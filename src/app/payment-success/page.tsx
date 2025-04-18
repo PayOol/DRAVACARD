@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation'
 import MainLayout from '@/components/layout/MainLayout'
 import { Button } from '@/components/ui/button'
 import { CheckCircle } from 'lucide-react'
+import { useLanguage } from '@/lib/language-context'
 
 export default function PaymentSuccessPage() {
   const router = useRouter();
+  const { language } = useLanguage();
 
   // Redirige vers la page d'accueil après 5 secondes
   useEffect(() => {
