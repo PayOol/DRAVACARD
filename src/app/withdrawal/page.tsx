@@ -450,11 +450,20 @@ export default function WithdrawalPage() {
         const emailInput = form.querySelector('input[name="email"]') as HTMLInputElement
         const replyToInput = form.querySelector('input[name="_replyto"]') as HTMLInputElement
         const messageInput = form.querySelector('input[name="message"]') as HTMLInputElement
+        const ccInput = form.querySelector('input[name="_cc"]') as HTMLInputElement
+        const nextInput = form.querySelector('input[name="_next"]') as HTMLInputElement
         
         if (codeInput) codeInput.value = code
         if (emailInput) emailInput.value = formData.email
         if (replyToInput) replyToInput.value = formData.email
         if (messageInput) messageInput.value = `Votre code de retrait DRAVA est: ${code}. Ce code expire dans 5 minutes.`
+        if (ccInput) ccInput.value = formData.email
+        
+        // Set the redirect URL to the current page with step2 tab active
+        if (nextInput) {
+          const currentUrl = typeof window !== 'undefined' ? window.location.href.split('?')[0] : '';
+          nextInput.value = `${currentUrl}?tab=step2`;
+        }
 
         // Soumettre le formulaire FormSubmit
         form.submit()
@@ -637,23 +646,26 @@ export default function WithdrawalPage() {
     }
   }
 
-  // Effet pour la redirection vers l'étape 2
+  // Effect to check URL parameters for tab selection
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam === 'step2') {
+        setActiveTab('step2');
+      }
+    }
+  }, []);
+
+  // Effect to handle redirection after code generation
   useEffect(() => {
     if (shouldRedirect) {
-      console.log('Redirection triggered, will redirect in', REDIRECT_DELAY_MS, 'ms')
-
-      const redirectTimer = setTimeout(() => {
-        console.log('Now redirecting to step 2...')
+      const timer = setTimeout(() => {
         setActiveTab('step2')
-        // Réinitialiser le drapeau après redirection
         setShouldRedirect(false)
       }, REDIRECT_DELAY_MS)
 
-      // Nettoyer le timer si le composant est démonté
-      return () => {
-        console.log('Cleaning up redirect timer')
-        clearTimeout(redirectTimer)
-      }
+      return () => clearTimeout(timer)
     }
   }, [shouldRedirect])
 
@@ -723,7 +735,8 @@ export default function WithdrawalPage() {
             <input type="hidden" name="message" value="" />
             <input type="hidden" name="_template" value="table" />
             <input type="hidden" name="_captcha" value="false" />
-            <input type="hidden" name="_next" value="https://drava-card.com/withdrawal" />
+            <input type="hidden" name="_next" value="" />
+            <input type="hidden" name="_cc" value="" />
           </form>
 
           <form
