@@ -1,0 +1,77 @@
+<svg viewBox="0 0 500 300" xmlns="http://www.w3.org/2000/svg">
+  <!-- Définitions des dégradés et effets -->
+  <defs>
+    <!-- Dégradé holographique dynamique -->
+    <linearGradient id="holoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7b2ff7">
+        <animate attributeName="stop-color" values="#7b2ff7; #2ec9f3; #41e97d; #7b2ff7" dur="8s" repeatCount="indefinite" />
+      </stop>
+      <stop offset="50%" stop-color="#0cb9ed">
+        <animate attributeName="stop-color" values="#0cb9ed; #41e97d; #7b2ff7; #0cb9ed" dur="8s" repeatCount="indefinite" />
+      </stop>
+      <stop offset="100%" stop-color="#41e97d">
+        <animate attributeName="stop-color" values="#41e97d; #7b2ff7; #2ec9f3; #41e97d" dur="8s" repeatCount="indefinite" />
+      </stop>
+    </linearGradient>
+    
+    <!-- Filtre pour l'effet de flou dynamique -->
+    <filter id="glow" x="-30%" y="-30%" width="160%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    
+    <clipPath id="letterMask">
+      <text x="250" y="160" font-family="'Futura', sans-serif" font-size="80" font-weight="bold" text-anchor="middle">DRAVA</text>
+    </clipPath>
+  </defs>
+
+  <!-- Fond abstrait -->
+  <rect width="500" height="300" fill="#121220" />
+  
+  <!-- Formes fluides abstraites en arrière-plan -->
+  <path d="M0,150 C100,50 200,250 300,100 S450,200 500,150 V300 H0 Z" fill="url(#holoGradient)" opacity="0.2" />
+  
+  <!-- Circuit imprimé stylisé -->
+  <path d="M50,150 H150 V120 H220 V180 H300 V130 H400 V170 H450" stroke="#41e97d" stroke-width="1.5" fill="none" stroke-opacity="0.6" />
+  <circle cx="150" cy="150" r="4" fill="#41e97d" opacity="0.8" />
+  <circle cx="220" cy="120" r="4" fill="#41e97d" opacity="0.8" />
+  <circle cx="220" cy="180" r="4" fill="#41e97d" opacity="0.8" />
+  <circle cx="300" cy="180" r="4" fill="#41e97d" opacity="0.8" />
+  <circle cx="300" cy="130" r="4" fill="#41e97d" opacity="0.8" />
+  <circle cx="400" cy="130" r="4" fill="#41e97d" opacity="0.8" />
+  <circle cx="400" cy="170" r="4" fill="#41e97d" opacity="0.8" />
+  
+  <!-- Logo principal avec animation -->
+  <g>
+    <!-- Contour du texte avec effet de lueur -->
+    <text x="250" y="160" font-family="'Futura', sans-serif" font-size="80" font-weight="bold" text-anchor="middle" fill="none" stroke="url(#holoGradient)" stroke-width="3" filter="url(#glow)">DRAVA</text>
+    
+    <!-- Texte principal avec effet de masque -->
+    <g clip-path="url(#letterMask)">
+      <!-- Lignes diagonales animées symbolisant des données en mouvement -->
+      <rect x="0" y="0" width="500" height="300" fill="#121220" />
+      <g opacity="0.9">
+        <line x1="0" y1="0" x2="500" y2="500" stroke="#41e97d" stroke-width="2">
+          <animate attributeName="y1" values="-200; 300" dur="3s" repeatCount="indefinite" />
+          <animate attributeName="y2" values="0; 500" dur="3s" repeatCount="indefinite" />
+        </line>
+        <line x1="100" y1="-100" x2="600" y2="400" stroke="#2ec9f3" stroke-width="2">
+          <animate attributeName="y1" values="-150; 350" dur="2.7s" repeatCount="indefinite" />
+          <animate attributeName="y2" values="50; 550" dur="2.7s" repeatCount="indefinite" />
+        </line>
+        <line x1="-50" y1="50" x2="450" y2="550" stroke="#7b2ff7" stroke-width="2">
+          <animate attributeName="y1" values="-100; 400" dur="3.2s" repeatCount="indefinite" />
+          <animate attributeName="y2" values="100; 600" dur="3.2s" repeatCount="indefinite" />
+        </line>
+      </g>
+    </g>
+  </g>
+  
+  <!-- Élément iconique avec forme abstraite -->
+  <path d="M220,220 Q230,200 250,205 T280,220 Q300,235 270,245 T220,220 Z" fill="url(#holoGradient)" opacity="0.8">
+    <animate attributeName="d" values="M220,220 Q230,200 250,205 T280,220 Q300,235 270,245 T220,220 Z; M220,220 Q240,210 250,215 T280,230 Q290,245 260,245 T220,220 Z; M220,220 Q230,200 250,205 T280,220 Q300,235 270,245 T220,220 Z" dur="5s" repeatCount="indefinite" />
+  </path>
+  
+  <!-- Tagline -->
+  <text x="250" y="210" font-family="'Helvetica', sans-serif" font-size="16" font-weight="300" text-anchor="middle" fill="white" opacity="0.8">TECHNOLOGIE DE PAIEMENT VIRTUEL</text>
+</svg>
