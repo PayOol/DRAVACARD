@@ -459,10 +459,9 @@ export default function WithdrawalPage() {
         if (messageInput) messageInput.value = `Votre code de retrait DRAVA est: ${code}. Ce code expire dans 5 minutes.`
         if (ccInput) ccInput.value = formData.email
         
-        // Set the redirect URL to the current page with step2 tab active
+        // Set the redirect URL to the withdrawal page
         if (nextInput) {
-          const currentUrl = typeof window !== 'undefined' ? window.location.href.split('?')[0] : '';
-          nextInput.value = `${currentUrl}?tab=step2`;
+          nextInput.value = '/withdrawal';
         }
 
         // Soumettre le formulaire FormSubmit
