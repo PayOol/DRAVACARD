@@ -337,7 +337,7 @@ export default function CardsPage() {
                 <img
                   src={getCardIcon(card.icon)}
                   alt={card.icon === 'visa' ? 'Visa' : 'Mastercard'}
-                  className="h-6 w-auto ml-2"
+                  className="h-8 w-auto ml-2"
                 />
               </div>
               <div className="text-xl font-bold mt-1">

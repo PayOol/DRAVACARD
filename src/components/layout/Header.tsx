@@ -20,7 +20,7 @@ const Header = () => {
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
           <Link href="/">
-            <img src="/images/drava-logo.svg" alt="DRAVA Logo" className="h-12 w-auto" />
+            <img src="/images/drava-logo-circle.svg" alt="DRAVA Logo" className="h-12 w-12 rounded-full" />
           </Link>
 
           {/* Desktop Navigation */}
