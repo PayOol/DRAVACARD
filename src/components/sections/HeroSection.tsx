@@ -63,8 +63,12 @@ const HeroSection = () => {
 
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4 bg-gradient-to-r from-blue-600 to-indigo-800 bg-clip-text text-transparent">
               {language === 'fr'
-                ? <>Paiements sans frontières avec <span className="bg-gradient-to-r from-blue-600 to-indigo-800 bg-clip-text text-transparent">DRAVA</span></>
-                : <>Borderless payments with <span className="bg-gradient-to-r from-blue-600 to-indigo-800 bg-clip-text text-transparent">DRAVA</span></>
+                ? <>Paiements sans frontières avec <span className="relative inline-block">DRAVA
+                  <span className="absolute -bottom-1 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-800 rounded-full"></span>
+                </span></>
+                : <>Borderless payments with <span className="relative inline-block">DRAVA
+                  <span className="absolute -bottom-1 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-800 rounded-full"></span>
+                </span></>
               }
             </h1>
 
@@ -77,7 +81,7 @@ const HeroSection = () => {
             <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start">
               <Button
                 size="lg"
-                className="bg-gradient-to-r from-blue-600 to-indigo-800 font-medium w-full sm:w-auto"
+                className="bg-gradient-to-r from-blue-600 to-indigo-800 hover:from-blue-700 hover:to-indigo-900 font-medium w-full sm:w-auto transform transition-transform duration-300 hover:scale-105"
                 onClick={handleCreateCard}
               >
                 {language === 'fr' ? 'Créer votre carte' : 'Create your card'}
@@ -86,7 +90,7 @@ const HeroSection = () => {
               <Button
                 variant="outline"
                 size="lg"
-                className="w-full sm:w-auto"
+                className="w-full sm:w-auto border-blue-600 text-blue-700 hover:bg-blue-50 transition-all duration-300"
                 onClick={handleShowHowItWorks}
               >
                 {t('navigation.howItWorks')}
@@ -126,11 +130,14 @@ const HeroSection = () => {
           <div className="relative">
             <div className="relative z-10 mx-auto max-w-md lg:max-w-none">
               {/* Main card image with shadow and glow */}
-              <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl shadow-blue-200 ring-1 ring-gray-200 transition-all duration-500 hover:shadow-2xl hover:shadow-blue-300">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-600/30 to-indigo-800/30 mix-blend-multiply opacity-0 transition-opacity duration-500 hover:opacity-10" />
+              <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl shadow-blue-200 ring-1 ring-gray-200 transition-all duration-500 hover:shadow-2xl hover:shadow-blue-300 group">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-600/30 to-indigo-800/30 mix-blend-multiply opacity-0 transition-opacity duration-500 group-hover:opacity-20" />
 
-                {/* Placeholder for card image - in a real app, use an actual image */}
-                <div className="aspect-[4/3] w-full bg-gradient-to-r from-blue-500 to-indigo-700 p-8 text-white">
+                {/* Card with holographic effect */}
+                <div className="aspect-[4/3] w-full bg-gradient-to-r from-blue-500 to-indigo-700 p-8 text-white relative overflow-hidden">
+                  {/* Holographic shine effect */}
+                  <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 transform -translate-x-full group-hover:translate-x-full" />
+                  
                   <div className="flex justify-between">
                     <div className="text-xs font-light">
                       {language === 'fr' ? 'Carte virtuelle' : 'Virtual card'}
@@ -142,8 +149,18 @@ const HeroSection = () => {
                   </div>
 
                   <div className="mt-6 font-light">
-                    <div className="text-xl">DRA<span className="font-bold">VA</span></div>
-                    <div className="mt-10 text-lg tracking-widest">5304 **** **** 3562</div>
+                    <div className="text-xl flex items-center">
+                      <span>DRA</span>
+                      <span className="font-bold">VA</span>
+                      <Image 
+                        src="/images/drava-icon-192.svg" 
+                        alt="DRAVA" 
+                        width={24} 
+                        height={24} 
+                        className="ml-2 opacity-80"
+                      />
+                    </div>
+                    <div className="mt-10 text-lg tracking-widest">5304 •••• •••• 3562</div>
                     <div className="mt-4 flex justify-between">
                       <div>
                         <div className="text-xs">
@@ -178,25 +195,44 @@ const HeroSection = () => {
         </div>
 
         {/* Country flags - showing support for various countries */}
-        <div className="mt-16 flex overflow-x-auto pb-4 scrollbar-hide">
-          <div className="flex gap-4 md:gap-6 mx-auto">
-            {['BJ', 'CI', 'CM', 'SN', 'ML', 'TG', 'CD', 'CG', 'RW', 'KE', 'ZM', 'BF', 'TZ'].map((country) => (
-              <div key={country} className="flex-shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-full bg-gray-100 flex flex-col items-center justify-center shadow-sm hover:shadow-md transition-shadow">
-                <div className="mb-1">
-                  <ReactCountryFlag
-                    countryCode={countryCodeMapping[country]}
-                    svg
-                    style={{
-                      width: '2em',
-                      height: '2em',
-                      borderRadius: '50%',
-                    }}
-                    title={country}
-                  />
+        <div className="mt-16 flex flex-col items-center">
+          <h3 className="text-xl font-semibold text-gray-800 mb-6">
+            {language === 'fr' 
+              ? 'Disponible dans ces pays et plus encore' 
+              : 'Available in these countries and more'}
+          </h3>
+          
+          <div className="flex overflow-x-auto pb-4 scrollbar-hide max-w-full">
+            <div className="flex gap-4 md:gap-6 mx-auto">
+              {['BJ', 'CI', 'CM', 'SN', 'ML', 'TG', 'CD', 'CG', 'RW', 'KE', 'ZM', 'BF', 'TZ'].map((country) => (
+                <div 
+                  key={country} 
+                  className="flex-shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-full bg-white flex flex-col items-center justify-center shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105 border border-gray-100"
+                >
+                  <div className="mb-1">
+                    <ReactCountryFlag
+                      countryCode={countryCodeMapping[country]}
+                      svg
+                      style={{
+                        width: '2em',
+                        height: '2em',
+                        borderRadius: '50%',
+                      }}
+                      title={country}
+                    />
+                  </div>
+                  <span className="text-xs font-medium text-gray-700">{country}</span>
                 </div>
-                <span className="text-xs font-medium text-gray-700">{country}</span>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+          
+          <div className="mt-8 text-center">
+            <p className="text-sm text-gray-500 max-w-lg mx-auto">
+              {language === 'fr'
+                ? 'Nos cartes virtuelles sont acceptées partout où VISA et Mastercard sont acceptés, avec un support spécial pour les pays africains.'
+                : 'Our virtual cards are accepted everywhere VISA and Mastercard are accepted, with special support for African countries.'}
+            </p>
           </div>
         </div>
       </div>
@@ -274,8 +310,8 @@ const HeroSection = () => {
                 </h3>
                 <p className="text-gray-600">
                   {language === 'fr'
-                    ? 'Utilisez votre carte pour les achats en ligne partout où VISA et MASTERCARD sont acceptés.'
-                    : 'Use your card for online purchases anywhere VISA and MASTERCARD are accepted.'}
+                    ? 'Utilisez votre carte pour les achats en ligne partout où VISA et Mastercard sont acceptés.'
+                    : 'Use your card for online purchases anywhere VISA and Mastercard are accepted.'}
                 </p>
               </div>
             </div>
