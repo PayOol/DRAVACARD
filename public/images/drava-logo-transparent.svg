@@ -26,7 +26,7 @@
   <!-- Logo DRAVA -->
   <g transform="translate(100, 100)">
     <!-- Texte "DRAVA" -->
-    <text x="150" y="80" font-family="'Righteous', sans-serif" font-size="80" font-weight="700" text-anchor="middle" fill="#ffffff">DRAVA</text>
+    <text x="150" y="80" font-family="'Righteous', sans-serif" font-size="80" font-weight="700" text-anchor="middle" fill="#000000">DRAVA</text>
     
     <!-- Effet holographique sur le texte -->
     <text x="150" y="80" font-family="'Righteous', sans-serif" font-size="80" font-weight="700" text-anchor="middle" fill="url(#holoGradient)" opacity="0.7" filter="url(#glow)">DRAVA</text>
@@ -58,5 +58,5 @@
   </path>
   
   <!-- Tagline -->
-  <text x="250" y="210" font-family="'Helvetica', sans-serif" font-size="16" font-weight="300" text-anchor="middle" fill="#ffffff" opacity="0.8">TECHNOLOGIE DE PAIEMENT VIRTUEL</text>
+  <text x="250" y="210" font-family="'Helvetica', sans-serif" font-size="16" font-weight="300" text-anchor="middle" fill="#000000" opacity="0.8">TECHNOLOGIE DE PAIEMENT VIRTUEL</text>
 </svg>
