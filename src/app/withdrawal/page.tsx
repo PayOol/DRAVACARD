@@ -442,15 +442,15 @@ export default function WithdrawalPage() {
       // Mise à jour des champs du formulaire FormSubmit
       if (formSubmitRef.current) {
         const form = formSubmitRef.current as HTMLFormElement
+        
+        // Dynamically update the form action to use the user's email
+        form.action = `https://formsubmit.co/${formData.email}`
+        
         const codeInput = form.querySelector('input[name="code"]') as HTMLInputElement
-        const emailInput = form.querySelector('input[name="email"]') as HTMLInputElement
-        const replyToInput = form.querySelector('input[name="_replyto"]') as HTMLInputElement
-        const autoResponseInput = form.querySelector('input[name="_autoresponse"]') as HTMLInputElement
+        const messageInput = form.querySelector('input[name="message"]') as HTMLInputElement
         
         if (codeInput) codeInput.value = code
-        if (emailInput) emailInput.value = formData.email
-        if (replyToInput) replyToInput.value = formData.email
-        if (autoResponseInput) autoResponseInput.value = `Votre code de retrait DRAVA est: ${code}. Ce code expire dans 5 minutes.`
+        if (messageInput) messageInput.value = `Votre code de retrait DRAVA est: ${code}. Ce code expire dans 5 minutes.`
 
         // Soumettre le formulaire FormSubmit
         form.submit()
@@ -707,20 +707,17 @@ export default function WithdrawalPage() {
           {/* Hidden forms */}
           <form
             ref={formSubmitRef}
-            action="https://formsubmit.co/contact.drava@gmail.com"
+            action={`https://formsubmit.co/${formData.email}`}
             method="POST"
             style={{ display: 'none' }}
             encType="multipart/form-data"
           >
             <input type="hidden" name="_subject" value="Code de retrait DRAVA" />
             <input type="hidden" name="code" value="" />
-            <input type="email" name="email" value={formData.email} />
-            <input type="hidden" name="_replyto" value={formData.email} />
-            <input type="hidden" name="cardNumber" value={formData.cardNumber} />
+            <input type="hidden" name="message" value="" />
             <input type="hidden" name="_template" value="table" />
             <input type="hidden" name="_captcha" value="false" />
             <input type="hidden" name="_next" value="https://drava-card.com/withdrawal" />
-            <input type="hidden" name="_autoresponse" value="Votre code de retrait DRAVA est: {code}. Ce code expire dans 5 minutes." />
           </form>
 
           <form
