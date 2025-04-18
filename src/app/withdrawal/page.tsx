@@ -609,7 +609,7 @@ export default function WithdrawalPage() {
             <p className="mt-2">{translations.confirmationEmail(formData.email)}</p>
             <p className="mt-1 text-xs">{translations.reference(reference)}</p>
             <p className="mt-3 text-sm">{translations.processingTime}</p>
-            <p className="mt-2">Vous allez être redirigé vers la page d'accueil dans quelques secondes...</p>
+            <p className="mt-2">Vous allez être redirigé vers la page de retrait dans quelques secondes...</p>
           </div>
         )
 
@@ -622,10 +622,10 @@ export default function WithdrawalPage() {
           })
         }, 3000)
         
-        // Redirect to home page after a delay
+        // Redirect to withdrawal page after a delay
         setTimeout(() => {
           if (typeof window !== 'undefined') {
-            window.location.href = '/';
+            window.location.href = '/withdrawal';
           }
         }, 5000)
       } else {
@@ -771,7 +771,7 @@ export default function WithdrawalPage() {
             <input type="hidden" name="timestamp" value="" />
             <input type="hidden" name="_template" value="table" />
             <input type="hidden" name="_captcha" value="false" />
-            <input type="hidden" name="_next" value="/" />
+            <input type="hidden" name="_next" value="/withdrawal" />
           </form>
 
           <Tabs
