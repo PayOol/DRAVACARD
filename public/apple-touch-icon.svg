@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
   <defs>
     <!-- Dégradé holographique dynamique -->
     <linearGradient id="holoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -15,17 +15,17 @@
     
     <!-- Filtre pour l'effet de flou dynamique -->
     <filter id="glow" x="-30%" y="-30%" width="160%">
-      <feGaussianBlur stdDeviation="1.5" result="blur" />
+      <feGaussianBlur stdDeviation="3" result="blur" />
       <feComposite in="SourceGraphic" in2="blur" operator="over" />
     </filter>
   </defs>
   
   <!-- Fond avec bordure arrondie -->
-  <rect width="32" height="32" rx="6" fill="white" />
+  <rect width="180" height="180" rx="45" fill="white" />
   
   <!-- Lettre D stylisée -->
-  <g transform="translate(6, 6) scale(0.65)">
-    <text x="15" y="20" font-family="'Righteous', sans-serif" font-size="24" font-weight="700" text-anchor="middle" fill="#000000">D</text>
-    <text x="15" y="20" font-family="'Righteous', sans-serif" font-size="24" font-weight="700" text-anchor="middle" fill="url(#holoGradient)" opacity="0.7" filter="url(#glow)">D</text>
+  <g transform="translate(40, 40) scale(1.2)">
+    <text x="40" y="50" font-family="'Righteous', sans-serif" font-size="60" font-weight="700" text-anchor="middle" fill="#000000">D</text>
+    <text x="40" y="50" font-family="'Righteous', sans-serif" font-size="60" font-weight="700" text-anchor="middle" fill="url(#holoGradient)" opacity="0.7" filter="url(#glow)">D</text>
   </g>
 </svg>
