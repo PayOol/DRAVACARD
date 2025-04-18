@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter, Righteous } from 'next/font/google';
 import './globals.css';
 import { LanguageProvider } from '@/lib/language-context';
+import Script from 'next/script';
 
 // Fonts
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -14,6 +15,7 @@ const righteous = Righteous({
 export const metadata: Metadata = {
   title: 'DRAVA - Paiements sans frontières',
   description: 'Créez, rechargez et gérez vos cartes virtuelles Visa/Mastercard. Effectuez des paiements partout dans le monde en toute sécurité.',
+  manifest: '/manifest.json',
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },
@@ -55,10 +57,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr" className="scroll-smooth">
+      <head>
+        <meta name="theme-color" content="#3b82f6" />
+      </head>
       <body className={`${inter.variable} ${righteous.variable} font-sans min-h-screen antialiased bg-white`}>
         <LanguageProvider>
           {children}
         </LanguageProvider>
+        <Script src="/register-sw.js" strategy="lazyOnload" />
       </body>
     </html>
   );

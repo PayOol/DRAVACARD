@@ -1,0 +1,23 @@
+<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="dravaIconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3B82F6" />
+      <stop offset="100%" style="stop-color:#4F46E5" />
+    </linearGradient>
+  </defs>
+
+  <!-- Base Circle -->
+  <circle cx="96" cy="96" r="88" fill="url(#dravaIconGradient)" />
+
+  <!-- Card Icon -->
+  <rect x="58" y="58" width="76" height="57" rx="9.5" fill="white" fill-opacity="0.9" />
+  <path d="M65 84h61v8H65z" fill="url(#dravaIconGradient)" />
+  <path d="M65 100h30v8H65z" fill="url(#dravaIconGradient)" />
+
+  <!-- Chip -->
+  <path d="M65 65h15v11a4 4 0 01-4 4h-7a4 4 0 01-4-4V65z" fill="url(#dravaIconGradient)" />
+
+  <!-- "PZ" Overlay -->
+  <path d="M98 134H69V146H127C127 139.333 125.667 134 123 130C120.333 126 115.667 124 108 124H98V134Z" fill="white" fill-opacity="0.7" />
+  <path d="M127 146H107L127 126V146Z" fill="white" fill-opacity="0.7" />
+</svg>
