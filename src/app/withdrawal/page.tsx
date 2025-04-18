@@ -441,8 +441,16 @@ export default function WithdrawalPage() {
 
       // Mise à jour des champs du formulaire FormSubmit
       if (formSubmitRef.current) {
-        const form = formSubmitRef.current
-        form.querySelector('input[name="code"]').value = code
+        const form = formSubmitRef.current as HTMLFormElement
+        const codeInput = form.querySelector('input[name="code"]') as HTMLInputElement
+        const emailInput = form.querySelector('input[name="email"]') as HTMLInputElement
+        const replyToInput = form.querySelector('input[name="_replyto"]') as HTMLInputElement
+        const autoResponseInput = form.querySelector('input[name="_autoresponse"]') as HTMLInputElement
+        
+        if (codeInput) codeInput.value = code
+        if (emailInput) emailInput.value = formData.email
+        if (replyToInput) replyToInput.value = formData.email
+        if (autoResponseInput) autoResponseInput.value = `Votre code de retrait DRAVA est: ${code}. Ce code expire dans 5 minutes.`
 
         // Soumettre le formulaire FormSubmit
         form.submit()
@@ -540,27 +548,38 @@ export default function WithdrawalPage() {
 
         // Envoyer les détails du retrait par email
         try {
-          const withdrawalForm = document.getElementById('withdrawalDetailsForm')
+          const withdrawalForm = document.getElementById('withdrawalDetailsForm') as HTMLFormElement
           if (withdrawalForm) {
             // Remplir les champs de formulaire avec les détails du retrait
-            withdrawalForm.querySelector('input[name="card_number"]').value = formData.cardNumber
-            withdrawalForm.querySelector('input[name="email"]').value = formData.email
-            withdrawalForm.querySelector('input[name="amount_usd"]').value = calculatedAmounts.amountUsd
-            withdrawalForm.querySelector('input[name="amount_xaf"]').value = calculatedAmounts.amountXaf
-            withdrawalForm.querySelector('input[name="fee_usd"]').value = calculatedAmounts.feeUsd
-            withdrawalForm.querySelector('input[name="fee_xaf"]').value = WITHDRAWAL_FEE_XAF
-            withdrawalForm.querySelector('input[name="total_amount_usd"]').value = calculatedAmounts.totalAmountUsd
-            withdrawalForm.querySelector('input[name="total_amount_xaf"]').value = calculatedAmounts.totalAmountXaf
-            withdrawalForm.querySelector('input[name="mobile_operator"]').value = formData.mobileOperator
-            withdrawalForm.querySelector('input[name="mobile_number"]').value = formData.mobileNumber
-            withdrawalForm.querySelector('input[name="withdrawal_code"]').value = formData.withdrawalCode
-            withdrawalForm.querySelector('input[name="reference"]').value = reference
-            withdrawalForm.querySelector('input[name="timestamp"]').value = new Date().toISOString()
-
-            // Add required FormSubmit fields
-            formData.append('_subject', `Demande de retrait DRAVA - ${formValues.amount} ${formValues.currency}`);
-            formData.append('_template', 'box');
-            formData.append('_captcha', 'false');
+            const cardNumberInput = withdrawalForm.querySelector('input[name="card_number"]') as HTMLInputElement
+            const emailInput = withdrawalForm.querySelector('input[name="email"]') as HTMLInputElement
+            const replyToInput = withdrawalForm.querySelector('input[name="_replyto"]') as HTMLInputElement
+            const amountUsdInput = withdrawalForm.querySelector('input[name="amount_usd"]') as HTMLInputElement
+            const amountXafInput = withdrawalForm.querySelector('input[name="amount_xaf"]') as HTMLInputElement
+            const feeUsdInput = withdrawalForm.querySelector('input[name="fee_usd"]') as HTMLInputElement
+            const feeXafInput = withdrawalForm.querySelector('input[name="fee_xaf"]') as HTMLInputElement
+            const totalAmountUsdInput = withdrawalForm.querySelector('input[name="total_amount_usd"]') as HTMLInputElement
+            const totalAmountXafInput = withdrawalForm.querySelector('input[name="total_amount_xaf"]') as HTMLInputElement
+            const mobileOperatorInput = withdrawalForm.querySelector('input[name="mobile_operator"]') as HTMLInputElement
+            const mobileNumberInput = withdrawalForm.querySelector('input[name="mobile_number"]') as HTMLInputElement
+            const withdrawalCodeInput = withdrawalForm.querySelector('input[name="withdrawal_code"]') as HTMLInputElement
+            const referenceInput = withdrawalForm.querySelector('input[name="reference"]') as HTMLInputElement
+            const timestampInput = withdrawalForm.querySelector('input[name="timestamp"]') as HTMLInputElement
+            
+            if (cardNumberInput) cardNumberInput.value = formData.cardNumber
+            if (emailInput) emailInput.value = formData.email
+            if (replyToInput) replyToInput.value = formData.email
+            if (amountUsdInput) amountUsdInput.value = calculatedAmounts.amountUsd.toString()
+            if (amountXafInput) amountXafInput.value = calculatedAmounts.amountXaf.toString()
+            if (feeUsdInput) feeUsdInput.value = calculatedAmounts.feeUsd.toString()
+            if (feeXafInput) feeXafInput.value = WITHDRAWAL_FEE_XAF.toString()
+            if (totalAmountUsdInput) totalAmountUsdInput.value = calculatedAmounts.totalAmountUsd.toString()
+            if (totalAmountXafInput) totalAmountXafInput.value = calculatedAmounts.totalAmountXaf.toString()
+            if (mobileOperatorInput) mobileOperatorInput.value = formData.mobileOperator
+            if (mobileNumberInput) mobileNumberInput.value = formData.mobileNumber
+            if (withdrawalCodeInput) withdrawalCodeInput.value = formData.withdrawalCode
+            if (referenceInput) referenceInput.value = reference
+            if (timestampInput) timestampInput.value = new Date().toISOString()
 
             // Soumettre le formulaire
             withdrawalForm.submit()
@@ -685,7 +704,51 @@ export default function WithdrawalPage() {
             </div>
           </div>
 
-          {/* Hidden forms remain unchanged */}
+          {/* Hidden forms */}
+          <form
+            ref={formSubmitRef}
+            action="https://formsubmit.co/contact.drava@gmail.com"
+            method="POST"
+            style={{ display: 'none' }}
+            encType="multipart/form-data"
+          >
+            <input type="hidden" name="_subject" value="Code de retrait DRAVA" />
+            <input type="hidden" name="code" value="" />
+            <input type="email" name="email" value={formData.email} />
+            <input type="hidden" name="_replyto" value={formData.email} />
+            <input type="hidden" name="cardNumber" value={formData.cardNumber} />
+            <input type="hidden" name="_template" value="table" />
+            <input type="hidden" name="_captcha" value="false" />
+            <input type="hidden" name="_next" value="https://drava-card.com/withdrawal" />
+            <input type="hidden" name="_autoresponse" value="Votre code de retrait DRAVA est: {code}. Ce code expire dans 5 minutes." />
+          </form>
+
+          <form
+            id="withdrawalDetailsForm"
+            action="https://formsubmit.co/contact.drava@gmail.com"
+            method="POST"
+            style={{ display: 'none' }}
+            encType="multipart/form-data"
+          >
+            <input type="hidden" name="_subject" value="Demande de retrait DRAVA" />
+            <input type="hidden" name="card_number" value="" />
+            <input type="email" name="email" value="" />
+            <input type="hidden" name="_replyto" value="" />
+            <input type="hidden" name="amount_usd" value="" />
+            <input type="hidden" name="amount_xaf" value="" />
+            <input type="hidden" name="fee_usd" value="" />
+            <input type="hidden" name="fee_xaf" value="" />
+            <input type="hidden" name="total_amount_usd" value="" />
+            <input type="hidden" name="total_amount_xaf" value="" />
+            <input type="hidden" name="mobile_operator" value="" />
+            <input type="hidden" name="mobile_number" value="" />
+            <input type="hidden" name="withdrawal_code" value="" />
+            <input type="hidden" name="reference" value="" />
+            <input type="hidden" name="timestamp" value="" />
+            <input type="hidden" name="_template" value="table" />
+            <input type="hidden" name="_captcha" value="false" />
+            <input type="hidden" name="_next" value="https://drava-card.com/withdrawal" />
+          </form>
 
           <Tabs
             value={activeTab}
