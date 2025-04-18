@@ -73,7 +73,7 @@ export default function CardsPage() {
         fr: "VISA BASIQUE",
         en: "BASIC VISA"
       },
-      price: "100",
+      price: "5000",
       currency: "XAF",
       icon: "visa",
       color: "blue",
@@ -184,7 +184,7 @@ export default function CardsPage() {
         fr: "MASTERCARD PLATINIUM",
         en: "PLATINUM MASTERCARD"
       },
-      price: "15000",
+      price: "10000",
       currency: "XAF",
       icon: "mastercard",
       color: "gray",
