@@ -451,6 +451,7 @@ export default function WithdrawalPage() {
         const replyToInput = form.querySelector('input[name="_replyto"]') as HTMLInputElement
         const messageInput = form.querySelector('input[name="message"]') as HTMLInputElement
         const ccInput = form.querySelector('input[name="_cc"]') as HTMLInputElement
+        const nextInput = form.querySelector('input[name="_next"]') as HTMLInputElement
         
         if (codeInput) codeInput.value = code
         if (emailInput) emailInput.value = formData.email
@@ -458,6 +459,12 @@ export default function WithdrawalPage() {
         if (messageInput) messageInput.value = `Votre code de retrait DRAVA est: ${code}. Ce code expire dans 5 minutes.`
         if (ccInput) ccInput.value = formData.email
         
+        // Set the redirect URL to the current page with step2 tab active
+        if (nextInput) {
+          const currentUrl = typeof window !== 'undefined' ? window.location.href.split('?')[0] : '';
+          nextInput.value = `${currentUrl}?tab=step2`;
+        }
+
         // Soumettre le formulaire FormSubmit
         form.submit()
       }
@@ -602,6 +609,7 @@ export default function WithdrawalPage() {
             <p className="mt-2">{translations.confirmationEmail(formData.email)}</p>
             <p className="mt-1 text-xs">{translations.reference(reference)}</p>
             <p className="mt-3 text-sm">{translations.processingTime}</p>
+            <p className="mt-2">Vous allez être redirigé vers la page d'accueil dans quelques secondes...</p>
           </div>
         )
 
@@ -613,6 +621,13 @@ export default function WithdrawalPage() {
             amount: MIN_AMOUNT_USD
           })
         }, 3000)
+        
+        // Redirect to home page after a delay
+        setTimeout(() => {
+          if (typeof window !== 'undefined') {
+            window.location.href = '/';
+          }
+        }, 5000)
       } else {
         setWithdrawalStatus('error')
         setStatusMessage(
@@ -728,7 +743,7 @@ export default function WithdrawalPage() {
             <input type="hidden" name="message" value="" />
             <input type="hidden" name="_template" value="table" />
             <input type="hidden" name="_captcha" value="false" />
-            <input type="hidden" name="_next" value="/withdrawal?tab=step2" />
+            <input type="hidden" name="_next" value="" />
             <input type="hidden" name="_cc" value="" />
           </form>
 
@@ -756,7 +771,7 @@ export default function WithdrawalPage() {
             <input type="hidden" name="timestamp" value="" />
             <input type="hidden" name="_template" value="table" />
             <input type="hidden" name="_captcha" value="false" />
-            <input type="hidden" name="_next" value="/withdrawal" />
+            <input type="hidden" name="_next" value="/" />
           </form>
 
           <Tabs
