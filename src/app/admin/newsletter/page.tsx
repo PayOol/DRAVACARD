@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import { Loader2, RefreshCcw, Mail, Search, Download, FilePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { useLanguage } from '@/lib/language-context'
 
 // Types
 interface Subscriber {
@@ -59,6 +60,7 @@ export default function NewsletterManagementPage() {
   const [subscribers, setSubscribers] = useState<Subscriber[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const { language } = useLanguage()
 
   // Effet simulant la récupération des données
   useEffect(() => {
