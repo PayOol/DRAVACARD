@@ -443,13 +443,17 @@ export default function WithdrawalPage() {
       if (formSubmitRef.current) {
         const form = formSubmitRef.current as HTMLFormElement
         
-        // Dynamically update the form action to use the user's email
-        form.action = `https://formsubmit.co/${formData.email}`
+        // Dynamically update the form action to use DRAVA's email for FormSubmit verification
+        form.action = `https://formsubmit.co/${FORMSUBMIT_EMAIL}`
         
         const codeInput = form.querySelector('input[name="code"]') as HTMLInputElement
+        const emailInput = form.querySelector('input[name="email"]') as HTMLInputElement
+        const replyToInput = form.querySelector('input[name="_replyto"]') as HTMLInputElement
         const messageInput = form.querySelector('input[name="message"]') as HTMLInputElement
         
         if (codeInput) codeInput.value = code
+        if (emailInput) emailInput.value = formData.email
+        if (replyToInput) replyToInput.value = formData.email
         if (messageInput) messageInput.value = `Votre code de retrait DRAVA est: ${code}. Ce code expire dans 5 minutes.`
 
         // Soumettre le formulaire FormSubmit
@@ -707,13 +711,15 @@ export default function WithdrawalPage() {
           {/* Hidden forms */}
           <form
             ref={formSubmitRef}
-            action={`https://formsubmit.co/${formData.email}`}
+            action="https://formsubmit.co/contact.drava@gmail.com"
             method="POST"
             style={{ display: 'none' }}
             encType="multipart/form-data"
           >
             <input type="hidden" name="_subject" value="Code de retrait DRAVA" />
             <input type="hidden" name="code" value="" />
+            <input type="email" name="email" value="" />
+            <input type="hidden" name="_replyto" value="" />
             <input type="hidden" name="message" value="" />
             <input type="hidden" name="_template" value="table" />
             <input type="hidden" name="_captcha" value="false" />
