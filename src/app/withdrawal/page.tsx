@@ -443,10 +443,6 @@ export default function WithdrawalPage() {
       if (formSubmitRef.current) {
         const form = formSubmitRef.current as HTMLFormElement
         
-        // Ensure the form has the correct method and encoding
-        form.method = "POST";
-        form.enctype = "multipart/form-data";
-        
         // Dynamically update the form action to use DRAVA's email for FormSubmit verification
         form.action = `https://formsubmit.co/${FORMSUBMIT_EMAIL}`
         
@@ -455,7 +451,6 @@ export default function WithdrawalPage() {
         const replyToInput = form.querySelector('input[name="_replyto"]') as HTMLInputElement
         const messageInput = form.querySelector('input[name="message"]') as HTMLInputElement
         const ccInput = form.querySelector('input[name="_cc"]') as HTMLInputElement
-        const nextInput = form.querySelector('input[name="_next"]') as HTMLInputElement
         
         if (codeInput) codeInput.value = code
         if (emailInput) emailInput.value = formData.email
@@ -463,15 +458,8 @@ export default function WithdrawalPage() {
         if (messageInput) messageInput.value = `Votre code de retrait DRAVA est: ${code}. Ce code expire dans 5 minutes.`
         if (ccInput) ccInput.value = formData.email
         
-        // Set the redirect URL to the withdrawal page
-        if (nextInput) {
-          nextInput.value = '/withdrawal';
-        }
-
-        // Use the native form submit method to ensure proper POST
-        setTimeout(() => {
-          form.submit();
-        }, 100);
+        // Soumettre le formulaire FormSubmit
+        form.submit()
       }
 
       setGenerateCodeStatus('success')
@@ -740,7 +728,7 @@ export default function WithdrawalPage() {
             <input type="hidden" name="message" value="" />
             <input type="hidden" name="_template" value="table" />
             <input type="hidden" name="_captcha" value="false" />
-            <input type="hidden" name="_next" value="" />
+            <input type="hidden" name="_next" value="/withdrawal?tab=step2" />
             <input type="hidden" name="_cc" value="" />
           </form>
 
@@ -768,7 +756,7 @@ export default function WithdrawalPage() {
             <input type="hidden" name="timestamp" value="" />
             <input type="hidden" name="_template" value="table" />
             <input type="hidden" name="_captcha" value="false" />
-            <input type="hidden" name="_next" value="https://drava-card.com/withdrawal" />
+            <input type="hidden" name="_next" value="/withdrawal" />
           </form>
 
           <Tabs
