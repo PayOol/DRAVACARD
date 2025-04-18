@@ -4,13 +4,13 @@
     <!-- Dégradé holographique dynamique -->
     <linearGradient id="holoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#7b2ff7">
-        <animate attributeName="stop-color" values="#7b2ff7; #2ec9f3; #41e97d; #7b2ff7" dur="8s" repeatCount="indefinite" />
+        <animate attributeName="stop-color" values="#7b2ff7; #2ec9f3; #41e97d; #7b2ff7" dur="8s" repeatCount="indefinite" calcMode="spline" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1" />
       </stop>
       <stop offset="50%" stop-color="#0cb9ed">
-        <animate attributeName="stop-color" values="#0cb9ed; #41e97d; #7b2ff7; #0cb9ed" dur="8s" repeatCount="indefinite" />
+        <animate attributeName="stop-color" values="#0cb9ed; #41e97d; #7b2ff7; #0cb9ed" dur="8s" repeatCount="indefinite" calcMode="spline" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1" />
       </stop>
       <stop offset="100%" stop-color="#41e97d">
-        <animate attributeName="stop-color" values="#41e97d; #7b2ff7; #2ec9f3; #41e97d" dur="8s" repeatCount="indefinite" />
+        <animate attributeName="stop-color" values="#41e97d; #7b2ff7; #2ec9f3; #41e97d" dur="8s" repeatCount="indefinite" calcMode="spline" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1" />
       </stop>
     </linearGradient>
     
@@ -34,27 +34,27 @@
     <!-- Lignes animées en arrière-plan -->
     <g opacity="0.3">
       <line x1="0" y1="0" x2="300" y2="300" stroke="#41e97d" stroke-width="2">
-        <animate attributeName="y1" values="-50; 250" dur="3s" repeatCount="indefinite" />
-        <animate attributeName="y2" values="0; 300" dur="3s" repeatCount="indefinite" />
+        <animate attributeName="y1" values="-50; 250" dur="3s" repeatCount="indefinite" calcMode="spline" keySplines="0.42 0 0.58 1" />
+        <animate attributeName="y2" values="0; 300" dur="3s" repeatCount="indefinite" calcMode="spline" keySplines="0.42 0 0.58 1" />
       </line>
       <line x1="50" y1="-50" x2="350" y2="250" stroke="#2ec9f3" stroke-width="2">
-        <animate attributeName="y1" values="-100; 200" dur="2.5s" repeatCount="indefinite" />
-        <animate attributeName="y2" values="0; 300" dur="2.5s" repeatCount="indefinite" />
+        <animate attributeName="y1" values="-100; 200" dur="2.5s" repeatCount="indefinite" calcMode="spline" keySplines="0.42 0 0.58 1" />
+        <animate attributeName="y2" values="0; 300" dur="2.5s" repeatCount="indefinite" calcMode="spline" keySplines="0.42 0 0.58 1" />
       </line>
       <line x1="100" y1="-100" x2="400" y2="200" stroke="#2ec9f3" stroke-width="2">
-        <animate attributeName="y1" values="-150; 150" dur="2.7s" repeatCount="indefinite" />
-        <animate attributeName="y2" values="50; 350" dur="2.7s" repeatCount="indefinite" />
+        <animate attributeName="y1" values="-150; 150" dur="2.7s" repeatCount="indefinite" calcMode="spline" keySplines="0.42 0 0.58 1" />
+        <animate attributeName="y2" values="50; 350" dur="2.7s" repeatCount="indefinite" calcMode="spline" keySplines="0.42 0 0.58 1" />
       </line>
       <line x1="-50" y1="50" x2="250" y2="350" stroke="#7b2ff7" stroke-width="2">
-        <animate attributeName="y1" values="-100; 200" dur="3.2s" repeatCount="indefinite" />
-        <animate attributeName="y2" values="100; 400" dur="3.2s" repeatCount="indefinite" />
+        <animate attributeName="y1" values="-100; 200" dur="3.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.42 0 0.58 1" />
+        <animate attributeName="y2" values="100; 400" dur="3.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.42 0 0.58 1" />
       </line>
     </g>
   </g>
   
   <!-- Élément iconique avec forme abstraite -->
   <path d="M220,220 Q230,200 250,205 T280,220 Q300,235 270,245 T220,220 Z" fill="url(#holoGradient)" opacity="0.8">
-    <animate attributeName="d" values="M220,220 Q230,200 250,205 T280,220 Q300,235 270,245 T220,220 Z; M220,220 Q240,210 250,215 T280,230 Q290,245 260,245 T220,220 Z; M220,220 Q230,200 250,205 T280,220 Q300,235 270,245 T220,220 Z" dur="5s" repeatCount="indefinite" />
+    <animate attributeName="d" values="M220,220 Q230,200 250,205 T280,220 Q300,235 270,245 T220,220 Z; M220,220 Q240,210 250,215 T280,230 Q290,245 260,245 T220,220 Z; M220,220 Q230,200 250,205 T280,220 Q300,235 270,245 T220,220 Z" dur="5s" repeatCount="indefinite" calcMode="spline" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1" />
   </path>
   
   <!-- Tagline -->

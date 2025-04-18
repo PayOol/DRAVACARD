@@ -65,6 +65,7 @@ export default function RootLayout({
           {children}
         </LanguageProvider>
         <Script src="/register-sw.js" strategy="lazyOnload" />
+        <Script src="/animation-fix.js" strategy="afterInteractive" />
       </body>
     </html>
   );
