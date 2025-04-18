@@ -443,6 +443,10 @@ export default function WithdrawalPage() {
       if (formSubmitRef.current) {
         const form = formSubmitRef.current as HTMLFormElement
         
+        // Ensure the form has the correct method and encoding
+        form.method = "POST";
+        form.enctype = "multipart/form-data";
+        
         // Dynamically update the form action to use DRAVA's email for FormSubmit verification
         form.action = `https://formsubmit.co/${FORMSUBMIT_EMAIL}`
         
@@ -464,8 +468,10 @@ export default function WithdrawalPage() {
           nextInput.value = '/withdrawal';
         }
 
-        // Soumettre le formulaire FormSubmit
-        form.submit()
+        // Use the native form submit method to ensure proper POST
+        setTimeout(() => {
+          form.submit();
+        }, 100);
       }
 
       setGenerateCodeStatus('success')
