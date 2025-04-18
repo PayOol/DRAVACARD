@@ -72,7 +72,7 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           <div>
             <Link href="/" className="mb-4 block">
-              <img src="/images/drava-logo.svg" alt="DRAVA Logo" className="h-20 w-auto" />
+              <img src="/images/drava-logo-light.svg" alt="DRAVA Logo" className="h-20 w-auto" />
             </Link>
             <p className="text-sm text-gray-500">
               {language === 'fr'
