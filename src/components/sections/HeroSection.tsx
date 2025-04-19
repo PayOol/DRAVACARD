@@ -63,12 +63,8 @@ const HeroSection = () => {
 
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4">
               {language === 'fr'
-                ? <><span className="bg-gradient-to-r from-blue-600 to-indigo-800 bg-clip-text text-transparent">Paiements sans frontières avec</span> <span className="relative inline-block text-blue-700">DRAVA
-                  <span className="absolute -bottom-1 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-800 rounded-full"></span>
-                </span></>
-                : <><span className="bg-gradient-to-r from-blue-600 to-indigo-800 bg-clip-text text-transparent">Borderless payments with</span> <span className="relative inline-block text-blue-700">DRAVA
-                  <span className="absolute -bottom-1 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-800 rounded-full"></span>
-                </span></>
+                ? <><span className="text-blue-700">DRAVA</span> <span className="bg-gradient-to-r from-blue-600 to-indigo-800 bg-clip-text text-transparent">- Paiements sans frontières</span></>
+                : <><span className="text-blue-700">DRAVA</span> <span className="bg-gradient-to-r from-blue-600 to-indigo-800 bg-clip-text text-transparent">- Borderless payments</span></>
               }
             </h1>
 
