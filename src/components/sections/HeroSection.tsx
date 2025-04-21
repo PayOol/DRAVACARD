@@ -235,12 +235,12 @@ const HeroSection = () => {
 
       {/* Dialog pour "Comment ça marche" */}
       <Dialog open={showHowItWorks} onOpenChange={setShowHowItWorks}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg w-[95%] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-800 bg-clip-text text-transparent">
+            <DialogTitle className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-800 bg-clip-text text-transparent">
               {t('home.howItWorks.title')}
             </DialogTitle>
-            <DialogDescription className="text-lg text-gray-600 mt-2">
+            <DialogDescription className="text-base sm:text-lg text-gray-600 mt-2">
               {language === 'fr'
                 ? 'Découvrez comment obtenir et utiliser votre carte virtuelle en quelques étapes simples.'
                 : 'Discover how to obtain and use your virtual card in a few simple steps.'}
@@ -253,10 +253,10 @@ const HeroSection = () => {
                 1
               </div>
               <div>
-                <h3 className="font-semibold text-lg text-gray-900">
+                <h3 className="font-semibold text-base sm:text-lg text-gray-900">
                   {language === 'fr' ? 'Choisissez votre carte' : 'Choose your card'}
                 </h3>
-                <p className="text-gray-600">
+                <p className="text-sm sm:text-base text-gray-600">
                   {language === 'fr'
                     ? 'Sélectionnez le type de carte qui correspond à vos besoins parmi nos options VISA et MASTERCARD.'
                     : 'Select the type of card that suits your needs from our VISA and MASTERCARD options.'}
@@ -269,10 +269,10 @@ const HeroSection = () => {
                 2
               </div>
               <div>
-                <h3 className="font-semibold text-lg text-gray-900">
+                <h3 className="font-semibold text-base sm:text-lg text-gray-900">
                   {language === 'fr' ? 'Effectuez le paiement' : 'Make the payment'}
                 </h3>
-                <p className="text-gray-600">
+                <p className="text-sm sm:text-base text-gray-600">
                   {language === 'fr'
                     ? 'Payez en toute sécurité via notre passerelle de paiement protégée utilisant des méthodes variées.'
                     : 'Pay securely through our protected payment gateway using various methods.'}
@@ -285,10 +285,10 @@ const HeroSection = () => {
                 3
               </div>
               <div>
-                <h3 className="font-semibold text-lg text-gray-900">
+                <h3 className="font-semibold text-base sm:text-lg text-gray-900">
                   {language === 'fr' ? 'Recevez votre carte' : 'Receive your card'}
                 </h3>
-                <p className="text-gray-600">
+                <p className="text-sm sm:text-base text-gray-600">
                   {language === 'fr'
                     ? 'Votre carte virtuelle est générée instantanément et les détails sont envoyés de manière sécurisée.'
                     : 'Your virtual card is generated instantly and details are sent securely.'}
@@ -301,10 +301,10 @@ const HeroSection = () => {
                 4
               </div>
               <div>
-                <h3 className="font-semibold text-lg text-gray-900">
+                <h3 className="font-semibold text-base sm:text-lg text-gray-900">
                   {language === 'fr' ? 'Utilisez partout' : 'Use everywhere'}
                 </h3>
-                <p className="text-gray-600">
+                <p className="text-sm sm:text-base text-gray-600">
                   {language === 'fr'
                     ? 'Utilisez votre carte pour les achats en ligne partout où VISA et Mastercard sont acceptés.'
                     : 'Use your card for online purchases anywhere VISA and Mastercard are accepted.'}
