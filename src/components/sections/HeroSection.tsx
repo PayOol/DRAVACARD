@@ -80,7 +80,7 @@ const HeroSection = () => {
                 className="bg-gradient-to-r from-blue-600 to-indigo-800 hover:from-blue-700 hover:to-indigo-900 font-medium w-full sm:w-auto transform transition-transform duration-300 hover:scale-105"
                 onClick={handleCreateCard}
               >
-                {language === 'fr' ? 'Créer votre carte' : 'Create your card'}
+                {language === 'fr' ? 'Acheter votre carte' : 'Buy your card'}
                 <ChevronRight className="ml-2 h-5 w-5" />
               </Button>
               <Button
@@ -317,7 +317,7 @@ const HeroSection = () => {
                 className="w-full bg-gradient-to-r from-blue-600 to-indigo-800"
                 onClick={handleCreateCard}
               >
-                {language === 'fr' ? 'Créer ma carte maintenant' : 'Create my card now'}
+                {language === 'fr' ? 'Acheter ma carte maintenant' : 'Buy my card now'}
                 <ChevronRight className="ml-2 h-5 w-5" />
               </Button>
             </div>
