@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from 'react'
-import { Send, X, MessageSquare, User, Mail, ChevronRight } from 'lucide-react'
+import { Send, X, MessageSquare, User, Mail, ChevronRight, Check } from 'lucide-react'
 import { useLanguage } from '@/lib/language-context'
 
 const WhatsAppChat = () => {
@@ -10,6 +10,7 @@ const WhatsAppChat = () => {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSent, setIsSent] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const { language } = useLanguage()
   
@@ -22,32 +23,73 @@ const WhatsAppChat = () => {
     }
   }, [isOpen])
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  useEffect(() => {
+    if (isOpen) {
+      setIsSent(false);
+    }
+  }, [isOpen]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    if (!message.trim()) return
+    if (!message.trim()) return;
     
-    setIsSubmitting(true)
+    setIsSubmitting(true);
     
     // Format the message with name and email if provided
-    let formattedMessage = message
+    let formattedMessage = message;
     if (name) {
-      formattedMessage = `*${name}*: ${formattedMessage}`
+      formattedMessage = `*${name}*: ${formattedMessage}`;
     }
     if (email) {
-      formattedMessage += `\n\n(Email: ${email})`
+      formattedMessage += `\n\n(Email: ${email})`;
     }
     
-    // Encode the message for the URL
-    const encodedMessage = encodeURIComponent(formattedMessage)
-    
-    // Open WhatsApp with the pre-filled message
-    window.open(`https://wa.me/${phoneNumber}?text=${encodedMessage}`, '_blank')
-    
-    // Reset form
-    setMessage('')
-    setIsSubmitting(false)
-    setIsOpen(false)
+    try {
+      // Encode the message for the URL
+      const encodedMessage = encodeURIComponent(formattedMessage);
+      const whatsappUrl = `https://api.whatsapp.com/send?phone=${phoneNumber}&text=${encodedMessage}`;
+      
+      // Create a hidden iframe to load the WhatsApp URL without redirecting
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+      
+      // Set iframe source to the WhatsApp URL
+      iframe.src = whatsappUrl;
+      
+      // Show success message
+      setIsSent(true);
+      
+      // Remove iframe after a delay
+      setTimeout(() => {
+        if (iframe && iframe.parentNode) {
+          iframe.parentNode.removeChild(iframe);
+        }
+        
+        // Reset form after showing success message
+        setTimeout(() => {
+          setMessage('');
+          setIsSubmitting(false);
+        }, 2000);
+      }, 1000);
+    } catch (error) {
+      console.error('Error sending WhatsApp message:', error);
+      setIsSubmitting(false);
+      
+      // Fallback: open in new window but keep focus on current page
+      const newWindow = window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(formattedMessage)}`, '_blank');
+      if (newWindow) {
+        newWindow.blur();
+        window.focus();
+      }
+      
+      setIsSent(true);
+      setTimeout(() => {
+        setMessage('');
+        setIsSubmitting(false);
+      }, 2000);
+    }
   }
 
   return (
@@ -110,17 +152,18 @@ const WhatsAppChat = () => {
                   ref={inputRef}
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
                   rows={3}
                   placeholder={language === 'fr' ? 'Comment pouvons-nous vous aider?' : 'How can we help you?'}
                   required
+                  disabled={isSent}
                 />
               </div>
               
               <button
                 type="submit"
-                disabled={isSubmitting || !message.trim()}
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-800 hover:from-blue-700 hover:to-indigo-900 text-white py-2.5 px-4 rounded-lg font-medium flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                disabled={isSubmitting || !message.trim() || isSent}
+                className="w-full bg-green-500 hover:bg-green-600 text-white py-2.5 px-4 rounded-lg font-medium flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
               >
                 {isSubmitting ? (
                   <span className="flex items-center">
@@ -129,6 +172,11 @@ const WhatsAppChat = () => {
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
                     {language === 'fr' ? 'Envoi en cours...' : 'Sending...'}
+                  </span>
+                ) : isSent ? (
+                  <span className="flex items-center text-white">
+                    <Check className="h-4 w-4 mr-2" />
+                    {language === 'fr' ? 'Message envoyé!' : 'Message sent!'}
                   </span>
                 ) : (
                   <span className="flex items-center">
@@ -140,9 +188,15 @@ const WhatsAppChat = () => {
               </button>
               
               <div className="text-center text-xs text-gray-500 dark:text-gray-400 mt-2">
-                {language === 'fr' 
-                  ? 'Votre message sera envoyé via WhatsApp' 
-                  : 'Your message will be sent via WhatsApp'}
+                {isSent ? (
+                  language === 'fr' 
+                    ? 'Nous vous répondrons dès que possible' 
+                    : 'We will respond as soon as possible'
+                ) : (
+                  language === 'fr' 
+                    ? 'Votre message sera envoyé via WhatsApp' 
+                    : 'Your message will be sent via WhatsApp'
+                )}
               </div>
             </div>
           </form>
