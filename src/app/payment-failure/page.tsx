@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import MainLayout from '@/components/layout/MainLayout'
 import { Button } from '@/components/ui/button'
@@ -10,15 +9,6 @@ import { useLanguage } from '@/lib/language-context'
 export default function PaymentFailurePage() {
   const router = useRouter();
   const { language } = useLanguage();
-
-  // Redirige vers la page des cartes après 5 secondes
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      router.push('/cards');
-    }, 5000);
-
-    return () => clearTimeout(timer);
-  }, [router]);
 
   return (
     <MainLayout>
@@ -38,7 +28,7 @@ export default function PaymentFailurePage() {
               : "An error occurred while processing your payment. Please try again or contact DRAVA support if the problem persists."}
           </p>
 
-          <a href="mailto:contact.drava@gmail.com" className="text-blue-600 hover:text-blue-800">
+          <a href="mailto:contact.drava@gmail.com" className="text-blue-600 hover:text-blue-800 block mb-8">
             contact.drava@gmail.com
           </a>
 

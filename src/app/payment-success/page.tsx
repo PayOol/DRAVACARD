@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import MainLayout from '@/components/layout/MainLayout'
 import { Button } from '@/components/ui/button'
@@ -10,15 +9,6 @@ import { useLanguage } from '@/lib/language-context'
 export default function PaymentSuccessPage() {
   const router = useRouter();
   const { language } = useLanguage();
-
-  // Redirige vers la page d'accueil après 5 secondes
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      router.push('/');
-    }, 5000);
-
-    return () => clearTimeout(timer);
-  }, [router]);
 
   return (
     <MainLayout>
@@ -44,7 +34,7 @@ export default function PaymentSuccessPage() {
               : "A confirmation email has been sent to you. If you have any issues, don't hesitate to contact our support."}
           </p>
 
-          <a href="mailto:contact.drava@gmail.com" className="text-blue-600 hover:text-blue-800">
+          <a href="mailto:contact.drava@gmail.com" className="text-blue-600 hover:text-blue-800 block mb-8">
             contact.drava@gmail.com
           </a>
 
@@ -53,14 +43,14 @@ export default function PaymentSuccessPage() {
               onClick={() => router.push('/')}
               className="bg-gradient-to-r from-blue-600 to-indigo-800 hover:from-blue-700 hover:to-indigo-900"
             >
-              Retour à l'accueil
+              {language === 'fr' ? "Retour à l'accueil" : "Back to Home"}
             </Button>
 
             <Button
               onClick={() => router.push('/cards')}
               variant="outline"
             >
-              Voir toutes les cartes
+              {language === 'fr' ? "Voir toutes les cartes" : "View all cards"}
             </Button>
           </div>
         </div>
