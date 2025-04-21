@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     formData.append('_template', 'table');
     formData.append('_captcha', 'false');
 
-    const response = await fetch('https://formsubmit.co/support@drava.net', {
+    const response = await fetch('https://formsubmit.co/contact.drava@gmail.com', {
       method: 'POST',
       body: formData,
     });
