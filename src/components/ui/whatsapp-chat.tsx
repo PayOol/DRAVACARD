@@ -46,49 +46,30 @@ const WhatsAppChat = () => {
     }
     
     try {
-      // Encode the message for the URL
+      // Create WhatsApp URL
       const encodedMessage = encodeURIComponent(formattedMessage);
-      const whatsappUrl = `https://api.whatsapp.com/send?phone=${phoneNumber}&text=${encodedMessage}`;
+      const whatsappUrl = `https://wa.me/${phoneNumber.replace(/\+/g, '')}?text=${encodedMessage}`;
       
-      // Create a hidden iframe to load the WhatsApp URL without redirecting
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      document.body.appendChild(iframe);
+      // Open WhatsApp in a new window
+      const whatsappWindow = window.open(whatsappUrl, '_blank');
       
-      // Set iframe source to the WhatsApp URL
-      iframe.src = whatsappUrl;
-      
-      // Show success message
+      // Show success message immediately
       setIsSent(true);
       
-      // Remove iframe after a delay
-      setTimeout(() => {
-        if (iframe && iframe.parentNode) {
-          iframe.parentNode.removeChild(iframe);
-        }
-        
-        // Reset form after showing success message
-        setTimeout(() => {
-          setMessage('');
-          setIsSubmitting(false);
-        }, 2000);
-      }, 1000);
-    } catch (error) {
-      console.error('Error sending WhatsApp message:', error);
-      setIsSubmitting(false);
+      // Focus back to our window
+      window.focus();
       
-      // Fallback: open in new window but keep focus on current page
-      const newWindow = window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(formattedMessage)}`, '_blank');
-      if (newWindow) {
-        newWindow.blur();
-        window.focus();
-      }
-      
-      setIsSent(true);
+      // Reset form after a delay
       setTimeout(() => {
         setMessage('');
         setIsSubmitting(false);
       }, 2000);
+    } catch (error) {
+      console.error('Error opening WhatsApp:', error);
+      setIsSubmitting(false);
+      
+      // Fallback method
+      window.location.href = `https://api.whatsapp.com/send?phone=${phoneNumber.replace(/\+/g, '')}&text=${encodeURIComponent(formattedMessage)}`;
     }
   }
 
