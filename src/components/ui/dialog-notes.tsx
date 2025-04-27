@@ -179,14 +179,14 @@ export function DialogNotes({ isOpen, onClose, onAccept, cardDetails, customerEm
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 perspective-1000"
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 perspective-1000 overflow-hidden"
           initial="hidden"
           animate="visible"
           exit="exit"
           variants={backdropVariants}
         >
           <motion.div
-            className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden"
+            className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden"
             variants={modalVariants}
             style={{ transformStyle: "preserve-3d" }}
           >
@@ -206,7 +206,7 @@ export function DialogNotes({ isOpen, onClose, onAccept, cardDetails, customerEm
             </motion.div>
 
             <motion.div
-              className="p-6"
+              className="p-4 sm:p-6 overflow-y-auto flex-grow"
               variants={contentVariants}
             >
               <motion.div
@@ -267,7 +267,7 @@ export function DialogNotes({ isOpen, onClose, onAccept, cardDetails, customerEm
               )}
 
               <motion.div
-                className="grid grid-cols-2 gap-6 mb-6"
+                className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-6"
                 variants={itemVariants}
               >
                 <motion.div
@@ -344,7 +344,7 @@ export function DialogNotes({ isOpen, onClose, onAccept, cardDetails, customerEm
             </motion.div>
 
             <motion.div
-              className="flex p-4 space-x-4 border-t"
+              className="flex flex-col sm:flex-row p-3 sm:p-4 sm:space-x-4 space-y-2 sm:space-y-0 border-t sticky bottom-0 bg-white"
               variants={buttonsVariants}
             >
               <motion.div className="flex-1"

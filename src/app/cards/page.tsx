@@ -200,7 +200,7 @@ export default function CardsPage() {
           "Aucun plafond sur les recharges",
           "Compatible Google Pay",
           "Compatible Apple Pay",
-          "🎁 Bonus de 5$ offert"
+          "🎁 Bonus de 3$ offert"
         ],
         en: [
           "Debit card",
@@ -208,7 +208,7 @@ export default function CardsPage() {
           "No ceiling on reloads",
           "Google Pay compatible",
           "Apple Pay compatible",
-          "🎁 $5 bonus offered"
+          "🎁 $3 bonus offered"
         ]
       }
     }
@@ -556,10 +556,6 @@ export default function CardsPage() {
                     <div className="flex items-center">
                       <Clock className="h-5 w-5 text-green-500 mr-2" />
                       <span>{language === 'fr' ? 'Livraison instantanée' : 'Instant delivery'}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <BadgeCheck className="h-5 w-5 text-green-500 mr-2" />
-                      <span>{language === 'fr' ? 'Garantie satisfait ou remboursé' : 'Satisfaction guaranteed'}</span>
                     </div>
                     <div className="flex items-center">
                       <CreditCard className="h-5 w-5 text-green-500 mr-2" />
