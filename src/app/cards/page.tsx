@@ -158,7 +158,7 @@ export default function CardsPage() {
           "3D Secure",
           "Achats sur Amazon",
           "Achats sur Alibaba",
-          "Retraits possibles",
+          "Retraits possibles (Cameroun uniquement)",
           "Compatible PayPal"
         ],
         en: [
@@ -166,7 +166,7 @@ export default function CardsPage() {
           "3D Secure",
           "Amazon purchases",
           "Alibaba purchases",
-          "Withdrawals possible",
+          "Withdrawals possible (Cameroon only)",
           "PayPal compatible"
         ]
       },
