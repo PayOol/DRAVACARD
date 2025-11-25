@@ -40,8 +40,8 @@ const getText = (lang: Language | null, text: { fr: string; en: string }): strin
  */
 export async function createPaymentGateway(
   cardDetails: CardPaymentDetails,
-  shopName = 'DRAVA Cards',
-  orderId = `ORDER-${Date.now()}`,
+  shopName = 'DravaCards',
+  orderId = `DRAVA-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
   successUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/payment-success`,
   failureUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/payment-failure`,
   customerEmail = '',
@@ -230,7 +230,7 @@ export function submitPaymentForm(formHtml: string): void {
  */
 export function openPaymentModal(
   cardDetails: CardPaymentDetails,
-  shopName = 'DRAVA Cards',
+  shopName = 'shopName',
   customerEmail = ''
 ): void {
   if (typeof window === 'undefined') return;
@@ -248,7 +248,7 @@ export function openPaymentModal(
   };
 
   const amount = Number.parseInt(cardDetails.price, 10);
-  const orderId = `ORDER-${Date.now()}`;
+  const orderId = `DRAVA-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
   const successUrl = `${window.location.origin}/payment-success`;
   const failureUrl = `${window.location.origin}/payment-failure`;
 

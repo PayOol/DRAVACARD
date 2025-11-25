@@ -9,6 +9,7 @@ import { createPaymentGateway, submitPaymentForm, openPaymentModal } from '@/lib
 import { useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useLanguage } from '@/lib/language-context'
+import { v4 as uuidv4 } from 'uuid';
 
 // Définir les types pour les cartes
 interface Card {
@@ -184,7 +185,7 @@ export default function CardsPage() {
         fr: "MASTERCARD PLATINIUM",
         en: "PLATINUM MASTERCARD"
       },
-      price: "10000",
+      price: "15000",
       currency: "XAF",
       icon: "mastercard",
       color: "gray",
@@ -200,7 +201,7 @@ export default function CardsPage() {
           "Aucun plafond sur les recharges",
           "Compatible Google Pay",
           "Compatible Apple Pay",
-          "🎁 Bonus de 3$ offert"
+          "🎁 Bonus de $5 offert"
         ],
         en: [
           "Debit card",
@@ -208,7 +209,7 @@ export default function CardsPage() {
           "No ceiling on reloads",
           "Google Pay compatible",
           "Apple Pay compatible",
-          "🎁 $3 bonus offered"
+          "🎁 $5 bonus offered"
         ]
       }
     }
@@ -259,8 +260,8 @@ export default function CardsPage() {
       // Créer le formulaire de paiement via l'API SoleasPay
       const response = await createPaymentGateway(
         paymentCardDetails,
-        'DRAVA Cards',
-        `ORDER-${Date.now()}`,
+        'DravaCards',
+        `DRAVA-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
         `${window.location.origin}/payment-success?card=${encodeURIComponent(paymentCardDetails.name)}`,
         `${window.location.origin}/payment-failure`,
         userEmail
