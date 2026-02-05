@@ -15,7 +15,7 @@ const WhatsAppChat = () => {
   const { language } = useLanguage()
   
   // WhatsApp phone number - replace with your actual business number
-  const phoneNumber = "+237696161186" // DRAVA business number
+  const phoneNumber = "+237692426620" // DRAVA business number
   
   useEffect(() => {
     if (isOpen && inputRef.current) {
