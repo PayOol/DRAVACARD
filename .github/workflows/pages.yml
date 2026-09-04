@@ -49,13 +49,13 @@ jobs:
         run: npm run build
         env:
           NEXT_PUBLIC_BASE_PATH: ${{ steps.pages.outputs.base_path }}
-          NEXT_PUBLIC_SITE_URL: ${{ steps.pages.outputs.base_url }}
+          NEXT_PUBLIC_SITE_URL: https://drava.click
 
       - name: Scan production export
         run: npm run security:output
         env:
           NEXT_PUBLIC_BASE_PATH: ${{ steps.pages.outputs.base_path }}
-          NEXT_PUBLIC_SITE_URL: ${{ steps.pages.outputs.base_url }}
+          NEXT_PUBLIC_SITE_URL: https://drava.click
 
       - name: Upload GitHub Pages artifact
         if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
