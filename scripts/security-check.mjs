@@ -8,6 +8,7 @@ const projectRoot = process.cwd()
 const requireOutput = process.argv.includes('--output')
 const runSelfTest = process.argv.includes('--self-test')
 const configuredBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
+const requireCardPaymentLinks = process.env.REQUIRE_CARD_PAYMENT_LINKS === 'true'
 const validBasePathPattern = /^\/[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*\/?$/
 const expectedBasePath = configuredBasePath === '' || configuredBasePath === '/'
   ? ''
@@ -15,6 +16,12 @@ const expectedBasePath = configuredBasePath === '' || configuredBasePath === '/'
 const appRoots = ['src', 'public']
 const appExtensions = new Set(['.html', '.js', '.jsx', '.json', '.mjs', '.svg', '.ts', '.tsx'])
 const ignoredDirectories = new Set(['.git', '.next', 'node_modules', 'out', 'logs'])
+const cardPaymentLinkEnvironmentNames = [
+  'NEXT_PUBLIC_PAYMENT_LINK_VISA_BASIC',
+  'NEXT_PUBLIC_PAYMENT_LINK_MASTERCARD_BASIC',
+  'NEXT_PUBLIC_PAYMENT_LINK_MASTERCARD_PREMIUM',
+  'NEXT_PUBLIC_PAYMENT_LINK_MASTERCARD_PLATINUM',
+]
 
 const retiredCredentialHashes = new Set([
   // SHA-256 only: retaining the revoked plaintext here would recreate the leak.
@@ -22,7 +29,10 @@ const retiredCredentialHashes = new Set([
 ])
 
 const forbiddenAppPatterns = [
-  { label: 'Soleas credential in client source', pattern: /SOLEAS_API_KEY|NEXT_PUBLIC_SOLEAS/ },
+  {
+    label: 'Soleas credential in client source',
+    pattern: /\b(?:SOLEAS_API_KEY|NEXT_PUBLIC_SOLEAS[A-Z0-9_]*|apiKey)\b/i,
+  },
   { label: 'FormSubmit relay', pattern: /formsubmit\.co/i },
   {
     label: 'WhatsApp personal-data handoff',
@@ -35,6 +45,10 @@ const forbiddenAppPatterns = [
     pattern: /https?:\/\/(?:images\.unsplash\.com|source\.unsplash\.com|ext\.same-assets\.com|ugc\.same-assets\.com|cdn\.jsdelivr\.net\/gh\/lipis\/flag-icons)\b/i,
   },
   { label: 'payment API key field', pattern: /name=["']apiKey["']/i },
+  {
+    label: 'legacy browser-side Soleas checkout endpoint',
+    pattern: /https:\/\/checkout\.soleaspay\.com\/?(?:["'`<>\s]|$)/i,
+  },
   {
     label: 'retired transaction marketing claim',
     pattern: /Paiements sans frontières|Your modern payment solution/i,
@@ -67,7 +81,10 @@ const publicEnvironmentCredentialPattern =
   /\bNEXT_PUBLIC_[A-Z0-9_]*(?:API_?KEY|ACCESS_?KEY|AUTH_?TOKEN|BEARER_?TOKEN|TOKEN|SECRET|SECRET_?KEY|PASSWORD|PASSWD|PRIVATE_?KEY|CLIENT_?SECRET)\b/i
 
 const forbiddenOutputPatterns = [
-  { label: 'Soleas integration in production output', pattern: /soleas|soleaspay|mysoleas/i },
+  {
+    label: 'legacy browser-side Soleas checkout form in production output',
+    pattern: /https:\/\/checkout\.soleaspay\.com\/?(?:["'`<>\s]|$)|name=["']apiKey["']/i,
+  },
   { label: 'FormSubmit relay in production output', pattern: /formsubmit\.co/i },
   {
     label: 'WhatsApp personal-data handoff in production output',
@@ -96,14 +113,41 @@ const forbiddenPaths = [
   'src/app/admin/newsletter/page.tsx',
   'src/app/api/newsletter/route.ts',
   'src/components/providers/soleas-payment-provider.tsx',
-  'src/components/ui/dialog-notes.tsx',
   'src/components/ui/whatsapp-chat.tsx',
   'src/lib/soleas-payment.ts',
 ]
 
+const requiredCardSurfacePaths = [
+  'src/app/cards/page.tsx',
+  'src/components/ui/dialog-notes.tsx',
+]
+
+const optionalCardSurfacePaths = [
+  'src/components/ui/tabs.tsx',
+  'src/lib/card-catalog.ts',
+]
+
+const forbiddenCardSurfacePatterns = [
+  {
+    label: 'Card catalogue is still replaced by the maintenance screen',
+    pattern: /SecureServiceUnavailable/,
+  },
+  {
+    label: 'Card purchase surface uses localStorage',
+    pattern: /\blocalStorage\b/,
+  },
+  {
+    label: 'Card purchase surface contains an HTML injection sink',
+    pattern: /dangerouslySetInnerHTML|\.innerHTML\s*=/,
+  },
+  {
+    label: 'Card purchase surface restores a browser-side payment form',
+    pattern: /<form\b|document\.createElement\(\s*["']form["']\s*\)|\b(?:createPaymentGateway|submitPaymentForm|openPaymentModal)\b|customer\[(?:email|name)\]/i,
+  },
+]
+
 const maintenancePages = [
   'src/app/balance/page.tsx',
-  'src/app/cards/page.tsx',
   'src/app/payment-failure/page.tsx',
   'src/app/payment-success/page.tsx',
   'src/app/topup/page.tsx',
@@ -112,7 +156,6 @@ const maintenancePages = [
 
 const maintenanceRoutes = [
   'balance',
-  'cards',
   'payment-failure',
   'payment-success',
   'topup',
@@ -179,6 +222,21 @@ function looksLikeConcreteSecret(value) {
   if (/\s/.test(value) || environmentPlaceholderPattern.test(value)) return false
   if (/^(?:https?|wss?):\/\//i.test(value)) return false
   return new Set(value).size >= 5
+}
+
+function isAllowedHostedPaymentLink(value) {
+  try {
+    const url = new URL(value)
+    const host = url.hostname.toLowerCase()
+    return url.protocol === 'https:'
+      && (host === 'soleaspay.com' || host.endsWith('.soleaspay.com'))
+      && (url.port === '' || url.port === '443')
+      && url.username === ''
+      && url.password === ''
+      && url.pathname !== '/'
+  } catch {
+    return false
+  }
 }
 
 function findEnvironmentCredentials(source) {
@@ -254,6 +312,31 @@ function selfTest() {
   }
   assert.equal(matchingRules('WhatsApp user-agent preview', forbiddenOutputPatterns)
     .some((rule) => rule.label === 'WhatsApp personal-data handoff in production output'), false)
+
+  assert.equal(
+    isAllowedHostedPaymentLink('https://business.soleaspay.com/payment-link/drava-card'),
+    true,
+  )
+  assert.equal(
+    isAllowedHostedPaymentLink('https://checkout.soleaspay.com/payment-link/drava-card'),
+    true,
+  )
+  assert.equal(isAllowedHostedPaymentLink('http://business.soleaspay.com/payment-link/drava'), false)
+  assert.equal(isAllowedHostedPaymentLink('https://soleaspay.com.evil.example/payment-link/drava'), false)
+  assert.equal(isAllowedHostedPaymentLink('https://soleaspay.com/'), false)
+
+  assert.ok(matchingRules('const apiKey = process.env.VALUE', forbiddenAppPatterns)
+    .some((rule) => rule.label === 'Soleas credential in client source'))
+  assert.ok(matchingRules('const endpoint = "https://checkout.soleaspay.com"', forbiddenAppPatterns)
+    .some((rule) => rule.label === 'legacy browser-side Soleas checkout endpoint'))
+  assert.equal(matchingRules(
+    'const href = "https://checkout.soleaspay.com/payment-link/drava-card"',
+    forbiddenAppPatterns,
+  ).some((rule) => rule.label === 'legacy browser-side Soleas checkout endpoint'), false)
+  assert.ok(matchingRules('localStorage.setItem("userEmail", email)', forbiddenCardSurfacePatterns)
+    .some((rule) => rule.label === 'Card purchase surface uses localStorage'))
+  assert.ok(matchingRules('<form action="https://checkout.soleaspay.com">', forbiddenCardSurfacePatterns)
+    .some((rule) => rule.label === 'Card purchase surface restores a browser-side payment form'))
 
   console.log('Security scanner self-test passed.')
 }
@@ -331,6 +414,21 @@ const failures = []
 if (configuredBasePath && configuredBasePath !== '/' && !validBasePathPattern.test(configuredBasePath)) {
   failures.push('NEXT_PUBLIC_BASE_PATH is not a safe absolute URL path')
 }
+
+const configuredCardPaymentLinks = cardPaymentLinkEnvironmentNames
+  .map((name) => ({ name, value: process.env[name]?.trim() ?? '' }))
+
+for (const { name, value } of configuredCardPaymentLinks) {
+  if (value && !isAllowedHostedPaymentLink(value)) {
+    failures.push(`Hosted payment link must use HTTPS on a SoleasPay domain (${name})`)
+  }
+}
+
+if (requireCardPaymentLinks) {
+  for (const { name, value } of configuredCardPaymentLinks) {
+    if (!value) failures.push(`Required hosted payment link is missing (${name})`)
+  }
+}
 const appFiles = (
   await Promise.all(appRoots.map((root) => listFiles(path.join(projectRoot, root), appExtensions)))
 ).flat()
@@ -387,6 +485,37 @@ for (const relativePath of maintenancePages) {
   }
 }
 
+const cardSurfaceSources = []
+let cardPageSource = ''
+for (const relativePath of requiredCardSurfacePaths) {
+  if (!(await pathExists(relativePath))) {
+    failures.push(`Required static card-purchase surface is missing: ${relativePath}`)
+    continue
+  }
+
+  const source = await readFile(path.join(projectRoot, relativePath), 'utf8')
+  cardSurfaceSources.push(source)
+  if (relativePath === 'src/app/cards/page.tsx') cardPageSource = source
+}
+for (const relativePath of optionalCardSurfacePaths) {
+  if (await pathExists(relativePath)) {
+    cardSurfaceSources.push(await readFile(path.join(projectRoot, relativePath), 'utf8'))
+  }
+}
+
+const cardCatalogueSource = cardSurfaceSources.join('\n')
+for (const rule of forbiddenCardSurfacePatterns) {
+  if (rule.pattern.test(cardCatalogueSource)) failures.push(rule.label)
+}
+if (cardPageSource && !/\bDialogNotes\b/.test(cardPageSource)) {
+  failures.push('Card catalogue does not use the restored usage-notes dialog')
+}
+for (const environmentName of cardPaymentLinkEnvironmentNames) {
+  if (!cardCatalogueSource.includes(environmentName)) {
+    failures.push(`Card catalogue does not use the hosted payment link setting (${environmentName})`)
+  }
+}
+
 if (await pathExists('src/app/reseller/page.tsx')) {
   const resellerPage = await readFile(path.join(projectRoot, 'src/app/reseller/page.tsx'), 'utf8')
   if (/<form\b|handleSubmit|formState|type=["'](?:email|tel)["']/.test(resellerPage)) {
@@ -406,11 +535,15 @@ if (requireOutput) {
     failures.push('Production output is missing; run npm run build first')
   } else {
     const outputFiles = await listFiles(outputRoot, null)
+    const embeddedCardPaymentLinks = new Set()
     for (const file of outputFiles) {
       const contents = await readFile(file)
       if (isProbablyBinary(contents)) continue
       outputFileCount += 1
       const source = contents.toString('utf8')
+      for (const { name, value } of configuredCardPaymentLinks) {
+        if (value && source.includes(value)) embeddedCardPaymentLinks.add(name)
+      }
       if (containsRetiredCredential(source)) {
         failures.push(`Retired credential present in production output: ${path.relative(projectRoot, file)}`)
       }
@@ -445,6 +578,12 @@ if (requireOutput) {
       }
     }
 
+    for (const { name, value } of configuredCardPaymentLinks) {
+      if (value && !embeddedCardPaymentLinks.has(name)) {
+        failures.push(`Hosted payment link was not embedded in the production export (${name})`)
+      }
+    }
+
     for (const file of outputFiles) {
       if (path.extname(file) === '.map') {
         failures.push(`Source map published: ${path.relative(projectRoot, file)}`)
@@ -473,6 +612,19 @@ if (requireOutput) {
       const expectedSocialImage = new URL('og-image.svg', expectedSiteUrl).href
       if (!rootHtml.includes(expectedSocialImage)) {
         failures.push('Social preview image does not match the configured GitHub Pages URL')
+      }
+    }
+
+    const cardsHtmlCandidates = ['out/cards/index.html', 'out/cards.html']
+    const cardsHtmlPath = (await Promise.all(cardsHtmlCandidates.map(async (candidate) =>
+      (await pathExists(candidate)) ? candidate : undefined))).find(Boolean)
+    if (!cardsHtmlPath) {
+      failures.push('Card catalogue is missing from production output: /cards')
+    } else {
+      const cardsHtml = await readFile(path.join(projectRoot, cardsHtmlPath), 'utf8')
+      if (!cardsHtml.includes('Cartes virtuelles DRAVA')
+        || cardsHtml.includes('Achat de cartes temporairement indisponible')) {
+        failures.push('Card catalogue was not restored in production output')
       }
     }
 

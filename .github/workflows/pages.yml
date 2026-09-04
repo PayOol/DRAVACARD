@@ -50,12 +50,20 @@ jobs:
         env:
           NEXT_PUBLIC_BASE_PATH: ${{ steps.pages.outputs.base_path }}
           NEXT_PUBLIC_SITE_URL: https://drava.click
+          NEXT_PUBLIC_PAYMENT_LINK_VISA_BASIC: ${{ vars.PAYMENT_LINK_VISA_BASIC }}
+          NEXT_PUBLIC_PAYMENT_LINK_MASTERCARD_BASIC: ${{ vars.PAYMENT_LINK_MASTERCARD_BASIC }}
+          NEXT_PUBLIC_PAYMENT_LINK_MASTERCARD_PREMIUM: ${{ vars.PAYMENT_LINK_MASTERCARD_PREMIUM }}
+          NEXT_PUBLIC_PAYMENT_LINK_MASTERCARD_PLATINUM: ${{ vars.PAYMENT_LINK_MASTERCARD_PLATINUM }}
 
       - name: Scan production export
         run: npm run security:output
         env:
           NEXT_PUBLIC_BASE_PATH: ${{ steps.pages.outputs.base_path }}
           NEXT_PUBLIC_SITE_URL: https://drava.click
+          NEXT_PUBLIC_PAYMENT_LINK_VISA_BASIC: ${{ vars.PAYMENT_LINK_VISA_BASIC }}
+          NEXT_PUBLIC_PAYMENT_LINK_MASTERCARD_BASIC: ${{ vars.PAYMENT_LINK_MASTERCARD_BASIC }}
+          NEXT_PUBLIC_PAYMENT_LINK_MASTERCARD_PREMIUM: ${{ vars.PAYMENT_LINK_MASTERCARD_PREMIUM }}
+          NEXT_PUBLIC_PAYMENT_LINK_MASTERCARD_PLATINUM: ${{ vars.PAYMENT_LINK_MASTERCARD_PLATINUM }}
 
       - name: Upload GitHub Pages artifact
         if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
