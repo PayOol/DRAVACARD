@@ -1,12 +1,12 @@
 # DRAVACARD
 
-Site statique Next.js de présentation de DRAVA, publié uniquement avec GitHub Pages.
+Catalogue statique de cartes virtuelles DRAVA, publié uniquement avec GitHub Pages.
 
-URL finale prévue : `https://drava.click`. L'URL de projet `https://payool.github.io/DRAVACARD/` reste utilisable tant que le domaine personnalisé n'est pas activé.
+URL publique : `https://drava.click`. L'export reste également compatible avec le chemin de projet `https://payool.github.io/DRAVACARD/`.
 
 ## État de sécurité
 
-Les achats de cartes, recharges, consultations de solde, retraits, pages de statut de paiement et collectes newsletter/revendeur sont volontairement suspendus. Le projet ne doit collecter aucune donnée bancaire ou personnelle tant qu'un backend authentifié et audité n'est pas disponible.
+Le catalogue est l'unique page du site. Les deux boutons de paiement restent volontairement désactivés et aucun parcours de paiement, recharge, consultation de solde, retrait, newsletter ou revendeur n'est publié. Le projet ne doit collecter aucune donnée bancaire ou personnelle tant qu'un backend authentifié et audité n'est pas disponible.
 
 Consultez [SECURITY.md](SECURITY.md) avant toute modification de ces parcours.
 

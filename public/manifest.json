@@ -1,7 +1,7 @@
 {
   "name": "DRAVA Card",
   "short_name": "DRAVA",
-  "description": "DRAVA - Site public d'information sur les services",
+  "description": "DRAVA - Catalogue de cartes virtuelles",
   "id": "./",
   "start_url": "./",
   "scope": "./",

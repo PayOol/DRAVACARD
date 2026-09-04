@@ -13,8 +13,6 @@ const PRECACHE_URLS = [
   withBasePath('/apple-touch-icon.svg'),
   withBasePath('/images/drava-icon-192.svg'),
   withBasePath('/images/drava-icon-512.svg'),
-  withBasePath('/images/drava-logo.svg'),
-  withBasePath('/images/card-generic.svg'),
   withBasePath('/images/mastercard.svg'),
   withBasePath('/images/visa.svg'),
 ]

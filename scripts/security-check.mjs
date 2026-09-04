@@ -8,7 +8,6 @@ const projectRoot = process.cwd()
 const requireOutput = process.argv.includes('--output')
 const runSelfTest = process.argv.includes('--self-test')
 const configuredBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
-const requireCardPaymentLinks = process.env.REQUIRE_CARD_PAYMENT_LINKS === 'true'
 const validBasePathPattern = /^\/[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*\/?$/
 const expectedBasePath = configuredBasePath === '' || configuredBasePath === '/'
   ? ''
@@ -16,12 +15,6 @@ const expectedBasePath = configuredBasePath === '' || configuredBasePath === '/'
 const appRoots = ['src', 'public']
 const appExtensions = new Set(['.html', '.js', '.jsx', '.json', '.mjs', '.svg', '.ts', '.tsx'])
 const ignoredDirectories = new Set(['.git', '.next', 'node_modules', 'out', 'logs'])
-const cardPaymentLinkEnvironmentNames = [
-  'NEXT_PUBLIC_PAYMENT_LINK_VISA_BASIC',
-  'NEXT_PUBLIC_PAYMENT_LINK_MASTERCARD_BASIC',
-  'NEXT_PUBLIC_PAYMENT_LINK_MASTERCARD_PREMIUM',
-  'NEXT_PUBLIC_PAYMENT_LINK_MASTERCARD_PLATINUM',
-]
 
 const retiredCredentialHashes = new Set([
   // SHA-256 only: retaining the revoked plaintext here would recreate the leak.
@@ -85,6 +78,10 @@ const forbiddenOutputPatterns = [
     label: 'legacy browser-side Soleas checkout form in production output',
     pattern: /https:\/\/checkout\.soleaspay\.com\/?(?:["'`<>\s]|$)|name=["']apiKey["']/i,
   },
+  {
+    label: 'retired hosted-payment integration in production output',
+    pattern: /soleaspay/i,
+  },
   { label: 'FormSubmit relay in production output', pattern: /formsubmit\.co/i },
   {
     label: 'WhatsApp personal-data handoff in production output',
@@ -114,17 +111,33 @@ const forbiddenPaths = [
   'src/app/api/newsletter/route.ts',
   'src/components/providers/soleas-payment-provider.tsx',
   'src/components/ui/whatsapp-chat.tsx',
+  'src/lib/card-catalog.ts',
   'src/lib/soleas-payment.ts',
 ]
 
 const requiredCardSurfacePaths = [
-  'src/app/cards/page.tsx',
+  'src/app/page.tsx',
   'src/components/ui/dialog-notes.tsx',
 ]
 
 const optionalCardSurfacePaths = [
   'src/components/ui/tabs.tsx',
-  'src/lib/card-catalog.ts',
+]
+
+const forbiddenPageRoutes = [
+  'about-us',
+  'balance',
+  'cards',
+  'cookies',
+  'faq',
+  'howitwork',
+  'payment-failure',
+  'payment-success',
+  'privacy',
+  'reseller',
+  'terms',
+  'topup',
+  'withdrawal',
 ]
 
 const forbiddenCardSurfacePatterns = [
@@ -144,22 +157,18 @@ const forbiddenCardSurfacePatterns = [
     label: 'Card purchase surface restores a browser-side payment form',
     pattern: /<form\b|document\.createElement\(\s*["']form["']\s*\)|\b(?:createPaymentGateway|submitPaymentForm|openPaymentModal)\b|customer\[(?:email|name)\]/i,
   },
-]
-
-const maintenancePages = [
-  'src/app/balance/page.tsx',
-  'src/app/payment-failure/page.tsx',
-  'src/app/payment-success/page.tsx',
-  'src/app/topup/page.tsx',
-  'src/app/withdrawal/page.tsx',
-]
-
-const maintenanceRoutes = [
-  'balance',
-  'payment-failure',
-  'payment-success',
-  'topup',
-  'withdrawal',
+  {
+    label: 'Card purchase surface contains a personal-data input',
+    pattern: /<(?:input|select|textarea)\b|\bcontentEditable\b/i,
+  },
+  {
+    label: 'Card purchase surface contains retired payment navigation',
+    pattern: /\b(?:window\.open|window\.location\.(?:assign|replace)|createPaymentGateway|submitPaymentForm|openPaymentModal|fetch)\s*\(|<a\b|<Link\b|\bhref\s*=/i,
+  },
+  {
+    label: 'Card purchase surface references a retired payment provider',
+    pattern: /soleas|soleaspay/i,
+  },
 ]
 
 async function listFiles(directory, extensions, ignored = new Set()) {
@@ -222,21 +231,6 @@ function looksLikeConcreteSecret(value) {
   if (/\s/.test(value) || environmentPlaceholderPattern.test(value)) return false
   if (/^(?:https?|wss?):\/\//i.test(value)) return false
   return new Set(value).size >= 5
-}
-
-function isAllowedHostedPaymentLink(value) {
-  try {
-    const url = new URL(value)
-    const host = url.hostname.toLowerCase()
-    return url.protocol === 'https:'
-      && (host === 'soleaspay.com' || host.endsWith('.soleaspay.com'))
-      && (url.port === '' || url.port === '443')
-      && url.username === ''
-      && url.password === ''
-      && url.pathname !== '/'
-  } catch {
-    return false
-  }
 }
 
 function findEnvironmentCredentials(source) {
@@ -313,30 +307,40 @@ function selfTest() {
   assert.equal(matchingRules('WhatsApp user-agent preview', forbiddenOutputPatterns)
     .some((rule) => rule.label === 'WhatsApp personal-data handoff in production output'), false)
 
-  assert.equal(
-    isAllowedHostedPaymentLink('https://business.soleaspay.com/payment-link/drava-card'),
-    true,
-  )
-  assert.equal(
-    isAllowedHostedPaymentLink('https://checkout.soleaspay.com/payment-link/drava-card'),
-    true,
-  )
-  assert.equal(isAllowedHostedPaymentLink('http://business.soleaspay.com/payment-link/drava'), false)
-  assert.equal(isAllowedHostedPaymentLink('https://soleaspay.com.evil.example/payment-link/drava'), false)
-  assert.equal(isAllowedHostedPaymentLink('https://soleaspay.com/'), false)
-
   assert.ok(matchingRules('const apiKey = process.env.VALUE', forbiddenAppPatterns)
     .some((rule) => rule.label === 'Soleas credential in client source'))
   assert.ok(matchingRules('const endpoint = "https://checkout.soleaspay.com"', forbiddenAppPatterns)
     .some((rule) => rule.label === 'legacy browser-side Soleas checkout endpoint'))
-  assert.equal(matchingRules(
-    'const href = "https://checkout.soleaspay.com/payment-link/drava-card"',
-    forbiddenAppPatterns,
-  ).some((rule) => rule.label === 'legacy browser-side Soleas checkout endpoint'), false)
   assert.ok(matchingRules('localStorage.setItem("userEmail", email)', forbiddenCardSurfacePatterns)
     .some((rule) => rule.label === 'Card purchase surface uses localStorage'))
   assert.ok(matchingRules('<form action="https://checkout.soleaspay.com">', forbiddenCardSurfacePatterns)
     .some((rule) => rule.label === 'Card purchase surface restores a browser-side payment form'))
+  assert.ok(matchingRules('<input type="email" />', forbiddenCardSurfacePatterns)
+    .some((rule) => rule.label === 'Card purchase surface contains a personal-data input'))
+  assert.ok(matchingRules('window.location.assign(paymentLink)', forbiddenCardSurfacePatterns)
+    .some((rule) => rule.label === 'Card purchase surface contains retired payment navigation'))
+
+  const safePaymentButtons = `
+    export function PaymentDialog() {
+      return <div><Button disabled>Proceed</Button><Button disabled={true}>Direct</Button></div>
+    }
+  `
+  assert.deepEqual(validateDisabledPaymentButtons(safePaymentButtons, 'safe-dialog.tsx'), [])
+  assert.ok(validateDisabledPaymentButtons(`
+    export function PaymentDialog() {
+      return <div><Button disabled={canPay} onClick={pay}>Proceed</Button><Button disabled>Direct</Button></div>
+    }
+  `, 'unsafe-dialog.tsx').some((failure) => failure.includes('statically disabled')))
+  assert.ok(validateDisabledPaymentButtons(`
+    export function PaymentDialog() {
+      return <div><Link href="/pay"><Button disabled>Proceed</Button></Link><Button disabled>Direct</Button></div>
+    }
+  `, 'linked-dialog.tsx').some((failure) => failure.includes('must not be nested')))
+  assert.ok(validateDisabledPaymentButtons(`
+    export function PaymentDialog() {
+      return <div><span onClick={pay}><Button disabled>Proceed</Button></span><Button disabled>Direct</Button></div>
+    }
+  `, 'wrapped-dialog.tsx').some((failure) => failure.includes('interactive wrapper')))
 
   console.log('Security scanner self-test passed.')
 }
@@ -346,88 +350,119 @@ if (runSelfTest) {
   process.exit(0)
 }
 
-function unwrapParentheses(expression) {
-  let current = expression
-  while (current && ts.isParenthesizedExpression(current)) current = current.expression
-  return current
+function isLinkTagName(tagName) {
+  return tagName === 'a' || tagName === 'Link' || tagName === 'NextLink'
 }
 
-function isLocalizedStringObject(attribute) {
-  if (!attribute.initializer || !ts.isJsxExpression(attribute.initializer)) return false
-  const expression = attribute.initializer.expression
-  if (!expression || !ts.isObjectLiteralExpression(expression)) return false
-  if (expression.properties.length !== 2) return false
+function isActivationHandlerName(name) {
+  return /^on(?:Click|DoubleClick|Key|Mouse|Pointer|Submit|Touch)/i.test(name)
+}
 
-  const keys = new Set()
-  for (const property of expression.properties) {
-    if (!ts.isPropertyAssignment(property)) return false
-    if (!ts.isIdentifier(property.name) && !ts.isStringLiteral(property.name)) return false
-    if (!ts.isStringLiteral(property.initializer) && !ts.isNoSubstitutionTemplateLiteral(property.initializer)) {
-      return false
+function getJsxOpeningElement(node) {
+  if (ts.isJsxElement(node)) return node.openingElement
+  if (ts.isJsxSelfClosingElement(node)) return node
+  return undefined
+}
+
+function hasInteractiveDescendant(node) {
+  let found = false
+
+  function visit(child) {
+    if (found) return
+    const openingElement = getJsxOpeningElement(child)
+    if (openingElement) {
+      const attributes = openingElement.attributes.properties
+      const hasInteractiveAttribute = attributes.some((attribute) =>
+        ts.isJsxSpreadAttribute(attribute)
+        || (ts.isJsxAttribute(attribute)
+          && (isActivationHandlerName(attribute.name.getText())
+            || attribute.name.getText() === 'href')))
+      if (isLinkTagName(openingElement.tagName.getText()) || hasInteractiveAttribute) {
+        found = true
+        return
+      }
     }
-    keys.add(property.name.text)
+    ts.forEachChild(child, visit)
   }
 
-  return keys.size === 2 && keys.has('fr') && keys.has('en')
+  ts.forEachChild(node, visit)
+  return found
 }
 
-function isStrictMaintenancePage(source, fileName) {
+function hasInteractiveAncestor(node) {
+  let current = node.parent
+  while (current) {
+    const openingElement = getJsxOpeningElement(current)
+    if (openingElement) {
+      if (isLinkTagName(openingElement.tagName.getText())) return true
+      const hasActivationHandler = openingElement.attributes.properties.some((attribute) =>
+        ts.isJsxAttribute(attribute) && isActivationHandlerName(attribute.name.getText()))
+      if (hasActivationHandler) return true
+    }
+    current = current.parent
+  }
+  return false
+}
+
+function isStaticallyDisabled(attribute) {
+  if (!attribute.initializer) return true
+  return ts.isJsxExpression(attribute.initializer)
+    && attribute.initializer.expression?.kind === ts.SyntaxKind.TrueKeyword
+}
+
+function validateDisabledPaymentButtons(source, fileName) {
   const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
-  if (sourceFile.parseDiagnostics.length > 0 || sourceFile.statements.length !== 2) return false
-
-  const [importDeclaration, functionDeclaration] = sourceFile.statements
-  if (!ts.isImportDeclaration(importDeclaration)) return false
-  if (!ts.isStringLiteral(importDeclaration.moduleSpecifier)) return false
-  if (importDeclaration.moduleSpecifier.text !== '@/components/security/secure-service-unavailable') {
-    return false
+  if (sourceFile.parseDiagnostics.length > 0) {
+    return [`Payment dialog cannot be parsed as TSX: ${fileName}`]
   }
 
-  const namedImports = importDeclaration.importClause?.namedBindings
-  if (!namedImports || !ts.isNamedImports(namedImports) || namedImports.elements.length !== 1) return false
-  if (namedImports.elements[0].name.text !== 'SecureServiceUnavailable') return false
+  const buttons = []
+  function visit(node) {
+    const openingElement = getJsxOpeningElement(node)
+    if (openingElement?.tagName.getText() === 'Button') {
+      buttons.push({ node, openingElement })
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
 
-  if (!ts.isFunctionDeclaration(functionDeclaration) || !functionDeclaration.body) return false
-  const modifiers = new Set(functionDeclaration.modifiers?.map((modifier) => modifier.kind))
-  if (!modifiers.has(ts.SyntaxKind.ExportKeyword) || !modifiers.has(ts.SyntaxKind.DefaultKeyword)) return false
-  if (functionDeclaration.parameters.length !== 0 || functionDeclaration.body.statements.length !== 1) return false
-
-  const returnStatement = functionDeclaration.body.statements[0]
-  if (!ts.isReturnStatement(returnStatement) || !returnStatement.expression) return false
-  const jsx = unwrapParentheses(returnStatement.expression)
-  if (!jsx || !ts.isJsxSelfClosingElement(jsx) || jsx.tagName.getText() !== 'SecureServiceUnavailable') {
-    return false
+  const buttonFailures = []
+  if (buttons.length !== 2) {
+    buttonFailures.push(`Payment dialog must contain exactly two Button controls (found ${buttons.length})`)
   }
 
-  const attributes = jsx.attributes.properties
-  if (attributes.length < 1 || attributes.length > 2) return false
-  const names = new Set()
-  for (const attribute of attributes) {
-    if (!ts.isJsxAttribute(attribute) || !ts.isIdentifier(attribute.name)) return false
-    if (!['service', 'message'].includes(attribute.name.text) || !isLocalizedStringObject(attribute)) return false
-    names.add(attribute.name.text)
+  for (const [index, { node, openingElement }] of buttons.entries()) {
+    const label = `Payment button ${index + 1}`
+    const attributes = openingElement.attributes.properties
+    if (attributes.some((attribute) => ts.isJsxSpreadAttribute(attribute))) {
+      buttonFailures.push(`${label} must not use spread attributes`)
+    }
+
+    const jsxAttributes = attributes.filter(ts.isJsxAttribute)
+    const disabledAttributes = jsxAttributes.filter((attribute) => attribute.name.getText() === 'disabled')
+    if (disabledAttributes.length !== 1 || !isStaticallyDisabled(disabledAttributes[0])) {
+      buttonFailures.push(`${label} must be statically disabled`)
+    }
+
+    const forbiddenAttributes = jsxAttributes
+      .map((attribute) => attribute.name.getText())
+      .filter((name) => /^on/i.test(name)
+        || ['action', 'asChild', 'formAction', 'href', 'target'].includes(name))
+    if (forbiddenAttributes.length > 0) {
+      buttonFailures.push(`${label} has forbidden interactive attributes: ${forbiddenAttributes.join(', ')}`)
+    }
+
+    if (hasInteractiveDescendant(node) || hasInteractiveAncestor(node)) {
+      buttonFailures.push(`${label} must not be nested in or contain an interactive wrapper`)
+    }
   }
 
-  return names.size === attributes.length && names.has('service')
+  return buttonFailures
 }
 
 const failures = []
 if (configuredBasePath && configuredBasePath !== '/' && !validBasePathPattern.test(configuredBasePath)) {
   failures.push('NEXT_PUBLIC_BASE_PATH is not a safe absolute URL path')
-}
-
-const configuredCardPaymentLinks = cardPaymentLinkEnvironmentNames
-  .map((name) => ({ name, value: process.env[name]?.trim() ?? '' }))
-
-for (const { name, value } of configuredCardPaymentLinks) {
-  if (value && !isAllowedHostedPaymentLink(value)) {
-    failures.push(`Hosted payment link must use HTTPS on a SoleasPay domain (${name})`)
-  }
-}
-
-if (requireCardPaymentLinks) {
-  for (const { name, value } of configuredCardPaymentLinks) {
-    if (!value) failures.push(`Required hosted payment link is missing (${name})`)
-  }
 }
 const appFiles = (
   await Promise.all(appRoots.map((root) => listFiles(path.join(projectRoot, root), appExtensions)))
@@ -437,6 +472,15 @@ for (const file of appFiles) {
   const source = await readFile(file, 'utf8')
   for (const rule of forbiddenAppPatterns) {
     if (rule.pattern.test(source)) failures.push(`${rule.label}: ${path.relative(projectRoot, file)}`)
+  }
+}
+
+const appRouteSources = appFiles
+  .map((file) => path.relative(projectRoot, file).split(path.sep).join('/'))
+  .filter((relativePath) => /^src\/app\/(?:.+\/)?(?:page|route)\.(?:js|jsx|ts|tsx)$/.test(relativePath))
+for (const relativePath of appRouteSources) {
+  if (relativePath !== 'src/app/page.tsx') {
+    failures.push(`Unexpected application route in single-page build: ${relativePath}`)
   }
 }
 
@@ -478,15 +522,9 @@ for (const relativePath of forbiddenPaths) {
   if (await pathExists(relativePath)) failures.push(`Insecure legacy path restored: ${relativePath}`)
 }
 
-for (const relativePath of maintenancePages) {
-  const source = await readFile(path.join(projectRoot, relativePath), 'utf8')
-  if (!isStrictMaintenancePage(source, relativePath)) {
-    failures.push(`Financial route is not strictly fail-closed: ${relativePath}`)
-  }
-}
-
 const cardSurfaceSources = []
 let cardPageSource = ''
+let paymentDialogSource = ''
 for (const relativePath of requiredCardSurfacePaths) {
   if (!(await pathExists(relativePath))) {
     failures.push(`Required static card-purchase surface is missing: ${relativePath}`)
@@ -495,7 +533,8 @@ for (const relativePath of requiredCardSurfacePaths) {
 
   const source = await readFile(path.join(projectRoot, relativePath), 'utf8')
   cardSurfaceSources.push(source)
-  if (relativePath === 'src/app/cards/page.tsx') cardPageSource = source
+  if (relativePath === 'src/app/page.tsx') cardPageSource = source
+  if (relativePath === 'src/components/ui/dialog-notes.tsx') paymentDialogSource = source
 }
 for (const relativePath of optionalCardSurfacePaths) {
   if (await pathExists(relativePath)) {
@@ -510,22 +549,18 @@ for (const rule of forbiddenCardSurfacePatterns) {
 if (cardPageSource && !/\bDialogNotes\b/.test(cardPageSource)) {
   failures.push('Card catalogue does not use the restored usage-notes dialog')
 }
-for (const environmentName of cardPaymentLinkEnvironmentNames) {
-  if (!cardCatalogueSource.includes(environmentName)) {
-    failures.push(`Card catalogue does not use the hosted payment link setting (${environmentName})`)
-  }
+if (paymentDialogSource) {
+  failures.push(...validateDisabledPaymentButtons(
+    paymentDialogSource,
+    'src/components/ui/dialog-notes.tsx',
+  ))
 }
 
-if (await pathExists('src/app/reseller/page.tsx')) {
-  const resellerPage = await readFile(path.join(projectRoot, 'src/app/reseller/page.tsx'), 'utf8')
-  if (/<form\b|handleSubmit|formState|type=["'](?:email|tel)["']/.test(resellerPage)) {
-    failures.push('Reseller page collects personal data without a secure backend')
+if (await pathExists('src/components/layout/MainLayout.tsx')) {
+  const mainLayout = await readFile(path.join(projectRoot, 'src/components/layout/MainLayout.tsx'), 'utf8')
+  if (/WhatsAppChat|whatsapp-chat/i.test(mainLayout)) {
+    failures.push('Global layout restores the retired WhatsApp personal-data flow')
   }
-}
-
-const mainLayout = await readFile(path.join(projectRoot, 'src/components/layout/MainLayout.tsx'), 'utf8')
-if (/WhatsAppChat|whatsapp-chat/i.test(mainLayout)) {
-  failures.push('Global layout restores the retired WhatsApp personal-data flow')
 }
 
 let outputFileCount = 0
@@ -535,15 +570,11 @@ if (requireOutput) {
     failures.push('Production output is missing; run npm run build first')
   } else {
     const outputFiles = await listFiles(outputRoot, null)
-    const embeddedCardPaymentLinks = new Set()
     for (const file of outputFiles) {
       const contents = await readFile(file)
       if (isProbablyBinary(contents)) continue
       outputFileCount += 1
       const source = contents.toString('utf8')
-      for (const { name, value } of configuredCardPaymentLinks) {
-        if (value && source.includes(value)) embeddedCardPaymentLinks.add(name)
-      }
       if (containsRetiredCredential(source)) {
         failures.push(`Retired credential present in production output: ${path.relative(projectRoot, file)}`)
       }
@@ -578,12 +609,6 @@ if (requireOutput) {
       }
     }
 
-    for (const { name, value } of configuredCardPaymentLinks) {
-      if (value && !embeddedCardPaymentLinks.has(name)) {
-        failures.push(`Hosted payment link was not embedded in the production export (${name})`)
-      }
-    }
-
     for (const file of outputFiles) {
       if (path.extname(file) === '.map') {
         failures.push(`Source map published: ${path.relative(projectRoot, file)}`)
@@ -615,30 +640,30 @@ if (requireOutput) {
       }
     }
 
-    const cardsHtmlCandidates = ['out/cards/index.html', 'out/cards.html']
-    const cardsHtmlPath = (await Promise.all(cardsHtmlCandidates.map(async (candidate) =>
-      (await pathExists(candidate)) ? candidate : undefined))).find(Boolean)
-    if (!cardsHtmlPath) {
-      failures.push('Card catalogue is missing from production output: /cards')
-    } else {
-      const cardsHtml = await readFile(path.join(projectRoot, cardsHtmlPath), 'utf8')
-      if (!cardsHtml.includes('Cartes virtuelles DRAVA')
-        || cardsHtml.includes('Achat de cartes temporairement indisponible')) {
-        failures.push('Card catalogue was not restored in production output')
+    if (!rootHtml.includes('Cartes virtuelles DRAVA')
+      || rootHtml.includes('Achat de cartes temporairement indisponible')) {
+      failures.push('Card catalogue is missing from the production root page')
+    }
+
+    for (const route of forbiddenPageRoutes) {
+      const candidates = [
+        `out/${route}`,
+        `out/${route}.html`,
+        `out/${route}/index.html`,
+      ]
+      if ((await Promise.all(candidates.map(pathExists))).some(Boolean)) {
+        failures.push(`Removed route is still present in production output: /${route}`)
       }
     }
 
-    for (const route of maintenanceRoutes) {
-      const candidates = [`out/${route}/index.html`, `out/${route}.html`]
-      const pagePath = (await Promise.all(candidates.map(async (candidate) =>
-        (await pathExists(candidate)) ? candidate : undefined))).find(Boolean)
-      if (!pagePath) {
-        failures.push(`Maintenance page missing from production output: /${route}`)
-        continue
-      }
-      const html = await readFile(path.join(projectRoot, pagePath), 'utf8')
-      if (!html.includes('temporairement indisponible') || !html.includes('Ne transmettez jamais')) {
-        failures.push(`Financial route is not fail-closed in production output: /${route}`)
+    const allowedHtmlPaths = new Set(['404.html', '404/index.html', 'index.html'])
+    const forbiddenRouteNames = new Set(forbiddenPageRoutes)
+    for (const file of outputFiles) {
+      if (path.extname(file) !== '.html') continue
+      const relativePath = path.relative(outputRoot, file).split(path.sep).join('/')
+      const firstSegment = relativePath.split('/')[0].replace(/\.html$/, '')
+      if (!allowedHtmlPaths.has(relativePath) && !forbiddenRouteNames.has(firstSegment)) {
+        failures.push(`Unexpected HTML route in single-page production output: ${relativePath}`)
       }
     }
 

@@ -38,9 +38,8 @@ const contentSecurityPolicy = [
 
 export const metadata: Metadata = {
   metadataBase: siteUrl,
-  title: "DRAVA - Site public d'information",
-  description:
-    "Site public d'information DRAVA. Services de carte, paiement, recharge et retrait temporairement indisponibles.",
+  title: "DRAVA - Cartes virtuelles",
+  description: "Découvrez le catalogue de cartes virtuelles DRAVA.",
   referrer: "strict-origin-when-cross-origin",
   manifest: withBasePath("/manifest.json"),
   icons: {
@@ -70,9 +69,8 @@ export const metadata: Metadata = {
     ],
   },
   openGraph: {
-    title: "DRAVA - Site public d'information",
-    description:
-      "Site public d'information DRAVA. Services de carte, paiement, recharge et retrait temporairement indisponibles.",
+    title: "DRAVA - Cartes virtuelles",
+    description: "Découvrez le catalogue de cartes virtuelles DRAVA.",
     url: siteUrl,
     siteName: "DRAVA",
     images: [
@@ -87,9 +85,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "DRAVA - Site public d'information",
-    description:
-      "Présentation publique de DRAVA; services transactionnels temporairement indisponibles.",
+    title: "DRAVA - Cartes virtuelles",
+    description: "Découvrez le catalogue de cartes virtuelles DRAVA.",
     images: [socialImageUrl],
   },
 };

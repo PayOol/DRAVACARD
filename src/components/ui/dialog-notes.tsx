@@ -1,27 +1,14 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { validateHostedPaymentLink } from "@/lib/card-catalog";
 import { useLanguage } from "@/lib/language-context";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { AnimatePresence, type Variants, motion } from "framer-motion";
 import { X } from "lucide-react";
 
-interface CardDetails {
-  name: {
-    fr: string;
-    en: string;
-  };
-  price: string;
-  currency: string;
-  paymentLink: string | null;
-}
-
 interface DialogNotesProps {
   isOpen: boolean;
   onClose: () => void;
-  onAccept: (cardDetails: CardDetails) => void;
-  cardDetails: CardDetails;
 }
 
 const backdropVariants: Variants = {
@@ -110,26 +97,8 @@ const buttonsVariants: Variants = {
   },
 };
 
-export function DialogNotes({
-  isOpen,
-  onClose,
-  onAccept,
-  cardDetails,
-}: DialogNotesProps) {
+export function DialogNotes({ isOpen, onClose }: DialogNotesProps) {
   const { language } = useLanguage();
-  const paymentLink = validateHostedPaymentLink(cardDetails.paymentLink);
-
-  const handleDirectPayment = () => {
-    if (!paymentLink) return;
-
-    onClose();
-    window.open(paymentLink, "_blank", "noopener,noreferrer");
-  };
-
-  const handleAccept = () => {
-    if (!paymentLink) return;
-    onAccept(cardDetails);
-  };
 
   return (
     <DialogPrimitive.Root
@@ -323,13 +292,12 @@ export function DialogNotes({
                   >
                     <motion.div
                       className="flex-1"
-                      whileHover={paymentLink ? { scale: 1.03 } : undefined}
-                      whileTap={paymentLink ? { scale: 0.97 } : undefined}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
                     >
                       <Button
                         className="w-full bg-blue-600 text-white hover:bg-blue-700"
-                        disabled={!paymentLink}
-                        onClick={handleAccept}
+                        disabled
                       >
                         {language === "fr"
                           ? "Procéder au paiement"
@@ -338,15 +306,10 @@ export function DialogNotes({
                     </motion.div>
                     <motion.div
                       className="flex-1"
-                      whileHover={paymentLink ? { scale: 1.03 } : undefined}
-                      whileTap={paymentLink ? { scale: 0.97 } : undefined}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
                     >
-                      <Button
-                        className="w-full"
-                        disabled={!paymentLink}
-                        onClick={handleDirectPayment}
-                        variant="outline"
-                      >
+                      <Button className="w-full" disabled variant="outline">
                         {language === "fr"
                           ? "Paiement direct"
                           : "Direct payment"}
