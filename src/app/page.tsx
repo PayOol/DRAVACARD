@@ -434,7 +434,7 @@ export default function Home() {
   return (
     <MainLayout>
       <section
-        className={`bg-gradient-to-b from-slate-50 to-white pb-12 pt-20 md:pb-20 md:pt-28 ${isMobile ? "min-h-screen" : ""}`}
+        className={`bg-gradient-to-b from-slate-50 to-white pb-12 pt-4 md:pb-20 md:pt-6 ${isMobile ? "min-h-screen" : ""}`}
       >
         <div className="container mx-auto px-4">
           <div
