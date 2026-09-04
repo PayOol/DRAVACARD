@@ -1,46 +1,24 @@
 /** @type {import('next').NextConfig} */
+const configuredBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
+if (
+  configuredBasePath &&
+  configuredBasePath !== '/' &&
+  !/^\/[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*\/?$/.test(configuredBasePath)
+) {
+  throw new Error('NEXT_PUBLIC_BASE_PATH must be empty or an absolute URL path without traversal segments.');
+}
+const basePath = configuredBasePath === '' || configuredBasePath === '/'
+  ? ''
+  : `/${configuredBasePath.replace(/^\/+|\/+$/g, '')}`;
+
 const nextConfig = {
   output: 'export',
-  distDir: 'out',
+  basePath,
+  trailingSlash: true,
+  outputFileTracingRoot: __dirname,
   reactStrictMode: true,
-  transpilePackages: ["@radix-ui/react-components"],
-  eslint: {
-    // we use biome for linting
-    ignoreDuringBuilds: true,
-  },
   images: {
     unoptimized: true,
-    domains: [
-      "source.unsplash.com",
-      "images.unsplash.com",
-      "ext.same-assets.com",
-      "ugc.same-assets.com",
-    ],
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "source.unsplash.com",
-        pathname: "/**",
-      },
-      {
-        protocol: "https",
-        hostname: "images.unsplash.com",
-        pathname: "/**",
-      },
-      {
-        protocol: "https",
-        hostname: "ext.same-assets.com",
-        pathname: "/**",
-      },
-      {
-        protocol: "https",
-        hostname: "ugc.same-assets.com",
-        pathname: "/**",
-      },
-    ],
-  },
-  typescript: {
-    ignoreBuildErrors: true,
   },
 };
 

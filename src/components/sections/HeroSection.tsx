@@ -1,40 +1,35 @@
-"use client"
+"use client";
 
-import { useState } from 'react'
-import Image from 'next/image'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { ChevronRight, CreditCard, Shield, Globe, X } from 'lucide-react'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
-import ReactCountryFlag from 'react-country-flag'
-import { useLanguage } from '@/lib/language-context'
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { withBasePath } from "@/lib/base-path";
+import { useLanguage } from "@/lib/language-context";
+import { ChevronRight, CreditCard, Globe, Shield } from "lucide-react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
-// Country code mapping for some African countries that may have different ISO codes
-const countryCodeMapping: Record<string, string> = {
-  BJ: 'BJ', // Benin
-  CI: 'CI', // Côte d'Ivoire
-  CM: 'CM', // Cameroon
-  SN: 'SN', // Senegal
-  ML: 'ML', // Mali
-  TG: 'TG', // Togo
-  CD: 'CD', // Democratic Republic of the Congo
-  CG: 'CG', // Republic of the Congo
-  RW: 'RW', // Rwanda
-  KE: 'KE', // Kenya
-  ZM: 'ZM', // Zambia
-  BF: 'BF', // Burkina Faso
-  TZ: 'TZ', // Tanzania
-}
+const toFlagEmoji = (countryCode: string) =>
+  countryCode
+    .toUpperCase()
+    .replace(/[A-Z]/g, (character) =>
+      String.fromCodePoint(character.charCodeAt(0) + 127397),
+    );
 
 const HeroSection = () => {
   const router = useRouter();
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const { t, language } = useLanguage();
 
-  // Fonction pour naviguer vers la page des cartes
-  const handleCreateCard = () => {
-    router.push('/cards');
+  // Fonction pour consulter l'état des services
+  const handleViewServiceStatus = () => {
+    router.push("/cards");
   };
 
   // Fonction pour afficher la boîte de dialogue "Comment ça marche"
@@ -55,32 +50,45 @@ const HeroSection = () => {
           <div className="max-w-xl mx-auto lg:mx-0 text-center lg:text-left">
             <div className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20 mb-6">
               <span>
-                {language === 'fr'
-                  ? 'DRAVA V3.6.0 est maintenant disponible'
-                  : 'DRAVA V3.6.0 is now available'}
+                {language === "fr"
+                  ? "Site public d'information DRAVA"
+                  : "DRAVA public information website"}
               </span>
             </div>
 
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4">
-              {language === 'fr'
-                ? <><span className="text-blue-700">DRAVA</span> <span className="bg-gradient-to-r from-blue-600 to-indigo-800 bg-clip-text text-transparent">- Paiements sans frontières</span></>
-                : <><span className="text-blue-700">DRAVA</span> <span className="bg-gradient-to-r from-blue-600 to-indigo-800 bg-clip-text text-transparent">- Borderless payments</span></>
-              }
+              {language === "fr" ? (
+                <>
+                  <span className="text-blue-700">DRAVA</span>{" "}
+                  <span className="bg-gradient-to-r from-blue-600 to-indigo-800 bg-clip-text text-transparent">
+                    - Informations sur les cartes virtuelles
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-blue-700">DRAVA</span>{" "}
+                  <span className="bg-gradient-to-r from-blue-600 to-indigo-800 bg-clip-text text-transparent">
+                    - Virtual card information
+                  </span>
+                </>
+              )}
             </h1>
 
             <p className="text-lg md:text-xl text-gray-600 mb-8">
-              {language === 'fr'
-                ? "Créez, rechargez et gérez vos cartes virtuelles DRAVA en quelques clics. Effectuez des paiements internationaux en toute simplicité."
-                : "Create, reload and manage your DRAVA virtual cards in just a few clicks. Make international payments with ease."}
+              {language === "fr"
+                ? "Les services de carte, paiement, recharge et retrait sont temporairement indisponibles. Le site reste accessible à titre informatif et ne collecte aucune donnée financière."
+                : "Card, payment, top-up, and withdrawal services are temporarily unavailable. The website remains available for information and collects no financial data."}
             </p>
 
             <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start">
               <Button
                 size="lg"
                 className="bg-gradient-to-r from-blue-600 to-indigo-800 hover:from-blue-700 hover:to-indigo-900 font-medium w-full sm:w-auto transform transition-transform duration-300 hover:scale-105"
-                onClick={handleCreateCard}
+                onClick={handleViewServiceStatus}
               >
-                {language === 'fr' ? 'Acheter votre carte' : 'Buy your card'}
+                {language === "fr"
+                  ? "Voir l'état des services"
+                  : "View service status"}
                 <ChevronRight className="ml-2 h-5 w-5" />
               </Button>
               <Button
@@ -89,7 +97,7 @@ const HeroSection = () => {
                 className="w-full sm:w-auto border-blue-600 text-blue-700 hover:bg-blue-50 transition-all duration-300"
                 onClick={handleShowHowItWorks}
               >
-                {t('navigation.howItWorks')}
+                {t("navigation.howItWorks")}
               </Button>
             </div>
 
@@ -100,7 +108,9 @@ const HeroSection = () => {
                   <CreditCard className="h-5 w-5 text-blue-700" />
                 </div>
                 <span className="text-sm font-medium text-gray-700">
-                  {language === 'fr' ? 'Cartes illimitées' : 'Unlimited cards'}
+                  {language === "fr"
+                    ? "Présentation informative"
+                    : "Informational overview"}
                 </span>
               </div>
               <div className="flex flex-col items-center lg:items-start">
@@ -108,7 +118,9 @@ const HeroSection = () => {
                   <Shield className="h-5 w-5 text-blue-700" />
                 </div>
                 <span className="text-sm font-medium text-gray-700">
-                  {language === 'fr' ? 'Sécurisé 3D' : '3D Secure'}
+                  {language === "fr"
+                    ? "Aucune donnée financière"
+                    : "No financial data"}
                 </span>
               </div>
               <div className="flex flex-col items-center lg:items-start">
@@ -116,7 +128,9 @@ const HeroSection = () => {
                   <Globe className="h-5 w-5 text-blue-700" />
                 </div>
                 <span className="text-sm font-medium text-gray-700">
-                  {language === 'fr' ? 'Utilisation mondiale' : 'Global usage'}
+                  {language === "fr"
+                    ? "Français et anglais"
+                    : "French and English"}
                 </span>
               </div>
             </div>
@@ -133,10 +147,12 @@ const HeroSection = () => {
                 <div className="aspect-[4/3] w-full bg-gradient-to-r from-blue-500 to-indigo-700 p-8 text-white relative overflow-hidden">
                   {/* Holographic shine effect */}
                   <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 transform -translate-x-full group-hover:translate-x-full" />
-                  
+
                   <div className="flex justify-between">
                     <div className="text-xs font-light">
-                      {language === 'fr' ? 'Carte virtuelle' : 'Virtual card'}
+                      {language === "fr"
+                        ? "Illustration de carte"
+                        : "Card illustration"}
                     </div>
                     <div className="flex gap-1">
                       <div className="h-5 w-5 rounded-full bg-yellow-400 opacity-70" />
@@ -148,27 +164,29 @@ const HeroSection = () => {
                     <div className="text-xl flex items-center">
                       <span>DRA</span>
                       <span className="font-bold">VA</span>
-                      <Image 
-                        src="/images/drava-icon-192.svg" 
-                        alt="DRAVA" 
-                        width={24} 
-                        height={24} 
+                      <Image
+                        src={withBasePath("/images/drava-icon-192.svg")}
+                        alt="DRAVA"
+                        width={24}
+                        height={24}
                         className="ml-2 opacity-80"
                       />
                     </div>
-                    <div className="mt-10 text-lg tracking-widest">5304 •••• •••• 3562</div>
+                    <div className="mt-10 text-lg tracking-widest">
+                      •••• •••• •••• ••••
+                    </div>
                     <div className="mt-4 flex justify-between">
                       <div>
                         <div className="text-xs">
-                          {language === 'fr' ? 'TITULAIRE' : 'CARDHOLDER'}
+                          {language === "fr" ? "TITULAIRE" : "CARDHOLDER"}
                         </div>
-                        <div>JOHN DOE</div>
+                        <div>{language === "fr" ? "EXEMPLE" : "SAMPLE"}</div>
                       </div>
                       <div>
                         <div className="text-xs">
-                          {language === 'fr' ? 'EXPIRE LE' : 'EXPIRES ON'}
+                          {language === "fr" ? "EXPIRE LE" : "EXPIRES ON"}
                         </div>
-                        <div>09/26</div>
+                        <div>{language === "fr" ? "MM/AA" : "MM/YY"}</div>
                       </div>
                     </div>
                   </div>
@@ -193,41 +211,54 @@ const HeroSection = () => {
         {/* Country flags - showing support for various countries */}
         <div className="mt-16 flex flex-col items-center">
           <h3 className="text-xl font-semibold text-gray-800 mb-6">
-            {language === 'fr' 
-              ? 'Disponible dans ces pays et plus encore' 
-              : 'Available in these countries and more'}
+            {language === "fr"
+              ? "Une présentation pensée pour plusieurs pays africains"
+              : "An overview designed for several African countries"}
           </h3>
-          
+
           <div className="flex overflow-x-auto pb-4 scrollbar-hide max-w-full">
             <div className="flex gap-4 md:gap-6 mx-auto">
-              {['BJ', 'CI', 'CM', 'SN', 'ML', 'TG', 'CD', 'CG', 'RW', 'KE', 'ZM', 'BF', 'TZ'].map((country) => (
-                <div 
-                  key={country} 
+              {[
+                "BJ",
+                "CI",
+                "CM",
+                "SN",
+                "ML",
+                "TG",
+                "CD",
+                "CG",
+                "RW",
+                "KE",
+                "ZM",
+                "BF",
+                "TZ",
+              ].map((country) => (
+                <div
+                  key={country}
                   className="flex-shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-full bg-white flex flex-col items-center justify-center shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105 border border-gray-100"
                 >
                   <div className="mb-1">
-                    <ReactCountryFlag
-                      countryCode={countryCodeMapping[country]}
-                      svg
-                      style={{
-                        width: '2em',
-                        height: '2em',
-                        borderRadius: '50%',
-                      }}
-                      title={country}
-                    />
+                    <span
+                      role="img"
+                      aria-label={country}
+                      className="text-3xl leading-none"
+                    >
+                      {toFlagEmoji(country)}
+                    </span>
                   </div>
-                  <span className="text-xs font-medium text-gray-700">{country}</span>
+                  <span className="text-xs font-medium text-gray-700">
+                    {country}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
-          
+
           <div className="mt-8 text-center">
             <p className="text-sm text-gray-500 max-w-lg mx-auto">
-              {language === 'fr'
-                ? 'Nos cartes virtuelles sont acceptées partout où VISA et Mastercard sont acceptés, avec un support spécial pour les pays africains.'
-                : 'Our virtual cards are accepted everywhere VISA and Mastercard are accepted, with special support for African countries.'}
+              {language === "fr"
+                ? "Ces pays illustrent la portée informative du projet et ne constituent pas une liste de disponibilité commerciale."
+                : "These countries illustrate the project's informational scope and are not a list of commercial availability."}
             </p>
           </div>
         </div>
@@ -238,12 +269,12 @@ const HeroSection = () => {
         <DialogContent className="sm:max-w-lg w-[95%] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-800 bg-clip-text text-transparent">
-              {t('home.howItWorks.title')}
+              {t("home.howItWorks.title")}
             </DialogTitle>
             <DialogDescription className="text-base sm:text-lg text-gray-600 mt-2">
-              {language === 'fr'
-                ? 'Découvrez comment obtenir et utiliser votre carte virtuelle en quelques étapes simples.'
-                : 'Discover how to obtain and use your virtual card in a few simple steps.'}
+              {language === "fr"
+                ? "Le parcours transactionnel reste suspendu pendant sa sécurisation. Voici ce que vous pouvez consulter aujourd'hui."
+                : "The transactional flow remains paused while it is secured. Here is what you can review today."}
             </DialogDescription>
           </DialogHeader>
 
@@ -254,12 +285,14 @@ const HeroSection = () => {
               </div>
               <div>
                 <h3 className="font-semibold text-base sm:text-lg text-gray-900">
-                  {language === 'fr' ? 'Choisissez votre carte' : 'Choose your card'}
+                  {language === "fr"
+                    ? "Consultez la présentation"
+                    : "Review the overview"}
                 </h3>
                 <p className="text-sm sm:text-base text-gray-600">
-                  {language === 'fr'
-                    ? 'Sélectionnez le type de carte qui correspond à vos besoins parmi nos options VISA et MASTERCARD.'
-                    : 'Select the type of card that suits your needs from our VISA and MASTERCARD options.'}
+                  {language === "fr"
+                    ? "Découvrez le projet et les catégories présentées, sans engagement ni commande active."
+                    : "Learn about the project and the displayed categories, with no commitment or active ordering."}
                 </p>
               </div>
             </div>
@@ -270,12 +303,14 @@ const HeroSection = () => {
               </div>
               <div>
                 <h3 className="font-semibold text-base sm:text-lg text-gray-900">
-                  {language === 'fr' ? 'Effectuez le paiement' : 'Make the payment'}
+                  {language === "fr"
+                    ? "Services temporairement suspendus"
+                    : "Services temporarily paused"}
                 </h3>
                 <p className="text-sm sm:text-base text-gray-600">
-                  {language === 'fr'
-                    ? 'Payez en toute sécurité via notre passerelle de paiement protégée utilisant des méthodes variées.'
-                    : 'Pay securely through our protected payment gateway using various methods.'}
+                  {language === "fr"
+                    ? "Le site ne permet actuellement aucun paiement, achat, recharge ou retrait."
+                    : "The website currently allows no payment, purchase, top-up, or withdrawal."}
                 </p>
               </div>
             </div>
@@ -286,12 +321,14 @@ const HeroSection = () => {
               </div>
               <div>
                 <h3 className="font-semibold text-base sm:text-lg text-gray-900">
-                  {language === 'fr' ? 'Recevez votre carte' : 'Receive your card'}
+                  {language === "fr"
+                    ? "Attendez un parcours vérifié"
+                    : "Wait for a verified flow"}
                 </h3>
                 <p className="text-sm sm:text-base text-gray-600">
-                  {language === 'fr'
-                    ? 'Votre carte virtuelle est générée instantanément et les détails sont envoyés de manière sécurisée.'
-                    : 'Your virtual card is generated instantly and details are sent securely.'}
+                  {language === "fr"
+                    ? "Une éventuelle réouverture sera annoncée sur ce site et reposera sur une infrastructure serveur sécurisée. Aucun détail de carte ne sera envoyé par e-mail."
+                    : "Any future reopening will be announced on this website and will rely on secure server infrastructure. No card details will be sent by email."}
                 </p>
               </div>
             </div>
@@ -302,12 +339,14 @@ const HeroSection = () => {
               </div>
               <div>
                 <h3 className="font-semibold text-base sm:text-lg text-gray-900">
-                  {language === 'fr' ? 'Utilisez partout' : 'Use everywhere'}
+                  {language === "fr"
+                    ? "Protégez vos données"
+                    : "Protect your data"}
                 </h3>
                 <p className="text-sm sm:text-base text-gray-600">
-                  {language === 'fr'
-                    ? 'Utilisez votre carte pour les achats en ligne partout où VISA et Mastercard sont acceptés.'
-                    : 'Use your card for online purchases anywhere VISA and Mastercard are accepted.'}
+                  {language === "fr"
+                    ? "Ne transmettez jamais un PAN, un CVV, un code à usage unique, un mot de passe ou un secret par e-mail ou messagerie."
+                    : "Never send a PAN, CVV, one-time code, password, or secret by email or messaging."}
                 </p>
               </div>
             </div>
@@ -315,9 +354,11 @@ const HeroSection = () => {
             <div className="mt-6">
               <Button
                 className="w-full bg-gradient-to-r from-blue-600 to-indigo-800"
-                onClick={handleCreateCard}
+                onClick={handleViewServiceStatus}
               >
-                {language === 'fr' ? 'Acheter ma carte maintenant' : 'Buy my card now'}
+                {language === "fr"
+                  ? "Consulter l'état des services"
+                  : "Check service status"}
                 <ChevronRight className="ml-2 h-5 w-5" />
               </Button>
             </div>
@@ -325,7 +366,7 @@ const HeroSection = () => {
         </DialogContent>
       </Dialog>
     </section>
-  )
-}
+  );
+};
 
-export default HeroSection
+export default HeroSection;

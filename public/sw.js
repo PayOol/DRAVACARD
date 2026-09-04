@@ -1,75 +1,69 @@
-// Service Worker for DRAVA PWA
-const CACHE_NAME = 'drava-cache-v1';
-const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/favicon.ico',
-  '/favicon-16x16.png',
-  '/favicon-32x32.png',
-  '/apple-touch-icon.png',
-  '/images/drava-icon-192.svg',
-  '/images/drava-icon-512.svg',
-  '/images/drava-logo.svg',
-  '/images/card-generic.svg',
-  '/images/mastercard.svg',
-  '/images/visa.svg'
-];
+// Cache only versioned public assets. Navigations always prefer the network so
+// security fixes and service-status changes cannot be pinned by an old cache.
+const workerPath = new URL(self.location.href).pathname
+const BASE_PATH = workerPath.endsWith('/sw.js') ? workerPath.slice(0, -'/sw.js'.length) : ''
+const withBasePath = (pathname) => `${BASE_PATH}${pathname}`
+const CACHE_NAME = `drava-public-v3-${BASE_PATH || 'root'}`
+const CACHE_PREFIX = 'drava-'
+const PRECACHE_URLS = [
+  withBasePath('/manifest.json'),
+  withBasePath('/favicon.svg'),
+  withBasePath('/favicon-16x16.svg'),
+  withBasePath('/favicon-32x32.svg'),
+  withBasePath('/apple-touch-icon.svg'),
+  withBasePath('/images/drava-icon-192.svg'),
+  withBasePath('/images/drava-icon-512.svg'),
+  withBasePath('/images/drava-logo.svg'),
+  withBasePath('/images/card-generic.svg'),
+  withBasePath('/images/mastercard.svg'),
+  withBasePath('/images/visa.svg'),
+]
 
-// Install event - cache assets
-self.addEventListener('install', event => {
+self.addEventListener('install', (event) => {
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)))
+  self.skipWaiting()
+})
+
+self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
-  );
-});
+    caches
+      .keys()
+      .then((cacheNames) => Promise.all(
+        cacheNames
+          .filter((cacheName) => cacheName.startsWith(CACHE_PREFIX) && cacheName !== CACHE_NAME)
+          .map((cacheName) => caches.delete(cacheName)),
+      ))
+      .then(() => self.clients.claim()),
+  )
+})
 
-// Fetch event - serve from cache, fall back to network
-self.addEventListener('fetch', event => {
+self.addEventListener('fetch', (event) => {
+  const { request } = event
+
+  if (request.method !== 'GET') return
+
+  const url = new URL(request.url)
+  if (url.origin !== self.location.origin) return
+
+  if (request.mode === 'navigate') {
+    event.respondWith(fetch(request))
+    return
+  }
+
+  const isPrecached = PRECACHE_URLS.includes(url.pathname)
+  const isHashedNextAsset = url.pathname.startsWith(withBasePath('/_next/static/'))
+  if (!isPrecached && !isHashedNextAsset) return
+
   event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // Cache hit - return response
-        if (response) {
-          return response;
-        }
-        return fetch(event.request).then(
-          response => {
-            // Check if we received a valid response
-            if (!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
-            }
+    caches.match(request).then(async (cachedResponse) => {
+      if (cachedResponse) return cachedResponse
 
-            // Clone the response
-            const responseToCache = response.clone();
-
-            caches.open(CACHE_NAME)
-              .then(cache => {
-                cache.put(event.request, responseToCache);
-              });
-
-            return response;
-          }
-        );
-      })
-  );
-});
-
-// Activate event - clean up old caches
-self.addEventListener('activate', event => {
-  const cacheWhitelist = [CACHE_NAME];
-  event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
-  );
-});
+      const networkResponse = await fetch(request)
+      if (networkResponse.ok && networkResponse.type === 'basic') {
+        const cache = await caches.open(CACHE_NAME)
+        await cache.put(request, networkResponse.clone())
+      }
+      return networkResponse
+    }),
+  )
+})

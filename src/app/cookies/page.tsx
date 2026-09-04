@@ -1,177 +1,189 @@
-'use client'
+"use client";
 
-import MainLayout from '@/components/layout/MainLayout'
-import { Separator } from '@/components/ui/separator'
-import Link from 'next/link'
-import { useLanguage } from '@/lib/language-context'
+import MainLayout from "@/components/layout/MainLayout";
+import { Separator } from "@/components/ui/separator";
+import { useLanguage } from "@/lib/language-context";
+import Link from "next/link";
 
 export default function CookiesPage() {
   const { language } = useLanguage();
 
   return (
     <MainLayout>
-      <div className="container mx-auto py-16 px-4">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-4xl font-bold mb-6">
-            {language === 'fr'
-              ? "Politique de cookies DRAVA"
-              : "DRAVA Cookie Policy"}
+      <div className="container mx-auto px-4 py-16">
+        <div className="mx-auto max-w-4xl">
+          <h1 className="mb-6 text-4xl font-bold">
+            {language === "fr"
+              ? "Politique de stockage local DRAVA"
+              : "DRAVA Local Storage Policy"}
           </h1>
-          <p className="text-gray-600 mb-8">
-            {language === 'fr'
-              ? "Cette politique explique comment DRAVA utilise les cookies sur son site web."
-              : "This policy explains how DRAVA uses cookies on its website."}
+          <p className="mb-2 text-gray-600">
+            {language === "fr"
+              ? "Cette page explique l'absence de cookies applicatifs et le stockage local limité utilisé par le site."
+              : "This page explains the absence of application cookies and the website's limited use of local storage."}
+          </p>
+          <p className="mb-8 text-sm text-gray-500">
+            {language === "fr"
+              ? "Dernière mise à jour : 4 septembre 2026"
+              : "Last updated: September 4, 2026"}
           </p>
 
           <div className="prose prose-blue max-w-none">
-            <p className="lead text-lg text-gray-700 mb-8">
-              {language === 'fr'
-                ? "Cette politique explique comment DRAVA utilise les cookies et technologies similaires sur notre site web. Nous vous expliquons quels types de cookies nous utilisons, pourquoi nous les utilisons, et comment vous pouvez les gérer selon vos préférences."
-                : "This policy explains how DRAVA uses cookies and similar technologies on our website. We explain what types of cookies we use, why we use them, and how you can manage them according to your preferences."}
-            </p>
+            <div className="mb-8 rounded-lg bg-blue-50 p-6 text-blue-950">
+              <p className="font-semibold">
+                {language === "fr"
+                  ? "Le code applicatif DRAVA ne dépose aucun cookie."
+                  : "The DRAVA application code does not set cookies."}
+              </p>
+              <p className="mt-2">
+                {language === "fr"
+                  ? "Il n'utilise ni outil publicitaire, ni outil d'analyse, ni pixel de suivi."
+                  : "It uses no advertising tool, analytics tool, or tracking pixel."}
+              </p>
+            </div>
 
             <Separator className="my-8" />
 
             <section className="mb-10">
-              <h2 className="text-2xl font-bold mb-4" id="definition">
-                {language === 'fr' ? "1. Qu'est-ce qu'un cookie ?" : "1. What is a cookie?"}
+              <h2 className="mb-4 text-2xl font-bold" id="definition">
+                {language === "fr"
+                  ? "1. Cookies et stockage du navigateur"
+                  : "1. Cookies and browser storage"}
               </h2>
-              <p className="mb-4">
-                {language === 'fr'
-                  ? "Un cookie est un petit fichier texte qu'un site web sauvegarde sur votre ordinateur ou appareil mobile lorsque vous visitez ce site. Il permet au site web de mémoriser vos actions et préférences (comme votre identifiant de connexion, la langue, la taille de police et d'autres préférences d'affichage) pendant une période déterminée, afin que vous n'ayez pas à les saisir à nouveau lorsque vous revenez sur le site ou naviguez d'une page à l'autre."
-                  : "A cookie is a small text file that a website saves on your computer or mobile device when you visit the site. It enables the website to remember your actions and preferences (such as login, language, font size, and other display preferences) for a period of time, so you don't have to re-enter them when you come back to the site or browse from one page to another."}
-              </p>
-            </section>
-
-            <section className="mb-10">
-              <h2 className="text-2xl font-bold mb-4" id="types">
-                {language === 'fr' ? "2. Types de cookies que nous utilisons" : "2. Types of cookies we use"}
-              </h2>
-              <p className="mb-4">
-                {language === 'fr'
-                  ? "DRAVA utilise différents types de cookies pour diverses raisons :"
-                  : "DRAVA uses different types of cookies for various reasons:"}
-              </p>
-              <ul className="list-disc pl-6 space-y-2">
-                <li>
-                  <strong>{language === 'fr' ? "Cookies essentiels" : "Essential cookies"}</strong>:
-                  {language === 'fr'
-                    ? " Ces cookies sont nécessaires au fonctionnement de notre site web. Ils vous permettent de naviguer sur notre site et d'utiliser ses fonctionnalités."
-                    : " These cookies are necessary for the operation of our website. They allow you to navigate our site and use its features."}
-                </li>
-                <li>
-                  <strong>{language === 'fr' ? "Cookies de performance" : "Performance cookies"}</strong>:
-                  {language === 'fr'
-                    ? " Ils nous aident à comprendre comment les visiteurs interagissent avec notre site en recueillant et analysant des informations de manière anonyme."
-                    : " They help us understand how visitors interact with our site by collecting and analyzing information anonymously."}
-                </li>
-                <li>
-                  <strong>{language === 'fr' ? "Cookies de fonctionnalité" : "Functionality cookies"}</strong>:
-                  {language === 'fr'
-                    ? " Ces cookies permettent à notre site de mémoriser les choix que vous faites afin de vous fournir une expérience personnalisée."
-                    : " These cookies allow our site to remember choices you make to provide you with a personalized experience."}
-                </li>
-                <li>
-                  <strong>{language === 'fr' ? "Cookies de ciblage/publicitaires" : "Targeting/advertising cookies"}</strong>:
-                  {language === 'fr'
-                    ? " Ils sont utilisés pour vous présenter des publicités plus pertinentes à vos intérêts."
-                    : " They are used to present advertisements more relevant to your interests."}
-                </li>
-              </ul>
-            </section>
-
-            <section className="mb-10">
-              <h2 className="text-2xl font-bold mb-4" id="cookies-tiers">3. Cookies tiers</h2>
-              <p className="mb-4">
-                {language === 'fr'
-                  ? "En plus de nos propres cookies (cookies de première partie), nous pouvons également utiliser différents cookies de tiers pour rapporter des statistiques d'utilisation du site, diffuser des publicités, etc."
-                  : "In addition to our own cookies (first-party cookies), we may also use various third-party cookies to report site usage statistics, serve advertisements, etc."}
-              </p>
               <p>
-                {language === 'fr'
-                  ? "Ces cookies tiers peuvent inclure des cookies provenant de services tels que Google Analytics, Facebook Pixel, et d'autres plateformes de médias sociaux ou services publicitaires."
-                  : "These third-party cookies may include cookies from services such as Google Analytics, Facebook Pixel, and other social media platforms or advertising services."}
+                {language === "fr"
+                  ? "Un cookie est une donnée qu'un site peut associer aux requêtes de votre navigateur. Le stockage local et Cache Storage sont des espaces distincts du navigateur : leurs données ne sont pas envoyées automatiquement avec chaque requête."
+                  : "A cookie is data that a website can associate with your browser requests. Local storage and Cache Storage are separate browser areas: their data is not automatically sent with every request."}
               </p>
             </section>
 
             <section className="mb-10">
-              <h2 className="text-2xl font-bold mb-4" id="controle">4. Comment contrôler les cookies</h2>
-              <p className="mb-4">
-                {language === 'fr'
-                  ? "Vous pouvez contrôler et/ou supprimer les cookies comme vous le souhaitez. Vous pouvez supprimer tous les cookies qui sont déjà sur votre ordinateur et vous pouvez configurer la plupart des navigateurs pour empêcher leur installation."
-                  : "You can control and/or delete cookies as you wish. You can delete all cookies that are already on your computer and you can configure most browsers to prevent their installation."}
-              </p>
-              <p className="mb-4">
-                {language === 'fr'
-                  ? "Vous pouvez facilement accepter ou refuser les cookies sur ce site en choisissant l'une des options suivantes :"
-                  : "You can easily accept or refuse cookies on this site by choosing one of the following options:"}
-              </p>
-              <ul className="list-disc pl-6 space-y-2">
-                <li>{language === 'fr' ? "Accepter tous les cookies" : "Accept all cookies"}</li>
-                <li>{language === 'fr' ? "N'accepter que les cookies essentiels" : "Accept only essential cookies"}</li>
-                <li>{language === 'fr' ? "Refuser tous les cookies non essentiels" : "Reject all non-essential cookies"}</li>
+              <h2 className="mb-4 text-2xl font-bold" id="utilisation">
+                {language === "fr"
+                  ? "2. Ce que le site conserve localement"
+                  : "2. What the website stores locally"}
+              </h2>
+              <ul className="list-disc space-y-2 pl-6">
+                <li>
+                  <strong>
+                    {language === "fr"
+                      ? "Préférence de langue :"
+                      : "Language preference:"}
+                  </strong>{" "}
+                  {language === "fr"
+                    ? "le choix français ou anglais est conservé dans localStorage pour l'affichage des prochaines pages."
+                    : "the French or English choice is kept in localStorage for subsequent page displays."}
+                </li>
+                <li>
+                  <strong>
+                    {language === "fr" ? "Actifs publics :" : "Public assets:"}
+                  </strong>{" "}
+                  {language === "fr"
+                    ? "le service worker peut placer des fichiers publics et versionnés du site dans Cache Storage pour accélérer leur chargement."
+                    : "the service worker may place public, versioned website files in Cache Storage to improve loading."}
+                </li>
               </ul>
               <p className="mt-4">
-                {language === 'fr'
-                  ? "Vous pouvez également modifier les paramètres de cookies dans votre navigateur. Voici quelques instructions pour les navigateurs les plus populaires :"
-                  : "You can also modify cookie settings in your browser. Here are some instructions for the most popular browsers:"}
+                {language === "fr"
+                  ? "Aucune de ces zones n'est utilisée par le code du site pour conserver un paiement, une carte, une recharge, un retrait, une inscription à une newsletter ou une candidature revendeur."
+                  : "Neither area is used by the website code to store a payment, card, top-up, withdrawal, newsletter subscription, or reseller application."}
               </p>
-              <ul className="list-disc pl-6 space-y-2 mt-4">
-                <li><a href="https://support.google.com/chrome/answer/95647" className="text-blue-600 hover:underline">Chrome</a></li>
-                <li><a href="https://support.mozilla.org/en-US/kb/cookies-information-websites-store-on-your-computer" className="text-blue-600 hover:underline">Firefox</a></li>
-                <li><a href="https://support.apple.com/guide/safari/manage-cookies-and-website-data-sfri11471/mac" className="text-blue-600 hover:underline">Safari</a></li>
-                <li><a href="https://support.microsoft.com/en-us/windows/delete-and-manage-cookies-168dab11-0753-043d-7c16-ede5947fc64d" className="text-blue-600 hover:underline">Edge</a></li>
-              </ul>
             </section>
 
             <section className="mb-10">
-              <h2 className="text-2xl font-bold mb-4" id="modifications">5. Modifications de notre politique de cookies</h2>
+              <h2 className="mb-4 text-2xl font-bold" id="hebergeur">
+                {language === "fr"
+                  ? "3. GitHub Pages et services externes"
+                  : "3. GitHub Pages and external services"}
+              </h2>
               <p className="mb-4">
-                {language === 'fr'
-                  ? "Nous pouvons mettre à jour cette politique de cookies de temps à autre pour refléter, par exemple, les changements apportés aux cookies que nous utilisons ou pour d'autres raisons opérationnelles, légales ou réglementaires."
-                  : "We may update this cookie policy from time to time to reflect, for example, changes to the cookies we use or for other operational, legal, or regulatory reasons."}
+                {language === "fr"
+                  ? "GitHub Pages héberge le site et peut traiter des adresses IP et des journaux techniques selon les politiques de GitHub. Ces traitements d'hébergement ne sont pas pilotés par le code applicatif DRAVA."
+                  : "GitHub Pages hosts the website and may process IP addresses and technical logs under GitHub's policies. This hosting processing is not controlled by the DRAVA application code."}
               </p>
               <p>
-                {language === 'fr'
-                  ? "La date en haut de cette page indique quand cette politique de cookies a été mise à jour pour la dernière fois."
-                  : "The date at the top of this page indicates when this cookie policy was last updated."}
+                {language === "fr"
+                  ? "Un lien vers un e-mail, un numéro de téléphone ou un autre site ouvre une application ou un service externe. Ce fournisseur peut utiliser ses propres cookies ou stockages selon sa politique."
+                  : "A link to an email address, phone number, or another website opens an external application or service. That provider may use its own cookies or storage under its policy."}
               </p>
             </section>
 
             <section className="mb-10">
-              <h2 className="text-2xl font-bold mb-4" id="contact">6. Nous contacter</h2>
+              <h2 className="mb-4 text-2xl font-bold" id="controle">
+                {language === "fr"
+                  ? "4. Gérer ou supprimer les données locales"
+                  : "4. Managing or deleting local data"}
+              </h2>
               <p className="mb-4">
-                {language === 'fr'
-                  ? "Si vous avez des questions concernant notre utilisation des cookies ou d'autres technologies, veuillez nous contacter :"
-                  : "If you have any questions regarding our use of cookies or other technologies, please contact us:"}
+                {language === "fr"
+                  ? "Vous pouvez effacer la préférence de langue, le cache et les données du site depuis les réglages de confidentialité ou de stockage de votre navigateur. Vous pouvez aussi désinscrire le service worker dans les outils ou réglages du navigateur."
+                  : "You can remove the language preference, cache, and website data from your browser's privacy or storage settings. You can also unregister the service worker through the browser's tools or settings."}
               </p>
+              <p>
+                {language === "fr"
+                  ? "Cette suppression peut réinitialiser la langue et obliger le navigateur à télécharger de nouveau les actifs publics; elle ne bloque pas l'accès au contenu essentiel du site."
+                  : "Removing this data may reset the language and require the browser to download public assets again; it does not prevent access to the website's essential content."}
+              </p>
+            </section>
 
-              <div className="bg-gray-50 p-6 rounded-lg">
-                <p className="font-medium mb-2">DRAVA - Service confidentialité</p>
-                <p className="mb-1">Adresse : 1111 Maetur à Dakar, Cameroun</p>
-                <p className="mb-1">Email : <a href="mailto:contact.drava@gmail.com" className="text-blue-600 hover:underline">contact.drava@gmail.com</a></p>
-                <p>Téléphone : +237 696 16 11 86</p>
-              </div>
+            <section className="mb-10">
+              <h2 className="mb-4 text-2xl font-bold" id="modifications">
+                {language === "fr"
+                  ? "5. Modifications et contact"
+                  : "5. Changes and contact"}
+              </h2>
+              <p>
+                {language === "fr"
+                  ? "Cette politique sera mise à jour avant l'ajout de tout nouveau cookie, outil de mesure ou stockage. Pour toute question, écrivez à "
+                  : "This policy will be updated before any new cookie, measurement tool, or storage is added. For questions, write to "}
+                <a
+                  href="mailto:contact.drava@gmail.com"
+                  className="text-blue-600 hover:underline"
+                >
+                  contact.drava@gmail.com
+                </a>
+                {language === "fr"
+                  ? ". Ce lien ouvre votre messagerie; n'envoyez jamais de PAN, CVV, code ou secret."
+                  : ". This link opens your email application; never send a PAN, CVV, code, or secret."}
+              </p>
             </section>
 
             <Separator className="my-8" />
 
-            <div className="mt-10 bg-blue-50 p-6 rounded-lg">
-              <h3 className="text-xl font-semibold mb-3 text-blue-800">Liens connexes</h3>
+            <div className="mt-10 rounded-lg bg-blue-50 p-6">
+              <h3 className="mb-3 text-xl font-semibold text-blue-800">
+                {language === "fr" ? "Liens connexes" : "Related links"}
+              </h3>
               <ul className="space-y-2">
                 <li>
-                  <Link href="/privacy" className="text-blue-600 hover:underline flex items-center">
-                    <span className="mr-2">→</span> Politique de confidentialité
+                  <Link
+                    href="/privacy"
+                    className="flex items-center text-blue-600 hover:underline"
+                  >
+                    <span className="mr-2">→</span>
+                    {language === "fr"
+                      ? "Politique de confidentialité"
+                      : "Privacy Policy"}
                   </Link>
                 </li>
                 <li>
-                  <Link href="/terms" className="text-blue-600 hover:underline flex items-center">
-                    <span className="mr-2">→</span> Conditions d'utilisation
+                  <Link
+                    href="/terms"
+                    className="flex items-center text-blue-600 hover:underline"
+                  >
+                    <span className="mr-2">→</span>
+                    {language === "fr"
+                      ? "Conditions d'utilisation"
+                      : "Terms of Service"}
                   </Link>
                 </li>
                 <li>
-                  <Link href="/faq" className="text-blue-600 hover:underline flex items-center">
-                    <span className="mr-2">→</span> Foire Aux Questions
+                  <Link
+                    href="/faq"
+                    className="flex items-center text-blue-600 hover:underline"
+                  >
+                    <span className="mr-2">→</span>
+                    {language === "fr" ? "Foire aux questions" : "FAQ"}
                   </Link>
                 </li>
               </ul>
@@ -180,5 +192,5 @@ export default function CookiesPage() {
         </div>
       </div>
     </MainLayout>
-  )
+  );
 }

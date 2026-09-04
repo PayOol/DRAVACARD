@@ -1,11 +1,19 @@
-"use client"
+"use client";
 
-import { motion } from 'framer-motion'
-import { CheckCircle, DollarSign, CreditCard, Smartphone, ShoppingCart, Shield } from 'lucide-react'
-import MainLayout from '@/components/layout/MainLayout'
-import { Button } from '@/components/ui/button'
-import Link from 'next/link'
-import { useLanguage } from '@/lib/language-context'
+import MainLayout from "@/components/layout/MainLayout";
+import { Button } from "@/components/ui/button";
+import { withBasePath } from "@/lib/base-path";
+import { useLanguage } from "@/lib/language-context";
+import { motion } from "framer-motion";
+import {
+  CheckCircle,
+  CreditCard,
+  DollarSign,
+  Shield,
+  ShoppingCart,
+  Smartphone,
+} from "lucide-react";
+import Link from "next/link";
 
 export default function HowItWorksPage() {
   const { language } = useLanguage();
@@ -16,100 +24,119 @@ export default function HowItWorksPage() {
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.15
-      }
-    }
-  }
+        staggerChildren: 0.15,
+      },
+    },
+  };
 
   const itemVariants = {
     hidden: { opacity: 0, y: 20 },
     visible: {
       opacity: 1,
       y: 0,
-      transition: { duration: 0.5 }
-    }
-  }
+      transition: { duration: 0.5 },
+    },
+  };
 
   // Données sur les étapes du fonctionnement
   const steps = [
     {
-      title: language === 'fr' ? "Choisissez votre carte" : "Choose your card",
-      description: language === 'fr'
-        ? "Sélectionnez parmi notre gamme de cartes virtuelles Visa et Mastercard selon vos besoins. Options disponibles pour tous les budgets et usages."
-        : "Select from our range of Visa and Mastercard virtual cards according to your needs. Options available for all budgets and uses.",
+      title:
+        language === "fr" ? "Consultez la présentation" : "Review the overview",
+      description:
+        language === "fr"
+          ? "Découvrez le projet et les catégories de cartes présentées à titre informatif, sans commande ni offre active."
+          : "Learn about the project and card categories shown for information, with no ordering or active offer.",
       icon: <CreditCard className="h-10 w-10 text-white" />,
       color: "bg-blue-600",
-      image: "https://images.unsplash.com/photo-1556155092-490a1ba16284?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=80"
+      image: withBasePath("/images/card-generic.svg"),
     },
     {
-      title: language === 'fr' ? "Personnalisez les options" : "Customize options",
-      description: language === 'fr'
-        ? "Choisissez les options spécifiques de votre carte selon vos besoins, comme les limites de transaction et les fonctionnalités de sécurité."
-        : "Choose specific card options according to your needs, such as transaction limits and security features.",
+      title:
+        language === "fr"
+          ? "Vérifiez l'état du service"
+          : "Check service status",
+      description:
+        language === "fr"
+          ? "Les pages de carte, recharge, solde et retrait indiquent clairement que les fonctions transactionnelles sont suspendues."
+          : "The card, top-up, balance, and withdrawal pages clearly state that transactional features are paused.",
       icon: <CreditCard className="h-10 w-10 text-white" />,
       color: "bg-indigo-600",
-      image: "https://images.unsplash.com/photo-1563013544-824ae1b704d3?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=80"
+      image: withBasePath("/images/drava-logo.svg"),
     },
     {
-      title: language === 'fr' ? "Effectuez le paiement" : "Make the payment",
-      description: language === 'fr'
-        ? "Payez votre carte en utilisant nos différentes méthodes de paiement sécurisées : mobile money, crypto-monnaies ou transferts bancaires."
-        : "Pay for your card using our various secure payment methods: mobile money, cryptocurrencies, or bank transfers.",
+      title: language === "fr" ? "Aucun paiement actif" : "No active payments",
+      description:
+        language === "fr"
+          ? "Le site ne reçoit aucun paiement, montant de recharge, identifiant financier ou ordre de retrait."
+          : "The website receives no payments, top-up amounts, financial credentials, or withdrawal instructions.",
       icon: <DollarSign className="h-10 w-10 text-white" />,
       color: "bg-green-600",
-      image: "https://images.unsplash.com/photo-1559526324-593bc073d938?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=80"
+      image: withBasePath("/images/drava-icon-512.svg"),
     },
     {
-      title: language === 'fr' ? "Recevez vos détails" : "Receive your details",
-      description: language === 'fr'
-        ? "Obtenez instantanément les détails de votre carte virtuelle par email. Prête à être utilisée immédiatement pour vos achats en ligne."
-        : "Get the details of your virtual card instantly by email. Ready to be used immediately for your online purchases.",
+      title:
+        language === "fr"
+          ? "Aucun détail envoyé par e-mail"
+          : "No details sent by email",
+      description:
+        language === "fr"
+          ? "DRAVA n'envoie aucune donnée de carte depuis ce site. Un e-mail ou une messagerie ne doit jamais servir à transmettre un PAN, un CVV ou un code."
+          : "DRAVA sends no card data from this website. Email or messaging must never be used to send a PAN, CVV, or code.",
       icon: <Smartphone className="h-10 w-10 text-white" />,
       color: "bg-purple-600",
-      image: "https://images.unsplash.com/photo-1565492206137-0797aa0168a0?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=80"
+      image: withBasePath("/images/visa.svg"),
     },
     {
-      title: language === 'fr' ? "Utilisez votre carte" : "Use your card",
-      description: language === 'fr'
-        ? "Effectuez des achats en ligne partout dans le monde. Votre carte est acceptée sur la plupart des sites et plateformes internationaux."
-        : "Make online purchases anywhere in the world. Your card is accepted on most international websites and platforms.",
+      title:
+        language === "fr"
+          ? "Attendez un parcours vérifié"
+          : "Wait for a verified flow",
+      description:
+        language === "fr"
+          ? "Une éventuelle réouverture sera annoncée sur le site et reposera sur une infrastructure serveur sécurisée."
+          : "Any future reopening will be announced on the website and rely on secure server infrastructure.",
       icon: <ShoppingCart className="h-10 w-10 text-white" />,
       color: "bg-rose-600",
-      image: "https://images.unsplash.com/photo-1563013544-824ae1b704d3?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=80"
-    }
-  ]
+      image: withBasePath("/images/mastercard.svg"),
+    },
+  ];
 
-  // Avantages de l'utilisation de DRAVA
+  // Principes de la version publique actuelle
   const benefits = [
     {
-      title: language === 'fr' ? "Transactions sécurisées" : "Secure transactions",
-      description: language === 'fr'
-        ? "Protection par authentification 3D Secure et cryptage SSL avancé pour chaque transaction."
-        : "Protection through 3D Secure authentication and advanced SSL encryption for every transaction.",
-      icon: <Shield className="h-6 w-6 text-blue-600" />
+      title: language === "fr" ? "Publication statique" : "Static publishing",
+      description:
+        language === "fr"
+          ? "Le site présente du contenu public et n'exécute aucune transaction financière."
+          : "The website presents public content and performs no financial transactions.",
+      icon: <Shield className="h-6 w-6 text-blue-600" />,
     },
     {
-      title: language === 'fr' ? "Anonymat préservé" : "Preserved anonymity",
-      description: language === 'fr'
-        ? "Vos informations personnelles restent privées lors des achats en ligne."
-        : "Your personal information remains private during online purchases.",
-      icon: <CheckCircle className="h-6 w-6 text-blue-600" />
+      title: language === "fr" ? "Collecte minimisée" : "Minimized collection",
+      description:
+        language === "fr"
+          ? "Aucun formulaire actif ne collecte de paiement, carte, retrait, newsletter ou candidature revendeur."
+          : "No active form collects payment, card, withdrawal, newsletter, or reseller application data.",
+      icon: <CheckCircle className="h-6 w-6 text-blue-600" />,
     },
     {
-      title: language === 'fr' ? "Recharge facilitée" : "Easy top-up",
-      description: language === 'fr'
-        ? "Rechargez votre carte à tout moment depuis notre plateforme en quelques clics."
-        : "Reload your card at any time from our platform in just a few clicks.",
-      icon: <DollarSign className="h-6 w-6 text-blue-600" />
+      title: language === "fr" ? "Statut transparent" : "Transparent status",
+      description:
+        language === "fr"
+          ? "Chaque fonction sensible renvoie vers une page de maintenance explicite."
+          : "Each sensitive feature leads to an explicit maintenance page.",
+      icon: <DollarSign className="h-6 w-6 text-blue-600" />,
     },
     {
-      title: language === 'fr' ? "Support réactif" : "Responsive support",
-      description: language === 'fr'
-        ? "Notre équipe est disponible 24/7 pour répondre à toutes vos questions."
-        : "Our team is available 24/7 to answer all your questions.",
-      icon: <Smartphone className="h-6 w-6 text-blue-600" />
-    }
-  ]
+      title: language === "fr" ? "Contact prudent" : "Cautious contact",
+      description:
+        language === "fr"
+          ? "Les contacts ouvrent un service externe. Ne transmettez jamais de PAN, CVV, code, mot de passe ou secret."
+          : "Contact links open an external service. Never send a PAN, CVV, code, password, or secret.",
+      icon: <Smartphone className="h-6 w-6 text-blue-600" />,
+    },
+  ];
 
   return (
     <MainLayout>
@@ -123,7 +150,9 @@ export default function HowItWorksPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
             >
-              {language === 'fr' ? "Comment fonctionne DRAVA ?" : "How does DRAVA work?"}
+              {language === "fr"
+                ? "Comment fonctionne DRAVA ?"
+                : "How does DRAVA work?"}
             </motion.h1>
             <motion.p
               className="text-xl text-gray-600 mb-8"
@@ -131,9 +160,9 @@ export default function HowItWorksPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
             >
-              {language === 'fr'
-                ? "Découvrez comment notre service de cartes virtuelles simplifie vos achats en ligne et sécurise vos paiements internationaux en quelques étapes simples."
-                : "Discover how our virtual card service simplifies your online shopping and secures your international payments in a few simple steps."}
+              {language === "fr"
+                ? "Découvrez le fonctionnement informatif du site pendant la suspension temporaire de tous les services transactionnels."
+                : "Learn how the informational website works while all transactional services are temporarily paused."}
             </motion.p>
           </div>
         </div>
@@ -149,7 +178,9 @@ export default function HowItWorksPage() {
             whileInView="visible"
             viewport={{ once: true }}
           >
-            {language === 'fr' ? "Un processus simple en 5 étapes" : "A simple 5-step process"}
+            {language === "fr"
+              ? "Le fonctionnement actuel en 5 points"
+              : "The current operation in 5 points"}
           </motion.h2>
 
           <motion.div
@@ -162,19 +193,21 @@ export default function HowItWorksPage() {
             {steps.map((step, index) => (
               <motion.div
                 key={step.title}
-                className={`flex flex-col md:flex-row ${index % 2 === 1 ? 'md:flex-row-reverse' : ''} gap-8 items-center`}
+                className={`flex flex-col md:flex-row ${index % 2 === 1 ? "md:flex-row-reverse" : ""} gap-8 items-center`}
                 variants={itemVariants}
               >
                 <div className="md:w-1/2">
                   <div className="relative">
-                    <div className="rounded-lg overflow-hidden shadow-xl">
+                    <div className="rounded-lg overflow-hidden shadow-xl bg-gradient-to-br from-blue-50 to-indigo-100">
                       <img
                         src={step.image}
                         alt={step.title}
                         className="w-full h-64 object-cover"
                       />
                     </div>
-                    <div className={`absolute -top-4 -left-4 ${step.color} rounded-full p-4 shadow-lg`}>
+                    <div
+                      className={`absolute -top-4 -left-4 ${step.color} rounded-full p-4 shadow-lg`}
+                    >
                       {step.icon}
                     </div>
                   </div>
@@ -187,13 +220,13 @@ export default function HowItWorksPage() {
                     </div>
                     <h3 className="text-2xl font-bold">{step.title}</h3>
                   </div>
-                  <p className="text-gray-600 mb-4">
-                    {step.description}
-                  </p>
+                  <p className="text-gray-600 mb-4">{step.description}</p>
                   {index === 0 && (
                     <Link href="/cards">
                       <Button className="bg-blue-600">
-                        {language === 'fr' ? "Voir nos cartes" : "View our cards"}
+                        {language === "fr"
+                          ? "Voir l'état des services"
+                          : "View service status"}
                       </Button>
                     </Link>
                   )}
@@ -215,7 +248,9 @@ export default function HowItWorksPage() {
               whileInView="visible"
               viewport={{ once: true }}
             >
-              {language === 'fr' ? "Pourquoi choisir DRAVA ?" : "Why choose DRAVA?"}
+              {language === "fr"
+                ? "Principes de la version actuelle"
+                : "Current-version principles"}
             </motion.h2>
 
             <motion.div
@@ -237,7 +272,9 @@ export default function HowItWorksPage() {
                       {benefit.icon}
                     </div>
                     <div>
-                      <h3 className="text-xl font-semibold mb-2">{benefit.title}</h3>
+                      <h3 className="text-xl font-semibold mb-2">
+                        {benefit.title}
+                      </h3>
                       <p className="text-gray-600">{benefit.description}</p>
                     </div>
                   </div>
@@ -254,7 +291,9 @@ export default function HowItWorksPage() {
             >
               <Link href="/cards">
                 <Button className="bg-blue-600 hover:bg-blue-700 px-8 py-6 text-lg">
-                  {language === 'fr' ? "Commencer maintenant" : "Start now"}
+                  {language === "fr"
+                    ? "Consulter l'état du service"
+                    : "Check service status"}
                 </Button>
               </Link>
             </motion.div>
@@ -273,7 +312,9 @@ export default function HowItWorksPage() {
               whileInView="visible"
               viewport={{ once: true }}
             >
-              {language === 'fr' ? "Vous avez des questions ?" : "Do you have questions?"}
+              {language === "fr"
+                ? "Vous avez des questions ?"
+                : "Do you have questions?"}
             </motion.h2>
             <motion.p
               className="text-lg text-gray-600 mb-8"
@@ -282,9 +323,9 @@ export default function HowItWorksPage() {
               whileInView="visible"
               viewport={{ once: true }}
             >
-              {language === 'fr'
-                ? "Questions ? N'hésitez pas à nous contacter à contact.drava@gmail.com pour obtenir de l'aide."
-                : "Questions? Don't hesitate to contact us at contact.drava@gmail.com for assistance."}
+              {language === "fr"
+                ? "Consultez d'abord la FAQ. Le contact par e-mail ouvre votre messagerie et vous fait quitter le site; n'envoyez aucune donnée financière ou d'authentification."
+                : "Check the FAQ first. Email contact opens your mail application and takes you away from the website; send no financial or authentication data."}
             </motion.p>
             <motion.div
               className="flex flex-col sm:flex-row gap-4 justify-center"
@@ -295,12 +336,14 @@ export default function HowItWorksPage() {
             >
               <Link href="/faq">
                 <Button variant="outline" className="px-6">
-                  {language === 'fr' ? "Consulter la FAQ" : "Check the FAQ"}
+                  {language === "fr" ? "Consulter la FAQ" : "Check the FAQ"}
                 </Button>
               </Link>
-              <Link href="mailto:support@drava.net">
+              <Link href="mailto:contact.drava@gmail.com">
                 <Button className="bg-blue-600 hover:bg-blue-700 px-6">
-                  {language === 'fr' ? "Contacter le support" : "Contact support"}
+                  {language === "fr"
+                    ? "Contacter le support"
+                    : "Contact support"}
                 </Button>
               </Link>
             </motion.div>
@@ -308,5 +351,5 @@ export default function HowItWorksPage() {
         </div>
       </section>
     </MainLayout>
-  )
+  );
 }

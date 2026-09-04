@@ -1,7 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Language } from './translations';
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { getTranslation, type Language } from './translations';
 
 interface LanguageContextType {
   language: Language;
@@ -29,7 +29,6 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
 
   // Translation function that uses the translations from our file
   const t = (key: string): string => {
-    const { getTranslation } = require('./translations');
     return getTranslation(key, language);
   };
 
