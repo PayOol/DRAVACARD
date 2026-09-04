@@ -16,6 +16,22 @@ const appRoots = ['src', 'public']
 const appExtensions = new Set(['.html', '.js', '.jsx', '.json', '.mjs', '.svg', '.ts', '.tsx'])
 const ignoredDirectories = new Set(['.git', '.next', 'node_modules', 'out', 'logs'])
 
+const leekPaySdkUrl = 'https://leekpay.fr/js/leekpay.js'
+const leekPayOrigin = 'https://leekpay.fr'
+const allowedLeekPayPublicKey = 'pk_live_L1EjmvxLXb4Djtyk0bN78dmQVIPPBYfh'
+const leekPayAdapterPath = 'src/lib/leekpay.ts'
+const providerDialogPath = 'src/components/ui/dialog-providers.tsx'
+const usageNotesDialogPath = 'src/components/ui/dialog-notes.tsx'
+const allowedRouteSources = new Set([
+  'src/app/page.tsx',
+  'src/app/payment-success/page.tsx',
+  'src/app/payment-failure/page.tsx',
+])
+
+const paymentCredentialPattern = /\b(?:pk|sk)_(?:live|test)_[A-Za-z0-9_-]{12,}\b/g
+const leekPaySecretPattern = /\bsk_(?:live|test)_[A-Za-z0-9_-]+\b/i
+const externalLeekPayUrlPattern = /https?:\/\/[^\s"'`<>),;]*/gi
+
 const retiredCredentialHashes = new Set([
   // SHA-256 only: retaining the revoked plaintext here would recreate the leak.
   '5755520164cac3c3fd5957bd48249ea21b88a4b9f36f924b54cb3847ecbc8be1',
@@ -24,14 +40,17 @@ const retiredCredentialHashes = new Set([
 const forbiddenAppPatterns = [
   {
     label: 'Soleas credential in client source',
-    pattern: /\b(?:SOLEAS_API_KEY|NEXT_PUBLIC_SOLEAS[A-Z0-9_]*|apiKey)\b/i,
+    pattern: /\b(?:SOLEAS_API_KEY|NEXT_PUBLIC_SOLEAS[A-Z0-9_]*)\b/i,
   },
+  { label: 'LeekPay secret key in client source', pattern: leekPaySecretPattern },
+  { label: 'Legacy XAF currency label in client source', pattern: /\bXAF\b/ },
   { label: 'FormSubmit relay', pattern: /formsubmit\.co/i },
   {
     label: 'WhatsApp personal-data handoff',
     pattern: /wa\.me(?:\/|\?)|(?:api|web)\.whatsapp\.com\/send|whatsapp:\/\/send/i,
   },
   { label: 'HTML injection sink', pattern: /dangerouslySetInnerHTML|\.innerHTML\s*=/ },
+  { label: 'Payment checkout embedded in an iframe', pattern: /<iframe\b|document\.createElement\(\s*["']iframe["']\s*\)/i },
   { label: 'obsolete service-worker cache', pattern: /drava-cache-v1/ },
   {
     label: 'external image host',
@@ -43,6 +62,10 @@ const forbiddenAppPatterns = [
     pattern: /https:\/\/checkout\.soleaspay\.com\/?(?:["'`<>\s]|$)/i,
   },
   {
+    label: 'non-LeekPay payment provider integration',
+    pattern: /\b(?:Stripe|PayPal|PaystackPop|FlutterwaveCheckout|SoleasPay)\s*\.|(?:js\.stripe\.com|paypal\.com\/sdk|js\.paystack\.co|checkout\.flutterwave\.com)/i,
+  },
+  {
     label: 'retired transaction marketing claim',
     pattern: /Paiements sans frontières|Your modern payment solution/i,
   },
@@ -50,10 +73,15 @@ const forbiddenAppPatterns = [
     label: 'financial or personal data in localStorage',
     pattern: /localStorage\.(?:getItem|setItem)\(\s*["'][^"']*(?:card|cvv|email|otp|pan|withdraw|code)/i,
   },
+  {
+    label: 'automatic card fulfillment from browser payment state',
+    pattern: /\b(?:autoFulfill|fulfillOrder|issueCard|issueVirtualCard|provisionCard|deliverCard|revealCard|generateCard|activateCard)\s*\(/i,
+  },
 ]
 
 const highConfidenceSecretPatterns = [
   { label: 'private key', pattern: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/ },
+  { label: 'LeekPay secret key', pattern: leekPaySecretPattern },
   { label: 'AWS access key', pattern: /\bAKIA[0-9A-Z]{16}\b/ },
   { label: 'GitHub token', pattern: /\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{50,})\b/ },
   { label: 'Stripe live secret', pattern: /\b(?:sk|rk)_live_[A-Za-z0-9]{20,}\b/ },
@@ -82,6 +110,8 @@ const forbiddenOutputPatterns = [
     label: 'retired hosted-payment integration in production output',
     pattern: /soleaspay/i,
   },
+  { label: 'LeekPay secret key in production output', pattern: leekPaySecretPattern },
+  { label: 'Legacy XAF currency label in production output', pattern: /\bXAF\b/ },
   { label: 'FormSubmit relay in production output', pattern: /formsubmit\.co/i },
   {
     label: 'WhatsApp personal-data handoff in production output',
@@ -98,6 +128,10 @@ const forbiddenOutputPatterns = [
   {
     label: 'withdrawal state in production output',
     pattern: /withdrawalData|withdrawalHistory|dravaCards/i,
+  },
+  {
+    label: 'automatic card fulfillment in production output',
+    pattern: /\b(?:autoFulfill|fulfillOrder|issueCard|issueVirtualCard|provisionCard|deliverCard|revealCard|generateCard|activateCard)\b/i,
   },
   { label: 'source map reference in production output', pattern: /sourceMappingURL\s*=\s*[^\s]+\.map/i },
   {
@@ -117,11 +151,14 @@ const forbiddenPaths = [
 
 const requiredCardSurfacePaths = [
   'src/app/page.tsx',
-  'src/components/ui/dialog-notes.tsx',
+  usageNotesDialogPath,
+  providerDialogPath,
+  leekPayAdapterPath,
 ]
 
 const optionalCardSurfacePaths = [
   'src/components/ui/tabs.tsx',
+  'src/types/leekpay.d.ts',
 ]
 
 const forbiddenPageRoutes = [
@@ -131,8 +168,6 @@ const forbiddenPageRoutes = [
   'cookies',
   'faq',
   'howitwork',
-  'payment-failure',
-  'payment-success',
   'privacy',
   'reseller',
   'terms',
@@ -162,8 +197,8 @@ const forbiddenCardSurfacePatterns = [
     pattern: /<(?:input|select|textarea)\b|\bcontentEditable\b/i,
   },
   {
-    label: 'Card purchase surface contains retired payment navigation',
-    pattern: /\b(?:window\.open|window\.location\.(?:assign|replace)|createPaymentGateway|submitPaymentForm|openPaymentModal|fetch)\s*\(|<a\b|<Link\b|\bhref\s*=/i,
+    label: 'Card purchase surface contains direct payment navigation',
+    pattern: /\b(?:window\.open|createPaymentGateway|submitPaymentForm|openPaymentModal)\s*\(/i,
   },
   {
     label: 'Card purchase surface references a retired payment provider',
@@ -262,6 +297,65 @@ function matchingRules(source, rules) {
   return rules.filter((rule) => rule.pattern.test(source))
 }
 
+function redactAllowedLeekPayPublicKey(source) {
+  return source.split(allowedLeekPayPublicKey).join('[allowed-leekpay-public-key]')
+}
+
+function validatePaymentCredentials(source, relativePath, allowBundledPublicKey = false) {
+  const credentialFailures = []
+  const matches = source.match(paymentCredentialPattern) ?? []
+
+  for (const credential of matches) {
+    if (/^sk_(?:live|test)_/i.test(credential)) {
+      credentialFailures.push(`LeekPay secret key exposed: ${relativePath}`)
+      continue
+    }
+    if (credential !== allowedLeekPayPublicKey) {
+      credentialFailures.push(`Unapproved payment public key: ${relativePath}`)
+      continue
+    }
+    if (!allowBundledPublicKey && relativePath !== leekPayAdapterPath) {
+      credentialFailures.push(`LeekPay public key must be isolated in ${leekPayAdapterPath}: ${relativePath}`)
+    }
+  }
+
+  return credentialFailures
+}
+
+function validateLeekPayUrls(source, relativePath, allowProductionBundle = false) {
+  const urlFailures = []
+  const matches = source.match(externalLeekPayUrlPattern) ?? []
+
+  for (const url of matches) {
+    if (!/leekpay/i.test(url)) continue
+    if (url === leekPayOrigin) continue
+    if (url === leekPaySdkUrl
+      && (allowProductionBundle || relativePath === leekPayAdapterPath)) continue
+    urlFailures.push(`Unapproved LeekPay URL (${url}): ${relativePath}`)
+  }
+
+  return urlFailures
+}
+
+function validateNoDirectSdkUse(source, relativePath) {
+  if (relativePath === leekPayAdapterPath || relativePath === 'src/types/leekpay.d.ts') return []
+  const failures = []
+  if (/\b(?:window\.)?LeekPay\s*\.\s*(?:checkout|configure|redirect|close)\s*\(/.test(source)) {
+    failures.push(`LeekPay SDK must only be called through ${leekPayAdapterPath}: ${relativePath}`)
+  }
+  if (/\bapiKey\s*:/.test(source)) {
+    failures.push(`LeekPay apiKey must only be passed inside ${leekPayAdapterPath}: ${relativePath}`)
+  }
+  return failures
+}
+
+function validateNoUiFetch(source, relativePath) {
+  if (!/^src\/(?:app|components)\//.test(relativePath)) return []
+  return /\bfetch\s*\(/.test(source)
+    ? [`Direct fetch is forbidden in UI code: ${relativePath}`]
+    : []
+}
+
 function selfTest() {
   const firstSecret = `aB3_${'cD4e'.repeat(6)}`
   const secondSecret = `9zY-${'8xWv'.repeat(6)}`
@@ -292,8 +386,48 @@ function selfTest() {
   const bundledAssignment = `const config={apiKey:"${firstSecret}"}`
   assert.ok(matchingRules(bundledAssignment, highConfidenceSecretPatterns)
     .some((rule) => rule.label === 'hard-coded credential assignment'))
+  assert.equal(matchingRules(
+    redactAllowedLeekPayPublicKey(`const config={apiKey:"${allowedLeekPayPublicKey}"}`),
+    highConfidenceSecretPatterns,
+  ).length, 0)
   assert.ok(publicEnvironmentCredentialPattern.test('process.env.NEXT_PUBLIC_PAYMENT_TOKEN'))
   assert.equal(findEnvironmentCredentials('API_KEY=placeholder\nTOKEN=${TOKEN}').length, 0)
+  assert.deepEqual(validatePaymentCredentials(
+    `export const key = '${allowedLeekPayPublicKey}'`,
+    leekPayAdapterPath,
+  ), [])
+  assert.ok(validatePaymentCredentials(
+    "const key = 'sk_live_this_must_never_be_bundled'",
+    leekPayAdapterPath,
+  ).some((failure) => failure.includes('secret key exposed')))
+  assert.ok(validatePaymentCredentials(
+    "const key = 'pk_test_unapproved_public_key_123456'",
+    leekPayAdapterPath,
+  ).some((failure) => failure.includes('Unapproved payment public key')))
+  assert.ok(validatePaymentCredentials(
+    `const key = '${allowedLeekPayPublicKey}'`,
+    'src/app/page.tsx',
+  ).some((failure) => failure.includes('must be isolated')))
+  assert.deepEqual(validateLeekPayUrls(
+    `const sdk = '${leekPaySdkUrl}'`,
+    leekPayAdapterPath,
+  ), [])
+  assert.ok(validateLeekPayUrls(
+    "const endpoint = 'https://leekpay.fr/api/public/widget/checkout'",
+    leekPayAdapterPath,
+  ).some((failure) => failure.includes('Unapproved LeekPay URL')))
+  assert.ok(validateLeekPayUrls(
+    "const sdk = 'https://leekpay.fr.evil.example/js/leekpay.js'",
+    leekPayAdapterPath,
+  ).some((failure) => failure.includes('Unapproved LeekPay URL')))
+  assert.ok(validateNoDirectSdkUse(
+    'window.LeekPay.checkout(options)',
+    'src/components/ui/dialog-providers.tsx',
+  ).some((failure) => failure.includes('must only be called through')))
+  assert.ok(validateNoUiFetch(
+    "fetch('https://leekpay.fr/api/public/widget/checkout')",
+    'src/components/ui/dialog-providers.tsx',
+  ).some((failure) => failure.includes('Direct fetch')))
 
   const whatsappHandoffs = [
     'window.open("https://wa.me/237000000000?text=hello")',
@@ -307,7 +441,7 @@ function selfTest() {
   assert.equal(matchingRules('WhatsApp user-agent preview', forbiddenOutputPatterns)
     .some((rule) => rule.label === 'WhatsApp personal-data handoff in production output'), false)
 
-  assert.ok(matchingRules('const apiKey = process.env.VALUE', forbiddenAppPatterns)
+  assert.ok(matchingRules('const SOLEAS_API_KEY = process.env.VALUE', forbiddenAppPatterns)
     .some((rule) => rule.label === 'Soleas credential in client source'))
   assert.ok(matchingRules('const endpoint = "https://checkout.soleaspay.com"', forbiddenAppPatterns)
     .some((rule) => rule.label === 'legacy browser-side Soleas checkout endpoint'))
@@ -317,30 +451,94 @@ function selfTest() {
     .some((rule) => rule.label === 'Card purchase surface restores a browser-side payment form'))
   assert.ok(matchingRules('<input type="email" />', forbiddenCardSurfacePatterns)
     .some((rule) => rule.label === 'Card purchase surface contains a personal-data input'))
-  assert.ok(matchingRules('window.location.assign(paymentLink)', forbiddenCardSurfacePatterns)
-    .some((rule) => rule.label === 'Card purchase surface contains retired payment navigation'))
+  assert.ok(matchingRules("window.open('https://unreviewed-provider.example')", forbiddenCardSurfacePatterns)
+    .some((rule) => rule.label === 'Card purchase surface contains direct payment navigation'))
 
-  const safePaymentButtons = `
-    export function PaymentDialog() {
-      return <div><Button disabled>Proceed</Button><Button disabled={true}>Direct</Button></div>
+  const safeUsageNotesButtons = `
+    export function PaymentDialog({ onAccept }) {
+      const handleAccept = () => onAccept()
+      return <div><Button onClick={handleAccept}>Proceed</Button><Button disabled={true}>Direct</Button></div>
     }
   `
-  assert.deepEqual(validateDisabledPaymentButtons(safePaymentButtons, 'safe-dialog.tsx'), [])
-  assert.ok(validateDisabledPaymentButtons(`
-    export function PaymentDialog() {
-      return <div><Button disabled={canPay} onClick={pay}>Proceed</Button><Button disabled>Direct</Button></div>
+  assert.deepEqual(validateUsageNotesButtons(safeUsageNotesButtons, 'safe-dialog.tsx'), [])
+  assert.ok(validateUsageNotesButtons(`
+    export function PaymentDialog({ onAccept }) {
+      return <div><Button disabled onClick={onAccept}>Proceed</Button><Button disabled>Direct</Button></div>
     }
-  `, 'unsafe-dialog.tsx').some((failure) => failure.includes('statically disabled')))
-  assert.ok(validateDisabledPaymentButtons(`
-    export function PaymentDialog() {
-      return <div><Link href="/pay"><Button disabled>Proceed</Button></Link><Button disabled>Direct</Button></div>
+  `, 'disabled-accept-dialog.tsx').some((failure) => failure.includes('must be active')))
+  assert.ok(validateUsageNotesButtons(`
+    export function PaymentDialog({ onAccept }) {
+      return <div><Button onClick={onAccept}>Proceed</Button><Button onClick={pay}>Direct</Button></div>
+    }
+  `, 'enabled-direct-dialog.tsx').some((failure) => failure.includes('statically disabled')))
+  assert.ok(validateUsageNotesButtons(`
+    export function PaymentDialog({ onAccept }) {
+      return <div><Link href="/pay"><Button onClick={onAccept}>Proceed</Button></Link><Button disabled>Direct</Button></div>
     }
   `, 'linked-dialog.tsx').some((failure) => failure.includes('must not be nested')))
-  assert.ok(validateDisabledPaymentButtons(`
-    export function PaymentDialog() {
-      return <div><span onClick={pay}><Button disabled>Proceed</Button></span><Button disabled>Direct</Button></div>
+
+  const safeAdapter = `
+    const SDK_URL = '${leekPaySdkUrl}'
+    const PUBLIC_KEY = '${allowedLeekPayPublicKey}'
+    export function startLeekPay(amount) {
+      window.LeekPay.checkout({
+        amount,
+        currency: 'XOF',
+        apiKey: PUBLIC_KEY,
+        description: 'DRAVA virtual card',
+        returnUrl: 'https://drava.click/payment-success/',
+        onSuccess: () => navigate('/payment-success'),
+        onCancel: () => navigate('/payment-failure'),
+        onError: () => navigate('/payment-failure'),
+      })
     }
-  `, 'wrapped-dialog.tsx').some((failure) => failure.includes('interactive wrapper')))
+  `
+  assert.deepEqual(validateLeekPayAdapter(safeAdapter), [])
+  assert.ok(validateLeekPayAdapter(safeAdapter.replace(
+    "        returnUrl: 'https://drava.click/payment-success/',\n",
+    '',
+  )).some((failure) => failure.includes('returnUrl')))
+  assert.ok(validateLeekPayAdapter(safeAdapter.replace("currency: 'XOF'", "currency: 'XAF'"))
+    .some((failure) => failure.includes('never send XAF')))
+  assert.ok(validateLeekPayAdapter(safeAdapter.replace(
+    'window.LeekPay.checkout({',
+    "fetch('https://leekpay.fr/api/public/widget/checkout'); window.LeekPay.checkout({",
+  )).some((failure) => failure.includes('must not call fetch')))
+
+  const safeProviderDialog = `
+    import { startLeekPay } from '@/lib/leekpay'
+    export function DialogProviders() {
+      const pay = () => startLeekPay({
+        amount: 5000,
+        returnUrl: new URL('/payment-success/', window.location.origin).href,
+      })
+      return <Button onClick={pay}>LeekPay — paiement en XOF</Button>
+    }
+  `
+  assert.deepEqual(validateProviderDialog(safeProviderDialog), [])
+  assert.ok(validateProviderDialog(`${safeProviderDialog}<input type="email" />`)
+    .some((failure) => failure.includes('data-entry controls')))
+  assert.ok(validateProviderDialog(safeProviderDialog.replace('XOF', 'XAF'))
+    .some((failure) => failure.includes('charge currency XOF')))
+
+  assert.deepEqual(validateCatalogueProviderFlow(`
+    export function Catalogue() {
+      const valid = data.amount === expectedAmount
+        && data.currency === LEEKPAY_CHECKOUT_CURRENCY
+        && data.status === 'paid'
+        && Boolean(data.payment_id)
+      const route = valid ? '/payment-success/' : '/payment-failure/'
+      return <><DialogNotes onAccept={openProviders} /><DialogProviders route={route} /></>
+    }
+  `), [])
+  assert.ok(validateCatalogueProviderFlow('<DialogNotes />')
+    .some((failure) => failure.includes('both usage-notes and provider dialogs')))
+  assert.ok(matchingRules('issueCard(transaction)', forbiddenAppPatterns)
+    .some((rule) => rule.label === 'automatic card fulfillment from browser payment state'))
+  assert.ok(matchingRules('currency: "XAF"', forbiddenAppPatterns)
+    .some((rule) => rule.label === 'Legacy XAF currency label in client source'))
+  assert.ok(matchingRules('10 000 XAF', forbiddenOutputPatterns)
+    .some((rule) => rule.label === 'Legacy XAF currency label in production output'))
 
   console.log('Security scanner self-test passed.')
 }
@@ -410,10 +608,10 @@ function isStaticallyDisabled(attribute) {
     && attribute.initializer.expression?.kind === ts.SyntaxKind.TrueKeyword
 }
 
-function validateDisabledPaymentButtons(source, fileName) {
+function validateUsageNotesButtons(source, fileName) {
   const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   if (sourceFile.parseDiagnostics.length > 0) {
-    return [`Payment dialog cannot be parsed as TSX: ${fileName}`]
+    return [`Usage-notes dialog cannot be parsed as TSX: ${fileName}`]
   }
 
   const buttons = []
@@ -428,11 +626,11 @@ function validateDisabledPaymentButtons(source, fileName) {
 
   const buttonFailures = []
   if (buttons.length !== 2) {
-    buttonFailures.push(`Payment dialog must contain exactly two Button controls (found ${buttons.length})`)
+    buttonFailures.push(`Usage-notes dialog must contain exactly two Button controls (found ${buttons.length})`)
   }
 
   for (const [index, { node, openingElement }] of buttons.entries()) {
-    const label = `Payment button ${index + 1}`
+    const label = index === 0 ? 'Usage-notes accept button' : 'Direct-payment button'
     const attributes = openingElement.attributes.properties
     if (attributes.some((attribute) => ts.isJsxSpreadAttribute(attribute))) {
       buttonFailures.push(`${label} must not use spread attributes`)
@@ -440,13 +638,18 @@ function validateDisabledPaymentButtons(source, fileName) {
 
     const jsxAttributes = attributes.filter(ts.isJsxAttribute)
     const disabledAttributes = jsxAttributes.filter((attribute) => attribute.name.getText() === 'disabled')
-    if (disabledAttributes.length !== 1 || !isStaticallyDisabled(disabledAttributes[0])) {
+    const attributeNames = jsxAttributes.map((attribute) => attribute.name.getText())
+    if (index === 0) {
+      if (disabledAttributes.length > 0) buttonFailures.push(`${label} must be active`)
+      if (attributeNames.filter((name) => name === 'onClick').length !== 1) {
+        buttonFailures.push(`${label} must have exactly one onClick handler`)
+      }
+    } else if (disabledAttributes.length !== 1 || !isStaticallyDisabled(disabledAttributes[0])) {
       buttonFailures.push(`${label} must be statically disabled`)
     }
 
-    const forbiddenAttributes = jsxAttributes
-      .map((attribute) => attribute.name.getText())
-      .filter((name) => /^on/i.test(name)
+    const forbiddenAttributes = attributeNames.filter((name) =>
+      (index === 0 ? /^on(?!Click$)/i.test(name) : /^on/i.test(name))
         || ['action', 'asChild', 'formAction', 'href', 'target'].includes(name))
     if (forbiddenAttributes.length > 0) {
       buttonFailures.push(`${label} has forbidden interactive attributes: ${forbiddenAttributes.join(', ')}`)
@@ -457,7 +660,134 @@ function validateDisabledPaymentButtons(source, fileName) {
     }
   }
 
+  const invokesOnAccept = /\bonAccept\s*\(/.test(source)
+    || /onClick\s*=\s*{\s*onAccept\s*}/.test(source)
+  if (!invokesOnAccept) {
+    buttonFailures.push('Usage-notes accept button must invoke onAccept')
+  }
+
   return buttonFailures
+}
+
+function getObjectProperty(objectLiteral, propertyName) {
+  return objectLiteral.properties.find((property) =>
+    (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)
+      || ts.isMethodDeclaration(property))
+      && property.name?.getText().replace(/["']/g, '') === propertyName)
+}
+
+function validateLeekPayAdapter(source) {
+  const adapterFailures = []
+  const sourceFile = ts.createSourceFile(leekPayAdapterPath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  if (sourceFile.parseDiagnostics.length > 0) {
+    return [`LeekPay adapter cannot be parsed as TypeScript: ${leekPayAdapterPath}`]
+  }
+
+  if ((source.split(leekPaySdkUrl).length - 1) !== 1) {
+    adapterFailures.push(`LeekPay adapter must declare the exact SDK URL once: ${leekPaySdkUrl}`)
+  }
+  if ((source.split(allowedLeekPayPublicKey).length - 1) !== 1) {
+    adapterFailures.push('LeekPay adapter must contain exactly the approved pk_live public key')
+  }
+  if (/\bfetch\s*\(/.test(source)) {
+    adapterFailures.push('LeekPay adapter must use the SDK and must not call fetch directly')
+  }
+  if (/\bXAF\b/.test(source)) {
+    adapterFailures.push('LeekPay adapter must never send XAF to the provider')
+  }
+  if (/\b(?:customerEmail|customerName|customerPhone|customer_email|customer_name|customer_phone|cardNumber|card_number|cvv|pan)\b/i.test(source)) {
+    adapterFailures.push('LeekPay adapter must not collect or transmit customer/card data')
+  }
+  if (/\b(?:paymentLink|LeekPay\s*\.\s*redirect)\b/.test(source)) {
+    adapterFailures.push('LeekPay adapter must use the reviewed checkout flow only')
+  }
+
+  const checkoutCalls = []
+  function visit(node) {
+    if (ts.isCallExpression(node)
+      && ts.isPropertyAccessExpression(node.expression)
+      && node.expression.name.getText() === 'checkout'
+      && /LeekPay/.test(node.expression.expression.getText())) {
+      checkoutCalls.push(node)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+
+  if (checkoutCalls.length !== 1) {
+    adapterFailures.push(`LeekPay adapter must contain exactly one LeekPay.checkout call (found ${checkoutCalls.length})`)
+  } else {
+    const options = checkoutCalls[0].arguments[0]
+    if (!options || !ts.isObjectLiteralExpression(options)) {
+      adapterFailures.push('LeekPay.checkout options must be an auditable object literal')
+    } else {
+      const currency = getObjectProperty(options, 'currency')
+      const currencyIsStaticXof = currency && ts.isPropertyAssignment(currency)
+        && ((ts.isStringLiteral(currency.initializer) && currency.initializer.text === 'XOF')
+          || (ts.isIdentifier(currency.initializer)
+            && currency.initializer.text === 'LEEKPAY_CHECKOUT_CURRENCY'
+            && /LEEKPAY_CHECKOUT_CURRENCY\s*=\s*["']XOF["']/.test(source)))
+      if (!currencyIsStaticXof) {
+        adapterFailures.push('LeekPay.checkout currency must be the static string XOF')
+      }
+      for (const requiredOption of ['amount', 'apiKey', 'description', 'returnUrl', 'onSuccess', 'onCancel', 'onError']) {
+        if (!getObjectProperty(options, requiredOption)) {
+          adapterFailures.push(`LeekPay.checkout is missing required reviewed option: ${requiredOption}`)
+        }
+      }
+    }
+  }
+
+  return adapterFailures
+}
+
+function validateProviderDialog(source) {
+  const providerFailures = []
+  if (!/from\s*["']@\/lib\/leekpay["']/.test(source)) {
+    providerFailures.push(`Provider dialog must import the reviewed ${leekPayAdapterPath} adapter`)
+  }
+  if (!/\bLeekPay\b/.test(source)) {
+    providerFailures.push('Provider dialog must display the LeekPay provider')
+  }
+  if (!/\b(?:XOF|LEEKPAY_CHECKOUT_CURRENCY)\b/.test(source)) {
+    providerFailures.push('Provider dialog must disclose the LeekPay charge currency XOF')
+  }
+  if (/\bXAF\b/.test(source)) {
+    providerFailures.push('Provider dialog must not pass or display XAF as the LeekPay charge currency')
+  }
+  if (/<(?:form|input|select|textarea)\b|\bcontentEditable\b/i.test(source)) {
+    providerFailures.push('Provider dialog must not contain forms or data-entry controls')
+  }
+  if (/\b(?:customerEmail|customerName|customerPhone|customer_email|customer_name|customer_phone|email|phone|cardNumber|card_number|cvv|pan)\b/i.test(source)) {
+    providerFailures.push('Provider dialog must not collect personal or card data')
+  }
+  if (source.includes(leekPaySdkUrl) || source.includes(allowedLeekPayPublicKey)) {
+    providerFailures.push(`Provider dialog must delegate SDK details to ${leekPayAdapterPath}`)
+  }
+  if (!/returnUrl\s*:\s*new URL\([\s\S]*?payment-success/.test(source)) {
+    providerFailures.push('Provider dialog must pass the same-origin payment-success return URL')
+  }
+  return providerFailures
+}
+
+function validateCatalogueProviderFlow(source) {
+  const flowFailures = []
+  if (!/\bDialogNotes\b/.test(source) || !/\bDialogProviders\b/.test(source)) {
+    flowFailures.push('Card catalogue must render both usage-notes and provider dialogs')
+  }
+  if (!/<DialogNotes\b[\s\S]*?\bonAccept\s*=/.test(source)) {
+    flowFailures.push('Card catalogue must open the provider flow through DialogNotes onAccept')
+  }
+  if (!/data\.amount\s*===\s*expectedAmount/.test(source)
+    || !/data\.currency\s*===\s*LEEKPAY_CHECKOUT_CURRENCY/.test(source)
+    || !/data\.status\s*===\s*["']paid["']/.test(source)
+    || !/data\.payment_id/.test(source)) {
+    flowFailures.push('Browser success callback must compare paid status, payment id, amount, and XOF currency with the selected card')
+  }
+  if (!/payment-success/.test(source) || !/payment-failure/.test(source)) {
+    flowFailures.push('Card catalogue must route validated and rejected callbacks to separate result pages')
+  }
+  return flowFailures
 }
 
 const failures = []
@@ -470,17 +800,26 @@ const appFiles = (
 
 for (const file of appFiles) {
   const source = await readFile(file, 'utf8')
+  const relativePath = path.relative(projectRoot, file).split(path.sep).join('/')
   for (const rule of forbiddenAppPatterns) {
-    if (rule.pattern.test(source)) failures.push(`${rule.label}: ${path.relative(projectRoot, file)}`)
+    if (rule.pattern.test(source)) failures.push(`${rule.label}: ${relativePath}`)
   }
+  failures.push(...validateLeekPayUrls(source, relativePath))
+  failures.push(...validateNoDirectSdkUse(source, relativePath))
+  failures.push(...validateNoUiFetch(source, relativePath))
 }
 
 const appRouteSources = appFiles
   .map((file) => path.relative(projectRoot, file).split(path.sep).join('/'))
   .filter((relativePath) => /^src\/app\/(?:.+\/)?(?:page|route)\.(?:js|jsx|ts|tsx)$/.test(relativePath))
+for (const expectedRoute of allowedRouteSources) {
+  if (!appRouteSources.includes(expectedRoute)) {
+    failures.push(`Required application route is missing: ${expectedRoute}`)
+  }
+}
 for (const relativePath of appRouteSources) {
-  if (relativePath !== 'src/app/page.tsx') {
-    failures.push(`Unexpected application route in single-page build: ${relativePath}`)
+  if (!allowedRouteSources.has(relativePath)) {
+    failures.push(`Unexpected application route: ${relativePath}`)
   }
 }
 
@@ -493,9 +832,9 @@ for (const file of repositoryFiles) {
   if (isProbablyBinary(contents)) continue
   repositoryFileCount += 1
   const source = contents.toString('utf8')
+  const relativePath = path.relative(projectRoot, file).split(path.sep).join('/')
   if (isEnvironmentFile(file)) {
     for (const credential of findEnvironmentCredentials(source)) {
-      const relativePath = path.relative(projectRoot, file)
       const exposure = credential.key.toUpperCase().startsWith('NEXT_PUBLIC_')
         ? 'Browser-exposed credential in environment file'
         : 'Concrete credential in environment file'
@@ -504,10 +843,12 @@ for (const file of repositoryFiles) {
     }
   }
   if (containsRetiredCredential(source)) {
-    failures.push(`Retired credential restored: ${path.relative(projectRoot, file)}`)
+    failures.push(`Retired credential restored: ${relativePath}`)
   }
+  failures.push(...validatePaymentCredentials(source, relativePath))
+  const secretScanSource = redactAllowedLeekPayPublicKey(source)
   for (const rule of highConfidenceSecretPatterns) {
-    if (rule.pattern.test(source)) failures.push(`${rule.label}: ${path.relative(projectRoot, file)}`)
+    if (rule.pattern.test(secretScanSource)) failures.push(`${rule.label}: ${relativePath}`)
   }
 }
 
@@ -525,6 +866,8 @@ for (const relativePath of forbiddenPaths) {
 const cardSurfaceSources = []
 let cardPageSource = ''
 let paymentDialogSource = ''
+let providerDialogSource = ''
+let leekPayAdapterSource = ''
 for (const relativePath of requiredCardSurfacePaths) {
   if (!(await pathExists(relativePath))) {
     failures.push(`Required static card-purchase surface is missing: ${relativePath}`)
@@ -534,7 +877,9 @@ for (const relativePath of requiredCardSurfacePaths) {
   const source = await readFile(path.join(projectRoot, relativePath), 'utf8')
   cardSurfaceSources.push(source)
   if (relativePath === 'src/app/page.tsx') cardPageSource = source
-  if (relativePath === 'src/components/ui/dialog-notes.tsx') paymentDialogSource = source
+  if (relativePath === usageNotesDialogPath) paymentDialogSource = source
+  if (relativePath === providerDialogPath) providerDialogSource = source
+  if (relativePath === leekPayAdapterPath) leekPayAdapterSource = source
 }
 for (const relativePath of optionalCardSurfacePaths) {
   if (await pathExists(relativePath)) {
@@ -550,11 +895,14 @@ if (cardPageSource && !/\bDialogNotes\b/.test(cardPageSource)) {
   failures.push('Card catalogue does not use the restored usage-notes dialog')
 }
 if (paymentDialogSource) {
-  failures.push(...validateDisabledPaymentButtons(
+  failures.push(...validateUsageNotesButtons(
     paymentDialogSource,
-    'src/components/ui/dialog-notes.tsx',
+    usageNotesDialogPath,
   ))
 }
+if (cardPageSource) failures.push(...validateCatalogueProviderFlow(cardPageSource))
+if (providerDialogSource) failures.push(...validateProviderDialog(providerDialogSource))
+if (leekPayAdapterSource) failures.push(...validateLeekPayAdapter(leekPayAdapterSource))
 
 if (await pathExists('src/components/layout/MainLayout.tsx')) {
   const mainLayout = await readFile(path.join(projectRoot, 'src/components/layout/MainLayout.tsx'), 'utf8')
@@ -563,7 +911,56 @@ if (await pathExists('src/components/layout/MainLayout.tsx')) {
   }
 }
 
+if (await pathExists('src/app/layout.tsx')) {
+  const rootLayout = await readFile(path.join(projectRoot, 'src/app/layout.tsx'), 'utf8')
+  const requiredCspDirectives = [
+    "script-src 'self' 'unsafe-inline' https://leekpay.fr",
+    "style-src 'self' 'unsafe-inline'",
+    "connect-src 'self' https://leekpay.fr",
+    "form-action 'none'",
+    "frame-src 'none'",
+  ]
+  for (const directive of requiredCspDirectives) {
+    if (!rootLayout.includes(directive)) {
+      failures.push(`LeekPay-compatible CSP directive is missing or broadened: ${directive}`)
+    }
+  }
+  if (/https:\/\/(?:\*\.)?leekpay\.me|https:\/\/\*\.leekpay\.fr/.test(rootLayout)) {
+    failures.push('CSP must not trust wildcard LeekPay hosts or leekpay.me for scripts/connections')
+  }
+}
+
+const paymentResultPath = 'src/components/payment/PaymentResult.tsx'
+if (!(await pathExists(paymentResultPath))) {
+  failures.push(`Required payment result component is missing: ${paymentResultPath}`)
+} else {
+  const paymentResultSource = await readFile(path.join(projectRoot, paymentResultPath), 'utf8')
+  if (!/ne constitue pas une validation définitive/i.test(paymentResultSource)
+    || !/not final validation/i.test(paymentResultSource)) {
+    failures.push('Payment success UI must state that the browser callback is not final validation')
+  }
+  if (/\b(?:autoFulfill|fulfillOrder|issueCard|issueVirtualCard|provisionCard|deliverCard|revealCard|generateCard|activateCard)\s*\(/i.test(paymentResultSource)) {
+    failures.push('Payment result UI must never auto-fulfill a card')
+  }
+}
+
+for (const [routePath, expectedStatus] of [
+  ['src/app/payment-success/page.tsx', 'success'],
+  ['src/app/payment-failure/page.tsx', 'failure'],
+]) {
+  if (!(await pathExists(routePath))) continue
+  const routeSource = await readFile(path.join(projectRoot, routePath), 'utf8')
+  if (!new RegExp(`status=["']${expectedStatus}["']`).test(routeSource)) {
+    failures.push(`Technical payment route does not render the ${expectedStatus} result: ${routePath}`)
+  }
+  if (!/index\s*:\s*false/.test(routeSource)) {
+    failures.push(`Technical payment route must be noindex: ${routePath}`)
+  }
+}
+
 let outputFileCount = 0
+let outputHasLeekPaySdk = false
+let outputHasApprovedLeekPayKey = false
 if (requireOutput) {
   const outputRoot = path.join(projectRoot, 'out')
   if (!(await pathExists('out'))) {
@@ -575,12 +972,18 @@ if (requireOutput) {
       if (isProbablyBinary(contents)) continue
       outputFileCount += 1
       const source = contents.toString('utf8')
+      if (source.includes(leekPaySdkUrl)) outputHasLeekPaySdk = true
+      if (source.includes(allowedLeekPayPublicKey)) outputHasApprovedLeekPayKey = true
       if (containsRetiredCredential(source)) {
         failures.push(`Retired credential present in production output: ${path.relative(projectRoot, file)}`)
       }
+      const outputRelativePath = path.relative(projectRoot, file).split(path.sep).join('/')
+      failures.push(...validatePaymentCredentials(source, outputRelativePath, true))
+      failures.push(...validateLeekPayUrls(source, outputRelativePath, true))
+      const secretScanSource = redactAllowedLeekPayPublicKey(source)
       for (const rule of highConfidenceSecretPatterns) {
-        if (rule.pattern.test(source)) {
-          failures.push(`${rule.label} in production output: ${path.relative(projectRoot, file)}`)
+        if (rule.pattern.test(secretScanSource)) {
+          failures.push(`${rule.label} in production output: ${outputRelativePath}`)
         }
       }
       for (const rule of forbiddenOutputPatterns) {
@@ -614,6 +1017,9 @@ if (requireOutput) {
         failures.push(`Source map published: ${path.relative(projectRoot, file)}`)
       }
     }
+
+    if (!outputHasLeekPaySdk) failures.push('Exact LeekPay SDK URL is missing from production output')
+    if (!outputHasApprovedLeekPayKey) failures.push('Approved LeekPay pk_live public key is missing from production output')
 
     const manifest = JSON.parse(await readFile(path.join(outputRoot, 'manifest.json'), 'utf8'))
     const manifestIcons = Array.isArray(manifest.icons) ? manifest.icons : []
@@ -656,7 +1062,26 @@ if (requireOutput) {
       }
     }
 
-    const allowedHtmlPaths = new Set(['404.html', '404/index.html', 'index.html'])
+
+    for (const route of ['payment-success', 'payment-failure']) {
+      const candidates = [
+        `out/${route}.html`,
+        `out/${route}/index.html`,
+      ]
+      if (!(await Promise.all(candidates.map(pathExists))).some(Boolean)) {
+        failures.push(`Required technical payment route is missing from production output: /${route}`)
+      }
+    }
+
+    const allowedHtmlPaths = new Set([
+      '404.html',
+      '404/index.html',
+      'index.html',
+      'payment-success.html',
+      'payment-success/index.html',
+      'payment-failure.html',
+      'payment-failure/index.html',
+    ])
     const forbiddenRouteNames = new Set(forbiddenPageRoutes)
     for (const file of outputFiles) {
       if (path.extname(file) !== '.html') continue

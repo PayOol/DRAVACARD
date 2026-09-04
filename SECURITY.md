@@ -2,11 +2,15 @@
 
 ## Financial operations
 
-Card purchases, top-ups, balance checks, withdrawals, payment callback pages, newsletter and reseller data collection, the global WhatsApp contact form, and the demo admin route are intentionally disabled. They must not be re-enabled until a trusted server implementation is available.
+Card checkout initiation is enabled through LeekPay's hosted payment page. Top-ups, balance checks, withdrawals, newsletter and reseller data collection, the global WhatsApp contact form, and the demo admin route remain disabled.
+
+The LeekPay `pk_live_*` publishable key is intentionally exposed to the browser. A LeekPay secret key (`sk_live_*` or `sk_test_*`) must never be added to this repository, a `NEXT_PUBLIC_*` variable, or a browser bundle. DRAVA sends the displayed numeric price to LeekPay with the provider currency code `XOF`; it does not collect payment details itself.
+
+The browser-side `onSuccess` callback and the `/payment-success` page are interface signals only. Before issuing or delivering a card, manually verify the payment status, amount, currency, and intended product in the LeekPay dashboard. Client-side amounts and descriptions can be modified by a visitor and must never authorize fulfillment on their own.
 
 The server implementation must:
 
-- keep Soleas and webhook credentials in a runtime secret manager, never in `NEXT_PUBLIC_*` variables or browser bundles;
+- keep Soleas, LeekPay secret keys, and webhook credentials in a runtime secret manager, never in `NEXT_PUBLIC_*` variables or browser bundles;
 - accept immutable product identifiers and calculate prices, currencies, fees, order identifiers, and callback URLs on the server;
 - verify payment state and amount through an authenticated provider API or signed, idempotent webhook before fulfillment;
 - use provider-hosted fields or tokenization for card data and never store or email a full PAN, CVV, or withdrawal code;

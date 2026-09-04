@@ -6,7 +6,7 @@ URL publique : `https://drava.click`. L'export reste également compatible avec 
 
 ## État de sécurité
 
-Le catalogue est l'unique page du site. Les deux boutons de paiement restent volontairement désactivés et aucun parcours de paiement, recharge, consultation de solde, retrait, newsletter ou revendeur n'est publié. Le projet ne doit collecter aucune donnée bancaire ou personnelle tant qu'un backend authentifié et audité n'est pas disponible.
+Le catalogue est la page principale du site. Le paiement peut être initié dans le checkout hébergé par LeekPay; DRAVA ne collecte aucune donnée bancaire. Les pages techniques de résultat restent informatives et une commande doit être vérifiée dans LeekPay avant toute émission ou livraison. Les parcours de recharge, consultation de solde, retrait, newsletter et revendeur ne sont pas publiés.
 
 Consultez [SECURITY.md](SECURITY.md) avant toute modification de ces parcours.
 

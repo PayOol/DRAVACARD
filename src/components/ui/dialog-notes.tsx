@@ -9,6 +9,8 @@ import { X } from "lucide-react";
 interface DialogNotesProps {
   isOpen: boolean;
   onClose: () => void;
+  onAccept: () => void;
+  onExitComplete: () => void;
 }
 
 const backdropVariants: Variants = {
@@ -97,7 +99,12 @@ const buttonsVariants: Variants = {
   },
 };
 
-export function DialogNotes({ isOpen, onClose }: DialogNotesProps) {
+export function DialogNotes({
+  isOpen,
+  onClose,
+  onAccept,
+  onExitComplete,
+}: DialogNotesProps) {
   const { language } = useLanguage();
 
   return (
@@ -107,7 +114,7 @@ export function DialogNotes({ isOpen, onClose }: DialogNotesProps) {
       }}
       open={isOpen}
     >
-      <AnimatePresence>
+      <AnimatePresence onExitComplete={onExitComplete}>
         {isOpen ? (
           <DialogPrimitive.Portal forceMount>
             <DialogPrimitive.Overlay asChild forceMount>
@@ -297,11 +304,12 @@ export function DialogNotes({ isOpen, onClose }: DialogNotesProps) {
                     >
                       <Button
                         className="w-full bg-blue-600 text-white hover:bg-blue-700"
-                        disabled
+                        onClick={onAccept}
+                        type="button"
                       >
                         {language === "fr"
-                          ? "Procéder au paiement"
-                          : "Proceed to payment"}
+                          ? "Accepter et continuer"
+                          : "Accept and continue"}
                       </Button>
                     </motion.div>
                     <motion.div

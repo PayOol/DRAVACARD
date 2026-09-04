@@ -3,9 +3,14 @@
 import MainLayout from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { DialogNotes } from "@/components/ui/dialog-notes";
+import { DialogProviders } from "@/components/ui/dialog-providers";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { withBasePath } from "@/lib/base-path";
 import { useLanguage } from "@/lib/language-context";
+import {
+  LEEKPAY_CHECKOUT_CURRENCY,
+  type LeekPaySuccessData,
+} from "@/lib/leekpay";
 import {
   BadgeCheck,
   Check,
@@ -43,10 +48,12 @@ interface Card {
   };
 }
 
+type CheckoutStep = "closed" | "notes" | "notes-exiting" | "providers";
+
 export default function Home() {
   const { language } = useLanguage();
 
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>("closed");
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [activeTab, setActiveTab] = useState("all");
   const [isMobile, setIsMobile] = useState(false);
@@ -70,7 +77,7 @@ export default function Home() {
         en: "BASIC VISA",
       },
       price: "5000",
-      currency: "XAF",
+      currency: "Fcfa",
       icon: "visa",
       color: "blue",
       position: 1,
@@ -104,7 +111,7 @@ export default function Home() {
         en: "BASIC MASTERCARD",
       },
       price: "6000",
-      currency: "XAF",
+      currency: "Fcfa",
       icon: "mastercard",
       color: "teal",
       popular: true,
@@ -139,7 +146,7 @@ export default function Home() {
         en: "PREMIUM MASTERCARD",
       },
       price: "8500",
-      currency: "XAF",
+      currency: "Fcfa",
       icon: "mastercard",
       color: "emerald",
       position: 3,
@@ -177,7 +184,7 @@ export default function Home() {
         en: "PLATINUM MASTERCARD",
       },
       price: "15000",
-      currency: "XAF",
+      currency: "Fcfa",
       icon: "mastercard",
       color: "gray",
       position: 4,
@@ -213,7 +220,28 @@ export default function Home() {
 
   const handleBuyClick = (card: Card) => {
     setSelectedCard(card);
-    setDialogOpen(true);
+    setCheckoutStep("notes");
+  };
+
+  const navigateToPaymentResult = (pathname: string) => {
+    window.location.assign(withBasePath(pathname));
+  };
+
+  const handlePaymentSuccess = (data: LeekPaySuccessData) => {
+    const expectedAmount = selectedCard
+      ? Number.parseInt(selectedCard.price, 10)
+      : Number.NaN;
+    const matchesSelection =
+      Number.isSafeInteger(expectedAmount) &&
+      data.status === "paid" &&
+      data.amount === expectedAmount &&
+      data.currency === LEEKPAY_CHECKOUT_CURRENCY &&
+      Boolean(data.payment_id);
+
+    setCheckoutStep("closed");
+    navigateToPaymentResult(
+      matchesSelection ? "/payment-success/" : "/payment-failure/",
+    );
   };
 
   const getCardGradient = (color: string) => {
@@ -539,7 +567,34 @@ export default function Home() {
       </section>
 
       {selectedCard && (
-        <DialogNotes isOpen={dialogOpen} onClose={() => setDialogOpen(false)} />
+        <DialogNotes
+          isOpen={checkoutStep === "notes"}
+          onAccept={() => setCheckoutStep("notes-exiting")}
+          onClose={() => setCheckoutStep("closed")}
+          onExitComplete={() =>
+            setCheckoutStep((currentStep) =>
+              currentStep === "notes-exiting" ? "providers" : currentStep,
+            )
+          }
+        />
+      )}
+
+      {selectedCard && checkoutStep === "providers" && (
+        <DialogProviders
+          card={{
+            id: selectedCard.id,
+            name: selectedCard.name[language],
+            amount: Number.parseInt(selectedCard.price, 10),
+            displayCurrency: selectedCard.currency,
+          }}
+          isOpen
+          onClose={() => setCheckoutStep("closed")}
+          onFailure={() => {
+            setCheckoutStep("closed");
+            navigateToPaymentResult("/payment-failure/");
+          }}
+          onSuccess={handlePaymentSuccess}
+        />
       )}
     </MainLayout>
   );
