@@ -24,21 +24,59 @@ La configuration de déploiement `worker/wrangler.jsonc` exige uniquement `LEEKP
 - `TIKTOK_DATA_KEY` : 32 octets aléatoires, représentés par 64 caractères hexadécimaux, pour AES-GCM. Ne pas changer cette clé avant la fin du traitement des commandes en cours sans prévoir une migration.
 - `LEEKPAY_SECRET_KEY` : secret du marchand pour LeekPay, partagé avec les cartes.
 - `SEBPAY_PUBLIC_KEY` et `SEBPAY_SECRET_KEY` : identifiants du marchand SebPay.
-- `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY` : compte EmailJS du marchand, trois valeurs requises. Autoriser les appels API pour les applications non navigateur dans les réglages de sécurité EmailJS. Le service et le modèle doivent configurer le destinataire de traitement et, si souhaité, la réponse au client.
-- `EMAILJS_PRIVATE_KEY` : facultative, selon les réglages de sécurité du compte EmailJS. Si elle est absente, la requête REST omet entièrement `accessToken`. Si elle est fournie, elle doit être valide ; une valeur vide ou mal formée désactive la création TikTok. Elle reste exclusivement côté serveur.
+- `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY` : compte EmailJS du marchand, trois valeurs requises. Autoriser les appels API pour les applications non navigateur dans les réglages de sécurité EmailJS. Le modèle DRAVA décrit ci-dessous a un destinataire marchand fixe et un champ Reply-To ; aucune réponse automatique au client n’est configurée.
+- `EMAILJS_PRIVATE_KEY` : obligatoire pour le compte DRAVA selon ses réglages de sécurité. Elle doit être ajoutée aux secrets Worker et transmise uniquement côté serveur dans `accessToken`. Le moteur sait omettre ce champ pour les comptes ne l’exigeant pas, mais cette possibilité générique ne convient pas au compte DRAVA. Une valeur fournie vide ou mal formée désactive la création TikTok. Aucune clé publique ou privée ne doit être ajoutée à cette documentation ni au modèle HTML.
 - `SOLEASPAY_API_KEY` est réservé ; il n’active pas SoleasPay à lui seul.
 
 La création TikTok exige le chiffrement et la notification de traitement, afin de ne pas accepter une commande impossible à transmettre au marchand. Si ces réglages manquent, `fulfillment_unavailable` est renvoyé avant tout appel au prestataire. La vérification d’une commande existante dépend seulement des identifiants de son prestataire et du dossier serveur : une configuration EmailJS absente ou une panne de lecture des données annexes ne transforme pas un paiement confirmé en échec. La notification reste alors en attente et le libellé du compte peut être absent. L’absence de configuration TikTok ne désactive ni la disponibilité LeekPay ni les paiements de cartes.
 
-État du 5 septembre 2026 : le moteur partagé a été redéployé sur le Worker existant `drava-leekpay`, version `a5ca2c5f-9594-4404-b361-7c01821dbbb9`. La clé AES-256 `TIKTOK_DATA_KEY` a été générée et enregistrée directement dans les secrets Cloudflare, sans fichier de clé local ni changement des secrets LeekPay. LeekPay reste partagé par les services. SebPay reste non configuré et SoleasPay indisponible. L’accès au tableau de bord EmailJS est nécessaire pour vérifier le service, le modèle et son destinataire avant d’ajouter les trois secrets d’envoi ; la création TikTok conserve sa garde tant qu’ils manquent. Le projet local contient seulement des exemples de configuration. Aucun paiement ni courriel réel n’a été créé pendant cette validation.
+Déploiement historique du 5 septembre 2026, antérieur à la configuration du compte EmailJS DRAVA : le moteur partagé a été redéployé sur le Worker existant `drava-leekpay`, version `a5ca2c5f-9594-4404-b361-7c01821dbbb9`. La clé AES-256 `TIKTOK_DATA_KEY` a été générée et enregistrée directement dans les secrets Cloudflare, sans fichier de clé local ni changement des secrets LeekPay. LeekPay reste partagé par les services. SebPay était non configuré et SoleasPay indisponible. Les identifiants d’envoi EmailJS manquaient encore lors de cette validation ; aucun paiement ni courriel réel n’y avait été créé. Ce déploiement historique ne confirme pas l’activation de la nouvelle configuration EmailJS.
 
-Contrôle complémentaire d’activation : le projet UpCoin contient les trois identifiants EmailJS dans `app/lib/payments/send-order-email.ts`, mais ne révèle ni le propriétaire du compte ni le destinataire configuré dans le modèle distant. Leur réutilisation pour les commandes DRAVA doit correspondre au destinataire voulu par le marchand. Le tableau de bord EmailJS est actuellement déconnecté ; sa connexion reste nécessaire pour terminer cette configuration. Le frontend du commit `ca86e43` a été publié avec succès via [GitHub Pages](https://github.com/PayOol/DRAVACARD/actions/runs/33979936624). `https://drava.click/tiktok-payment/` répond désormais HTTP 200, avec `noindex` ; sans jeton, le navigateur affiche « Paiement non confirmé » et ne crée aucune transaction. Les retours de production pointent vers ce domaine public même quand la commande part de localhost.
+Référence et publication frontend déjà vérifiées : le projet UpCoin contient trois identifiants EmailJS dans `app/lib/payments/send-order-email.ts`, mais ne révèle ni le propriétaire du compte ni le destinataire du modèle distant. DRAVA utilise désormais son propre compte et le modèle décrit ci-dessous, sans reprendre les clés UpCoin. Le frontend du commit `ca86e43` a été publié avec succès via [GitHub Pages](https://github.com/PayOol/DRAVACARD/actions/runs/33979936624). `https://drava.click/tiktok-payment/` a répondu HTTP 200, avec `noindex` ; sans jeton, le navigateur affiche « Paiement non confirmé » et ne crée aucune transaction. Les retours de production pointent vers ce domaine public même quand la commande part de localhost.
+
+## Compte EmailJS DRAVA — configuration confirmée
+
+Le modèle [drava-order-template.html](emailjs/drava-order-template.html) conserve le HTML enregistré dans le tableau de bord EmailJS. Il s’agit d’une notification interne en français, avec le logo original DRAVA, le récapitulatif FCFA/pièces, les coordonnées et un bloc d’accès au compte réservé au traitement marchand. Il ne comporte ni lien de paiement, ni reçu de succès inventé, ni réponse automatique au client.
+
+| Réglage du tableau de bord | Valeur confirmée |
+| --- | --- |
+| Service | `service_drava` |
+| Nom du modèle | `DRAVA — Commandes TikTok` |
+| Identifiant du modèle | `template_drava_tiktok` |
+| Destinataire To | `contact.drava@gmail.com`, valeur fixe hors du HTML |
+| Reply-To | `{{client_email}}` |
+| Nom d’expéditeur From | `DRAVA` |
+| Adresse d’expéditeur | Adresse Gmail par défaut du service |
+| CC / BCC | Vides |
+| Option de confidentialité | `Do not save private data` cochée |
+| Clé privée | Requise par les réglages du compte ; valeur exclusivement dans les secrets serveur |
+
+Le contenu utilise uniquement les dix paramètres suivants, chacun dans une interpolation à doubles accolades. Aucun paramètre n’est placé dans une URL ou un attribut HTML ; aucune interpolation à triples accolades n’est utilisée.
+
+| Paramètre | Information transmise par le Worker |
+| --- | --- |
+| `service_type` | Libellé du service de recharge TikTok |
+| `order_id` | Identifiant de la commande, utilisé pour reconnaître un éventuel doublon |
+| `tiktok_username` | Pseudo ou e-mail de connexion TikTok |
+| `tiktok_password` | Mot de passe, dans le bloc interne réservé au marchand |
+| `desired_username` | Libellé de destination fourni par le parcours |
+| `client_email` | E-mail de contact du client, également utilisé en Reply-To |
+| `client_whatsapp` | WhatsApp du client |
+| `coins_amount` | Total à créditer, `coins + bonus`, formaté en français |
+| `price` | Montant formaté en français ; le modèle précise FCFA |
+| `date` | Date de création de la commande au format ISO |
+
+La destination fixe empêche qu’un paramètre de commande choisisse le destinataire de cette notification contenant les accès au compte. Reply-To ne crée pas d’envoi au client. L’option de confidentialité a été confirmée dans EmailJS ; elle ne supprime pas la copie du courriel reçue dans la boîte du marchand. Le HTML versionné ne contient aucune clé ni donnée client réelle.
+
+Validation du 5 septembre 2026 : le test synthétique du tableau de bord a retourné **200 OK** et son courriel a été reçu dans `contact.drava@gmail.com`. Un second test, `TEST-SERVEUR-DRAVA-20260905`, a appelé directement l’API REST depuis Node avec la clé privée, sans en-tête `Origin` ou `Referer`, et les dix paramètres fictifs du contrat Worker. Il a également retourné **HTTP 200**, avec réception confirmée dans la boîte DRAVA. Aucun paiement, compte client réel ou recharge n’a été créé. Ces tests valident le service et son accès serveur ; ils ne constituent pas un paiement de bout en bout exécuté sur le Worker.
+
+Le Worker existant `drava-leekpay` a ensuite été déployé à 100 % le 5 septembre 2026 à 18:30 UTC, version `9118f1da-ebfb-4cdc-85a1-8ca3003e2f90`. Les quatre liaisons `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY` et `EMAILJS_PRIVATE_KEY` sont confirmées comme secrets dans cette version active. Les clés de chiffrement et LeekPay sont conservées. `/health` et `/api/providers` répondent HTTP 200 avec `no-store` ; LeekPay reste disponible pour les deux services. Ces routes seules ne testent pas l’envoi EmailJS. Les 34 tests ciblés du moteur commun/TikTok et le contrôle TypeScript Worker passent.
 
 ## Notification et données de traitement
 
 Le champ de compte accepte le pseudo ou l’e-mail comme UpCoin ; le mot de passe comporte au moins quatre caractères. Les coordonnées et le mot de passe sont chiffrés avec AES-GCM et un nonce aléatoire, liés à l’identifiant de commande. Ils sont stockés exclusivement dans le KV serveur, séparément du dossier de vérification, pendant sept jours maximum. Une seconde enveloppe `:receipt` contient uniquement `{ username }`, sans mot de passe ni coordonnées de contact. Elle utilise son propre nonce et un contexte authentifié `receipt:<orderId>`, et conserve l’expiration initiale de la commande, sans prolongation lors des consultations. Les clés KV contiennent seulement le hachage du jeton aléatoire. Aucun mot de passe n’est transmis aux prestataires de paiement.
 
-Après vérification d’un paiement réussi, le Worker envoie au modèle EmailJS les mêmes champs fonctionnels qu’UpCoin : `service_type`, `order_id`, `tiktok_username`, `tiktok_password`, `desired_username`, `client_email`, `client_whatsapp`, `coins_amount`, `price`, `date`. Les noms de variables restent compatibles avec le modèle source ; les pièces comprennent le bonus, le prix est formaté en français et `date` contient la date de commande au format ISO. Aucun destinataire ni identifiant réel n’est copié dans le code. Il s’agit de la notification de traitement, pas d’un envoi automatique du PDF : comme UpCoin, le reçu PDF est téléchargé depuis la page ; une réponse automatique au client se configure séparément dans EmailJS.
+Après vérification d’un paiement réussi, le Worker envoie au modèle EmailJS les dix champs décrits ci-dessus, compatibles avec les champs fonctionnels d’UpCoin. Les pièces comprennent le bonus, le prix est formaté en français et `date` contient la date de commande au format ISO. Le destinataire marchand est configuré dans EmailJS ; les clés restent côté serveur. Il s’agit de la notification de traitement, pas d’un envoi automatique du PDF : comme UpCoin, le reçu PDF est téléchargé depuis la page. Aucune réponse automatique au client n’est activée par ce modèle.
 
 L’enveloppe complète `:customer` est supprimée après acceptation par EmailJS. Seul le libellé chiffré du reçu reste jusqu’à l’expiration initiale. Pour les anciennes commandes, ce libellé est récupéré depuis l’enveloppe complète avant sa suppression ; si les anciennes données ont déjà été supprimées, le reçu reste consultable sans compte TikTok. Après un échec final du paiement, les deux enveloppes sont supprimées. Le modèle de traitement reçoit donc le mot de passe demandé par le parcours d’origine ; son destinataire doit être contrôlé par le marchand.
 
@@ -54,4 +92,4 @@ Le lien de documentation officiel `https://developper.mysoleas.com` ne résolvai
 
 Références consultées le 5 septembre 2026 : [collectes SebPay](https://new.sebpay.bj/fr/docs/collections), [frais SebPay](https://new.sebpay.bj/fr/docs/tarifs), [REST EmailJS](https://www.emailjs.com/docs/rest-api/send/), [SDK officiel EmailJS : accès serveur et clé privée facultative](https://github.com/emailjs-com/emailjs-nodejs), [consistance KV](https://developers.cloudflare.com/kv/concepts/how-kv-works/), [page développeurs SoleasPay](https://soleaspay.com/home/services/developers), [plugin officiel SoleasPay](https://plugins.svn.wordpress.org/soleaspay-payment-gateway-for-woocommerce/trunk/class/).
 
-Les tests `worker/test/tiktok.test.mjs` et `worker/test/payments.test.mjs` interceptent toutes les requêtes externes et vérifient les prix, les bonus, les devis/OTP SebPay, les deux services, la validation serveur, le chiffrement et les pannes de notification. Aucun paiement ni courriel réel n’est créé par ces tests. Le déploiement du moteur commun est enregistré ci-dessus ; l’activation du traitement EmailJS reste distincte.
+Les tests `worker/test/tiktok.test.mjs` et `worker/test/payments.test.mjs` interceptent toutes les requêtes externes et vérifient les prix, les bonus, les devis/OTP SebPay, les deux services, la validation serveur, le chiffrement et les pannes de notification. Aucun paiement ni courriel réel n’est créé par ces tests automatisés. Les essais d’envoi réels avec données fictives et le déploiement de la configuration EmailJS sont documentés séparément ci-dessus.

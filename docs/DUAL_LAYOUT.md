@@ -166,3 +166,7 @@ Les ressources mises en cache sont publiques, bornées et vérifiées contre les
 ### Validation du contact DRAVA — 5 septembre 2026
 
 Le téléphone et WhatsApp officiels sont +237 692 426 620. Les anciens numéros et le lien de groupe WhatsApp ont été retirés des pages et des reçus. Edge émulé : 56 contrôles sur les sept dimensions imposées, FR/EN, clair/sombre ; un contact TikTok unique, liens corrects, sans débordement. Quatre PDF générés contiennent une seule occurrence du contact officiel. Lint, build, 85 tests paiement, 32 tests TikTok, 11 tests thème, six tests PWA et scanner source/export réussis. Aucun lien externe ouvert, appel téléphonique, message ou paiement réalisé. Aucun appareil physique iOS/Android testé.
+
+### Activation EmailJS — 5 septembre 2026, 18:30 UTC
+
+La configuration distante manquante lors des validations précédentes est désormais installée sur le Worker existant : service Gmail DRAVA, modèle interne `template_drava_tiktok` et quatre secrets EmailJS. Les tests d’envoi du tableau de bord et de l’API serveur ont été acceptés et reçus par `contact.drava@gmail.com`, avec données fictives uniquement. La version active, les contrôles et leurs limites sont consignés dans [TIKTOK_BACKEND.md](TIKTOK_BACKEND.md). Cette activation ne modifie aucun des deux layouts ; aucun paiement réel ni test supplémentaire sur appareil physique n’a été effectué.
