@@ -317,10 +317,13 @@ export function DialogNotes({
                       whileHover={{ scale: 1.03 }}
                       whileTap={{ scale: 0.97 }}
                     >
-                      <Button className="w-full" disabled variant="outline">
-                        {language === "fr"
-                          ? "Paiement direct"
-                          : "Direct payment"}
+                      <Button
+                        className="w-full"
+                        onClick={onClose}
+                        type="button"
+                        variant="outline"
+                      >
+                        {language === "fr" ? "Refuser" : "Decline"}
                       </Button>
                     </motion.div>
                   </motion.div>

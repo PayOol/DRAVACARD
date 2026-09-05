@@ -455,27 +455,42 @@ function selfTest() {
     .some((rule) => rule.label === 'Card purchase surface contains direct payment navigation'))
 
   const safeUsageNotesButtons = `
-    export function PaymentDialog({ onAccept }) {
+    export function PaymentDialog({ onAccept, onClose }) {
       const handleAccept = () => onAccept()
-      return <div><Button onClick={handleAccept}>Proceed</Button><Button disabled={true}>Direct</Button></div>
+      return <div><Button onClick={handleAccept}>Proceed</Button><Button type="button" onClick={onClose}>Decline</Button></div>
     }
   `
   assert.deepEqual(validateUsageNotesButtons(safeUsageNotesButtons, 'safe-dialog.tsx'), [])
   assert.ok(validateUsageNotesButtons(`
-    export function PaymentDialog({ onAccept }) {
-      return <div><Button disabled onClick={onAccept}>Proceed</Button><Button disabled>Direct</Button></div>
+    export function PaymentDialog({ onAccept, onClose }) {
+      return <div><Button disabled onClick={onAccept}>Proceed</Button><Button type="button" onClick={onClose}>Decline</Button></div>
     }
   `, 'disabled-accept-dialog.tsx').some((failure) => failure.includes('must be active')))
   assert.ok(validateUsageNotesButtons(`
-    export function PaymentDialog({ onAccept }) {
-      return <div><Button onClick={onAccept}>Proceed</Button><Button onClick={pay}>Direct</Button></div>
+    export function PaymentDialog({ onAccept, onClose }) {
+      return <div><Button onClick={onAccept}>Proceed</Button><Button type="button" onClick={pay}>Decline</Button></div>
     }
-  `, 'enabled-direct-dialog.tsx').some((failure) => failure.includes('statically disabled')))
+  `, 'payment-decline-dialog.tsx').some((failure) => failure.includes('must call onClose directly')))
   assert.ok(validateUsageNotesButtons(`
-    export function PaymentDialog({ onAccept }) {
-      return <div><Link href="/pay"><Button onClick={onAccept}>Proceed</Button></Link><Button disabled>Direct</Button></div>
+    export function PaymentDialog({ onAccept, onClose }) {
+      return <div><Button onClick={onAccept}>Proceed</Button><Button type="button" disabled onClick={onClose}>Decline</Button></div>
+    }
+  `, 'disabled-decline-dialog.tsx').some((failure) => failure.includes('must be active')))
+  assert.ok(validateUsageNotesButtons(`
+    export function PaymentDialog({ onAccept, onClose }) {
+      return <div><Button onClick={onAccept}>Proceed</Button><Button type="submit" onClick={onClose}>Decline</Button></div>
+    }
+  `, 'submit-decline-dialog.tsx').some((failure) => failure.includes('must have type="button"')))
+  assert.ok(validateUsageNotesButtons(`
+    export function PaymentDialog({ onAccept, onClose }) {
+      return <div><Link href="/pay"><Button onClick={onAccept}>Proceed</Button></Link><Button type="button" onClick={onClose}>Decline</Button></div>
     }
   `, 'linked-dialog.tsx').some((failure) => failure.includes('must not be nested')))
+  assert.ok(validateUsageNotesButtons(`
+    export function PaymentDialog({ onAccept, onClose }) {
+      return <div><Button onClick={onAccept}>Proceed</Button><div onClick={pay}><Button type="button" onClick={onClose}>Decline</Button></div></div>
+    }
+  `, 'interactive-decline-wrapper.tsx').some((failure) => failure.includes('must not be nested')))
 
   const safeAdapter = `
     const SDK_URL = '${leekPaySdkUrl}'
@@ -602,12 +617,6 @@ function hasInteractiveAncestor(node) {
   return false
 }
 
-function isStaticallyDisabled(attribute) {
-  if (!attribute.initializer) return true
-  return ts.isJsxExpression(attribute.initializer)
-    && attribute.initializer.expression?.kind === ts.SyntaxKind.TrueKeyword
-}
-
 function validateUsageNotesButtons(source, fileName) {
   const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   if (sourceFile.parseDiagnostics.length > 0) {
@@ -630,7 +639,7 @@ function validateUsageNotesButtons(source, fileName) {
   }
 
   for (const [index, { node, openingElement }] of buttons.entries()) {
-    const label = index === 0 ? 'Usage-notes accept button' : 'Direct-payment button'
+    const label = index === 0 ? 'Usage-notes accept button' : 'Usage-notes decline button'
     const attributes = openingElement.attributes.properties
     if (attributes.some((attribute) => ts.isJsxSpreadAttribute(attribute))) {
       buttonFailures.push(`${label} must not use spread attributes`)
@@ -639,17 +648,29 @@ function validateUsageNotesButtons(source, fileName) {
     const jsxAttributes = attributes.filter(ts.isJsxAttribute)
     const disabledAttributes = jsxAttributes.filter((attribute) => attribute.name.getText() === 'disabled')
     const attributeNames = jsxAttributes.map((attribute) => attribute.name.getText())
-    if (index === 0) {
-      if (disabledAttributes.length > 0) buttonFailures.push(`${label} must be active`)
-      if (attributeNames.filter((name) => name === 'onClick').length !== 1) {
-        buttonFailures.push(`${label} must have exactly one onClick handler`)
+    if (disabledAttributes.length > 0) buttonFailures.push(`${label} must be active`)
+    const clickAttributes = jsxAttributes.filter((attribute) => attribute.name.getText() === 'onClick')
+    if (clickAttributes.length !== 1) {
+      buttonFailures.push(`${label} must have exactly one onClick handler`)
+    }
+    if (index === 1) {
+      const clickInitializer = clickAttributes[0]?.initializer
+      const clickExpression = clickInitializer && ts.isJsxExpression(clickInitializer)
+        ? clickInitializer.expression
+        : undefined
+      if (!clickExpression || !ts.isIdentifier(clickExpression) || clickExpression.text !== 'onClose') {
+        buttonFailures.push(`${label} must call onClose directly`)
       }
-    } else if (disabledAttributes.length !== 1 || !isStaticallyDisabled(disabledAttributes[0])) {
-      buttonFailures.push(`${label} must be statically disabled`)
+      const typeAttributes = jsxAttributes.filter((attribute) => attribute.name.getText() === 'type')
+      const typeInitializer = typeAttributes[0]?.initializer
+      if (typeAttributes.length !== 1 || !typeInitializer
+        || !ts.isStringLiteral(typeInitializer) || typeInitializer.text !== 'button') {
+        buttonFailures.push(`${label} must have type="button"`)
+      }
     }
 
     const forbiddenAttributes = attributeNames.filter((name) =>
-      (index === 0 ? /^on(?!Click$)/i.test(name) : /^on/i.test(name))
+      /^on(?!Click$)/i.test(name)
         || ['action', 'asChild', 'formAction', 'href', 'target'].includes(name))
     if (forbiddenAttributes.length > 0) {
       buttonFailures.push(`${label} has forbidden interactive attributes: ${forbiddenAttributes.join(', ')}`)
