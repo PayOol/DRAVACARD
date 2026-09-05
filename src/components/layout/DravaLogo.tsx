@@ -13,14 +13,14 @@ export default function DravaLogo({
     return (
       <span className={`drava-wordmark ${className ?? ""}`.trim()}>
         <img
-          className="drava-wordmark-image dark:hidden"
+          className="drava-wordmark-light"
           src={withBasePath("/images/drava-wordmark.svg")}
           alt={decorative ? "" : "DRAVA"}
           width={607}
           height={127}
         />
         <img
-          className="drava-wordmark-image hidden dark:block"
+          className="drava-wordmark-dark"
           src={withBasePath("/images/drava-wordmark-dark.svg")}
           alt={decorative ? "" : "DRAVA"}
           width={607}

@@ -90,6 +90,11 @@
 .desktop-brand-logo { max-height: 40px; width: auto; object-fit: contain; }
 .app-desktop-header .desktop-brand-logo { max-height: 40px; width: auto; object-fit: contain; }
 
+.drava-wordmark-light { display: block; }
+.drava-wordmark-dark { display: none !important; }
+.dark .drava-wordmark-light { display: none !important; }
+.dark .drava-wordmark-dark { display: block !important; }
+
 @media screen {
   .dark .app-home-header .drava-logo,
   .dark .app-page-header .drava-logo,

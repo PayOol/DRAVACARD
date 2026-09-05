@@ -164,11 +164,24 @@
     flex-shrink: 0;
   }
 
-  .drava-wordmark-image {
+  .drava-wordmark-light,
+  .drava-wordmark-dark {
     display: block;
     height: 100%;
     width: auto;
     object-fit: contain;
+  }
+
+  .drava-wordmark-dark {
+    display: none !important;
+  }
+
+  .dark .drava-wordmark-light {
+    display: none !important;
+  }
+
+  .dark .drava-wordmark-dark {
+    display: block !important;
   }
 
   .app-page-header .drava-logo {

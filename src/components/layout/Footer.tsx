@@ -17,12 +17,12 @@ const Footer = () => {
             <img
               src={withBasePath("/images/drava-wordmark.svg")}
               alt="DRAVA Logo"
-              className="desktop-brand-logo dark:hidden h-10 w-auto"
+              className="desktop-brand-logo drava-wordmark-light h-10 w-auto"
             />
             <img
               src={withBasePath("/images/drava-wordmark-dark.svg")}
               alt="DRAVA Logo"
-              className="desktop-brand-logo hidden dark:block h-10 w-auto"
+              className="desktop-brand-logo drava-wordmark-dark h-10 w-auto"
             />
           </Link>
           <p className="text-center text-sm text-gray-600 md:text-left dark:text-slate-300">
