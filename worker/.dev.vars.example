@@ -1,2 +1,20 @@
 # Copy to .dev.vars.development for local-only testing, never commit credentials.
 LEEKPAY_SECRET_KEY=replace-with-development-credential
+
+# TikTok: the same server-side LeekPay credential can serve both catalogues.
+# Generate an independent cryptographically random 32-byte encryption key as hex.
+# Keep this key until every pending order encrypted with it has been delivered.
+TIKTOK_DATA_KEY=replace-with-64-hexadecimal-characters
+SEBPAY_PUBLIC_KEY=replace-with-development-public-key
+SEBPAY_SECRET_KEY=replace-with-development-secret-key
+# SoleasPay is intentionally unavailable until its server verification contract is supplied.
+SOLEASPAY_API_KEY=replace-with-development-api-key
+# Use the merchant-owned EmailJS service and template, with non-browser REST enabled.
+# The source's template field names are supported; recipient/auto-reply stays in EmailJS.
+# No address or key is copied from UpCoin. Only these three EmailJS values are required.
+EMAILJS_SERVICE_ID=replace-with-service-id
+EMAILJS_TEMPLATE_ID=replace-with-template-id
+EMAILJS_PUBLIC_KEY=replace-with-public-key
+# Optional: set only when required by the account's security settings.
+# If supplied, this must be a valid private key, not an empty value.
+# EMAILJS_PRIVATE_KEY=replace-with-private-key

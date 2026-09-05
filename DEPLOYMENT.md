@@ -2,11 +2,13 @@
 
 GitHub Pages reste l'unique hébergement de l'interface DRAVACARD. Le paiement utilise séparément un Cloudflare Worker REST à l'adresse `https://drava-leekpay.sebpay-proxy.workers.dev`. Les configurations Netlify, Render, Docker, Nginx et VPS restent retirées.
 
+Le build inclut maintenant la génération de la PWA **Drava** après l’export Next.js. Publier tout le dossier `out/` issu de `npm run build`, notamment `sw.js`, `offline.html`, le manifeste et les chunks. Ne pas publier directement `public/sw.js`, qui est un modèle sans manifeste de construction. Les contrôles et l’aperçu local sont décrits dans [PWA.md](docs/PWA.md).
+
 > **Dépôt public et historique** — ce dépôt est public. Considérez toute ancienne valeur présente dans son historique comme exposée : révoquez-la chez le fournisseur, purgez les caches concernés et ne vous contentez jamais de la supprimer du dernier commit.
 
 ## Déployer le proxy Cloudflare Worker
 
-Le Worker doit être disponible avant de publier une interface qui active le bouton LeekPay.
+Le Worker doit être disponible avant de publier l’interface. Tous les services utilisent ses routes communes ; mettre à jour le Worker existant, sans créer un deuxième proxy ni une deuxième configuration LeekPay.
 
 1. Ouvrez un terminal dans `worker/` et installez exactement le lockfile :
 
@@ -43,7 +45,9 @@ Le Worker doit être disponible avant de publier une interface qui active le bou
 
 6. Vérifiez les réponses CORS pour les origines prévues, les limites de requêtes et les journaux sans données sensibles. CORS n'authentifie pas l'appelant : les deux routes de paiement doivent toujours valider méthode, taille et forme du corps.
 
-Le proxy crée un checkout à partir de `{ productId, customer: { email, whatsapp } }` ; le montant et `XOF` viennent exclusivement du catalogue Worker. Le validateur partagé `src/lib/payment-customer.ts` doit être présent à côté du dossier `worker/` lors du build. Les coordonnées obligatoires sont revalidées puis envoyées dans `customer_email` et `customer_phone` à LeekPay ; `customer_name` est construit côté serveur au format `Client (email normalisé)`, sans nouveau champ côté navigateur. Ces valeurs ne sont copiées ni dans KV ni dans les logs. Déployez ce contrat Worker avant l'interface à trois étapes.
+Le proxy crée un checkout à partir de `{ service, productId, provider, customer, consent: true, payment? }` ; le montant et la devise viennent exclusivement du catalogue Worker. L’ancien corps cartes `{ productId, customer }` et les anciennes routes TikTok restent compatibles. Le validateur partagé `src/lib/payment-customer.ts` doit être présent à côté du dossier `worker/` lors du build. Les coordonnées obligatoires sont revalidées puis transmises selon le contrat documenté de l’adaptateur. Les contacts de carte ne sont copiés ni dans KV ni dans les logs. Les données de traitement TikTok utilisent un stockage chiffré distinct, décrit dans [TIKTOK_BACKEND.md](docs/TIKTOK_BACKEND.md).
+
+Vérifier `GET /api/providers` avec une origine autorisée après déploiement. Cette réponse est globale aux cartes et TikTok et dépend uniquement des identifiants de paiement. `LEEKPAY_SECRET_KEY` existant est réutilisé ; SebPay nécessite ses deux clés. L’activation TikTok exige en plus les réglages AES/EmailJS de son traitement, vérifiés avant tout appel de création. Aucune clé ni aucun destinataire d’un autre projet ne doit être copié implicitement. Voir [PAYMENTS.md](docs/PAYMENTS.md) pour les routes communes et la séparation prestataire/service.
 
 La vérification de statut relit LeekPay avec l'authentification serveur et compare l'identifiant, le montant et la devise stockés dans `ORDERS`. En raison de la cohérence éventuelle de KV, une page de retour peut devoir réessayer brièvement une commande encore introuvable. Un paiement vérifié ne doit jamais déclencher automatiquement l'émission d'une carte.
 

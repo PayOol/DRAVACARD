@@ -2,15 +2,17 @@
 
 ## Financial operations
 
-Card checkout initiation uses a dedicated Cloudflare Worker REST proxy. Top-ups, balance checks, withdrawals, newsletter and reseller data collection, the global WhatsApp contact form, and the demo admin route remain disabled.
+Card and TikTok checkout initiation use the same Cloudflare Worker REST proxy and provider adapters. Card top-ups, balance checks, withdrawals, newsletter and reseller data collection, the global WhatsApp contact form, and the demo admin route remain disabled. The shared payment architecture is documented in [docs/PAYMENTS.md](docs/PAYMENTS.md).
 
 Neither a LeekPay public key nor a LeekPay secret key belongs in the Pages source, a `NEXT_PUBLIC_*` variable, a browser bundle, GitHub Actions configuration, or a committed environment file. `LEEKPAY_SECRET_KEY` is an encrypted Cloudflare Worker secret and is read only as `env.LEEKPAY_SECRET_KEY` at runtime.
 
-The browser sends an immutable `productId` and exactly `customer: { email, whatsapp }` to `POST /api/checkout`, only after usage-note acceptance, contact validation and an explicit Pay action. The shared contact validator runs in both the browser and Worker. LeekPay receives only the documented `customer_email` and `customer_phone` fields. Contact details are held in React memory until the modal closes; they must never be copied into browser storage, KV, URLs, metadata, logs or proxy responses. Future providers must explicitly map the same canonical customer contract to their documented fields.
+The browser sends `{ service, productId, provider, customer, consent: true, payment? }` to `POST /api/checkout`, only after usage-note acceptance, contact validation and an explicit Pay action. The shared contact validator runs in both the browser and Worker. Card customers contain exactly `{ email, whatsapp }`. Provider adapters map the normalized contact contract to their documented fields; TikTok credentials never reach payment providers. Card contact details are held in React memory until the modal closes; they must never be copied into browser storage, KV, URLs, metadata, logs or proxy responses. The legacy card request remains supported by the same engine during rollout.
 
-The Worker owns the product catalogue, amount, description and `XOF` currency. It stores the LeekPay checkout identifier and expected values under a random order token in the `ORDERS` KV namespace. The static return and cancellation pages receive only `#order=` followed by 64 hexadecimal characters.
+TikTok adds the account and password required by its fulfillment workflow. These values stay in browser memory and in separate AES-GCM encrypted server envelopes with a seven-day maximum lifetime. They are sent only to the configured merchant EmailJS template after authenticated payment verification. The full envelope is deleted after EmailJS accepts the notification; a separate encrypted account label may remain for the verified receipt until the original expiry. Payment confirmation remains independent of email acceptance or delivery of coins. Configuration, retry and consistency limits are documented in [docs/TIKTOK_BACKEND.md](docs/TIKTOK_BACKEND.md).
 
-`POST /api/orders/status` accepts that opaque order token. The Worker retrieves the stored checkout identifier, performs an authenticated server-to-server `GET` to LeekPay, and compares the provider identifier, amount and currency with the stored order. A response may contain `verified: true` only when the authenticated provider response is `paid` and every comparison succeeds.
+The Worker owns each service's product catalogue, amount, description and currency. It stores the provider reference and expected collection amount/currency separately from the service amount/currency under a random order token in the `ORDERS` KV namespace. The static return and cancellation pages receive only `#order=` followed by 64 hexadecimal characters. Result pages remove that fragment immediately and retain the capability in memory; embedded Mobile Money results keep both token and operator link in memory.
+
+`POST /api/orders/status` accepts that opaque order token. The Worker retrieves the stored order and uses its provider's authenticated server-to-server verification, comparing reference, amount and currency with the stored order. A response may contain `verified: true` only when the authenticated provider response is `paid` and every comparison succeeds. Clients reject mismatched services and only expose explicitly allowed receipt fields. The legacy TikTok routes delegate to this same engine.
 
 The server implementation must:
 
@@ -20,7 +22,7 @@ The server implementation must:
 - use cryptographically random, unguessable order tokens and expire stored orders;
 - authenticate every provider status lookup and fail closed on network, parsing or comparison errors;
 - inspect upstream redirects manually and reject every 3xx response, so the bearer secret is never forwarded to another origin;
-- use provider-hosted payment pages and never collect or proxy a full PAN, CVV, OTP or withdrawal code;
+- never collect or proxy a full PAN, CVV, card OTP or withdrawal code; provider-hosted card authentication stays external. The shared SebPay Mobile Money form may collect the transaction OTP explicitly required by the selected operator's documented collection API. It must remain in memory, travel only in the protected creation body to that adapter, and never enter storage, URLs, logs or receipts;
 - rate-limit both checkout creation and status polling, while treating those distributed limits as approximate abuse controls;
 - keep payment confirmation separate from fulfillment. No browser callback, redirect or `verified` response may automatically issue, reveal or deliver a card.
 

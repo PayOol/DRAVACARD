@@ -187,7 +187,7 @@ export function CustomerDetails({
         </div>
       </div>
 
-      <div className="checkout-actions flex shrink-0 gap-3 border-t border-slate-100 p-4 dark:border-[#304159] sm:px-6">
+      <div className="checkout-actions checkout-actions-row flex shrink-0 gap-3 border-t border-slate-100 p-4 dark:border-[#304159] sm:px-6">
         <Button
           className="checkout-back-action h-11 gap-2"
           onClick={onBack}
@@ -198,7 +198,7 @@ export function CustomerDetails({
           {language === "fr" ? "Précédent" : "Back"}
         </Button>
         <Button
-          className="h-11 flex-1 gap-2 bg-blue-600 text-white hover:bg-blue-700"
+          className="checkout-primary-action h-11 flex-1 gap-2"
           type="submit"
         >
           {language === "fr" ? "Suivant" : "Next"}

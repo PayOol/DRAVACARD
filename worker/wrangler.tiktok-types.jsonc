@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // Type-generation input only. This config is never used to deploy a Worker.
+  // Keeping optional feature secrets here avoids making card-only deploys
+  // depend on every TikTok provider and notification service.
+  "name": "drava-tiktok-secret-types",
+  "compatibility_date": "2026-09-05",
+  "secrets": {
+    "required": [
+      "TIKTOK_DATA_KEY",
+      "SEBPAY_PUBLIC_KEY",
+      "SEBPAY_SECRET_KEY",
+      "SOLEASPAY_API_KEY",
+      "EMAILJS_SERVICE_ID",
+      "EMAILJS_TEMPLATE_ID",
+      "EMAILJS_PUBLIC_KEY",
+      "EMAILJS_PRIVATE_KEY"
+    ]
+  }
+}

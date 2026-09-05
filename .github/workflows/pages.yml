@@ -80,6 +80,9 @@ jobs:
       - name: Test payment client with mocked responses
         run: npm run test:payments
 
+      - name: Test TikTok and PWA installation, cache, and updates
+        run: npm run test:tiktok && npm run test:pwa
+
       - name: Build static export for GitHub Pages
         run: npm run build
         env:

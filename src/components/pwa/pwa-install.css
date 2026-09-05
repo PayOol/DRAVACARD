@@ -1,0 +1,96 @@
+.pwa-install-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgb(5 16 35 / 55%);
+  backdrop-filter: blur(8px);
+  animation: pwa-install-fade 180ms ease-out;
+}
+
+.pwa-install-modal {
+  position: fixed;
+  z-index: 81;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(430px, calc(100% - 40px));
+  max-height: calc(100dvh - max(40px, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 25px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 24px;
+  background: radial-gradient(circle at 100% 0, rgb(59 130 246 / 10%), transparent 15rem), hsl(var(--card));
+  color: hsl(var(--foreground));
+  box-shadow: 0 28px 75px rgb(4 16 40 / 30%);
+  animation: pwa-install-enter 220ms ease-out;
+  outline: none;
+  scrollbar-width: thin;
+}
+
+.pwa-install-heading { display: flex; align-items: center; gap: 13px; }
+.pwa-install-heading > div:last-child { min-width: 0; }
+.pwa-install-app-icon {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  flex: 0 0 auto;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid #dce8fa;
+  box-shadow: 0 6px 18px rgb(37 99 235 / 12%);
+  overflow: hidden;
+}
+.pwa-install-app-icon .drava-logo { position: relative; display: block; width: 53px; height: 26px; overflow: hidden; }
+.pwa-install-app-icon .drava-logo-image { position: absolute; width: 66px; max-width: none; height: 40px; left: -6px; top: -7px; object-fit: contain; }
+.pwa-install-platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #2563eb;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.pwa-install-heading h2 { margin: 4px 0 0; font-size: clamp(22px, 5.8vw, 27px); line-height: 1.13; letter-spacing: -.035em; font-weight: 800; outline: none; }
+.pwa-install-description { margin: 18px 0 0; color: hsl(var(--muted-foreground)); font-size: 13px; line-height: 1.6; }
+.pwa-install-steps { margin: 19px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.pwa-install-steps li { min-height: 51px; padding: 10px 12px; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--muted) / 65%); color: hsl(var(--muted-foreground)); display: flex; align-items: center; gap: 11px; font-size: 12px; font-weight: 600; line-height: 1.45; }
+.pwa-install-step-icon { width: 29px; height: 29px; flex: 0 0 auto; border-radius: 9px; background: rgb(59 130 246 / 12%); color: #2563eb; display: grid; place-items: center; font-size: 12px; font-weight: 800; }
+.pwa-install-benefit { display: flex; align-items: flex-start; gap: 9px; margin: 18px 0 0; padding: 12px 13px; border: 1px solid rgb(37 99 235 / 15%); border-radius: 12px; background: rgb(37 99 235 / 6%); color: #315588; font-size: 12px; line-height: 1.5; }
+.pwa-install-benefit svg { flex: 0 0 auto; margin-top: 1px; color: #2563eb; }
+.pwa-install-help { display: block; margin: 14px 0 0; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 1.55; }
+.pwa-install-actions { display: flex; align-items: stretch; gap: 10px; margin-top: 21px; }
+.pwa-install-primary, .pwa-install-later { min-height: 47px; padding: 11px 15px; border-radius: 12px; font-size: 12px; font-weight: 750; line-height: 1.4; cursor: pointer; transition: background 160ms ease, box-shadow 160ms ease, opacity 160ms ease; }
+.pwa-install-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex: 1; border: 1px solid transparent; background: linear-gradient(112deg, #2563eb, #1d4ed8); color: #fff; box-shadow: 0 8px 18px rgb(37 99 235 / 17%); }
+.pwa-install-primary svg { flex: 0 0 auto; }
+.pwa-install-primary:hover:not(:disabled) { background: #1d4ed8; box-shadow: 0 10px 22px rgb(37 99 235 / 25%); }
+.pwa-install-later { min-width: 96px; border: 1px solid hsl(var(--border)); background: hsl(var(--card)); color: hsl(var(--muted-foreground)); }
+.pwa-install-later:hover:not(:disabled) { background: hsl(var(--muted)); color: hsl(var(--foreground)); }
+.pwa-install-primary:disabled, .pwa-install-later:disabled { opacity: .65; cursor: wait; }
+.pwa-install-primary:focus-visible, .pwa-install-later:focus-visible { outline: 3px solid #60a5fa; outline-offset: 3px; }
+.dark .pwa-install-platform, .dark .pwa-install-step-icon, .dark .pwa-install-benefit svg { color: #93c5fd; }
+.dark .pwa-install-benefit { border-color: rgb(96 165 250 / 22%); background: rgb(59 130 246 / 10%); color: #b7cbed; }
+.pwa-update-notice { position: fixed; z-index: 50; bottom: max(20px, env(safe-area-inset-bottom)); right: max(20px, env(safe-area-inset-right)); width: min(430px, calc(100% - 40px)); padding: 18px; border: 1px solid hsl(var(--border)); border-radius: 18px; color: hsl(var(--foreground)); background: hsl(var(--card)); box-shadow: 0 12px 40px rgb(4 16 40 / 20%); }
+.pwa-update-copy { display: flex; align-items: flex-start; gap: 10px; }
+.pwa-update-copy > svg { flex: 0 0 auto; margin-top: 2px; color: #2563eb; }
+.dark .pwa-update-copy > svg { color: #93c5fd; }
+.pwa-update-copy strong { font-size: 14px; line-height: 1.4; }
+.pwa-update-copy output { display: block; margin: 5px 0 0; font-size: 12px; line-height: 1.5; color: hsl(var(--muted-foreground)); }
+.pwa-update-actions { display: flex; gap: 10px; margin-top: 14px; }
+@keyframes pwa-install-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pwa-install-enter { from { opacity: 0; transform: translate(-50%, calc(-50% + 10px)); } to { opacity: 1; transform: translate(-50%, -50%); } }
+
+@media (max-width: 767px), (max-width: 1023px) and (max-height: 500px) and (pointer: coarse) {
+  .pwa-install-modal { width: calc(100% - max(28px, env(safe-area-inset-left) + env(safe-area-inset-right))); max-width: 430px; padding: 21px; border-radius: 20px; max-height: calc(100dvh - max(28px, env(safe-area-inset-top) + env(safe-area-inset-bottom))); }
+  .pwa-install-actions { flex-direction: column; }
+  .pwa-install-primary, .pwa-install-later { width: 100%; flex: initial; }
+  .pwa-update-notice { left: max(14px, env(safe-area-inset-left)); right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); width: auto; max-width: 430px; margin-left: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pwa-install-overlay, .pwa-install-modal { animation: none; }
+  .pwa-install-primary, .pwa-install-later { transition: none; }
+}
+@media print { .pwa-install-overlay, .pwa-install-modal, .pwa-update-notice { display: none !important; } }

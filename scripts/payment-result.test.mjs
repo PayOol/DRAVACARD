@@ -4,7 +4,8 @@ import { createRequire } from "node:module";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
-import { readOrderToken } from "../src/lib/leekpay.ts";
+import { readOrderToken } from "../src/lib/payment-api.ts";
+import { DRAVA_CONTACT } from "../src/lib/drava-contact.ts";
 
 const require = createRequire(import.meta.url);
 const source = await readFile(
@@ -35,6 +36,10 @@ async function renderResult({
   language = "fr",
   printError = false,
   deferPrint = false,
+  embedded = false,
+  orderToken,
+  providerLink,
+  onReturn,
   response = { status: "paid", verified: true, amount: 5000, currency: "XOF", productId: "visa-basic", createdAt: Date.UTC(2026, 8, 5, 12) },
 } = {}) {
   const states = [];
@@ -42,7 +47,8 @@ async function renderResult({
   const calls = [];
   let printCalls = 0;
   const originalUrl = `http://${hostname || "localhost"}:3000/payment-${status}/${hash}`;
-  const location = { hostname, hash, href: originalUrl };
+  const location = new URL(originalUrl);
+  Object.defineProperty(location, "hostname", { value: hostname });
   const printedUrls = [];
   const events = new Map();
   let cursor = 0;
@@ -50,6 +56,7 @@ async function renderResult({
   const imports = {
     "react/jsx-runtime": require("react/jsx-runtime"),
     react: {
+      Fragment: require("react").Fragment,
       useState(initial) {
         const index = cursor++;
         if (!(index in states)) states[index] = initial;
@@ -58,15 +65,18 @@ async function renderResult({
         }];
       },
       useEffect(effect) { if (collectEffects) effects.push(effect); },
+      useRef(initial) { const index = cursor++; return states[index] ??= { current: initial }; },
     },
     "@/components/layout/MainLayout": { default: "main" },
     "@/components/ui/button": { Button: "button" },
     "@/lib/language-context": { useLanguage: () => ({ language }) },
-    "@/lib/leekpay": {
+    "@/lib/drava-contact": { DRAVA_CONTACT },
+    "@/lib/payment-api": {
       readOrderToken,
       PaymentApiError: class extends Error {},
-      async getLeekPayOrderStatus(token) { calls.push(token); return response; },
+      async getPaymentOrderStatus(token) { calls.push(token); return { service: "cards", provider: "leekpay", ...response }; },
     },
+    "./payment-result-embedded.css": {},
     "lucide-react": {
       AlertTriangle: "warning-icon",
       CheckCircle2: "success-icon",
@@ -83,7 +93,7 @@ async function renderResult({
     process: { env: { NODE_ENV: environment } },
     window: {
       location,
-      history: { state: {}, replaceState(_state, _unused, url) { location.href = url; } },
+      history: { state: {}, replaceState(_state, _unused, url) { location.href = new URL(url, location.href).href; } },
       addEventListener(name, listener) { events.set(name, listener); },
       removeEventListener(name) { events.delete(name); },
       print() {
@@ -105,7 +115,8 @@ async function renderResult({
   const context = vm.createContext({ ...globals, exports: {} });
   vm.runInContext(compiled, context);
   const Component = context.exports.default;
-  Component({ status });
+  const props = { status, embedded, orderToken, providerLink, onReturn };
+  Component(props);
   const cleanups = effects.map((effect) => effect());
   await new Promise((resolve) => setImmediate(resolve));
   collectEffects = false;
@@ -116,7 +127,7 @@ async function renderResult({
     if (typeof element.type === "function") return resolve(element.type(element.props));
     return { ...element, props: { ...element.props, children: resolve(element.props?.children) } };
   }
-  const tree = resolve(Component({ status }));
+  const tree = resolve(Component(props));
   for (const cleanup of cleanups) cleanup?.();
   function textOf(element) {
     if (element == null || typeof element === "boolean") return "";
@@ -132,7 +143,11 @@ async function renderResult({
     collect(element.props?.children);
   }
   collect(tree);
-  return { text: textOf(tree), states, calls, tree: JSON.stringify(tree), nodes, getPrintCalls: () => printCalls, printedUrls, location, originalUrl, finishPrint: () => events.get("afterprint")?.() };
+  return { text: textOf(tree), states, calls, tree: JSON.stringify(tree), nodes, getPrintCalls: () => printCalls, printedUrls, location, originalUrl, finishPrint: () => events.get("afterprint")?.(), async repeatVerification() {
+    const nextCleanups = effects.map((effect) => effect());
+    await new Promise((resolve) => setImmediate(resolve));
+    for (const cleanup of nextCleanups) cleanup?.();
+  } };
 }
 
 test("local development previews a successful order without an API call or verified order", async () => {
@@ -223,7 +238,7 @@ test("receipt contains the requested manual fulfillment instructions and exact s
   assert.deepEqual(links.map((node) => node.props.href), [
     "https://prismcard.net/r/VPBUL1EF",
     "https://t.me/PayOolTM",
-    "https://chat.whatsapp.com/LotDInVIA5n4i1j185xjxi",
+    "https://wa.me/237692426620",
     "/",
   ]);
   for (const link of links.slice(0, 3)) {
@@ -272,27 +287,69 @@ test("unconfirmed and failed payments cannot display instructions or print a suc
   }
 });
 
-test("printing never exposes the private order fragment and always restores it", async () => {
+test("printing never exposes or restores the consumed private order fragment", async () => {
   for (const printError of [false, true]) {
     const result = await renderResult({ hash: `#order=${"d".repeat(64)}`, printError });
     const printButton = result.nodes.find((node) => node.type === "button" && typeof node.props.onClick === "function");
     if (printError) assert.throws(() => printButton.props.onClick(), /Printing unavailable/);
     else printButton.props.onClick();
     assert.deepEqual(result.printedUrls, ["http://127.0.0.1:3000/payment-success/"]);
-    assert.equal(result.location.href, result.originalUrl);
+    assert.equal(result.location.href, "http://127.0.0.1:3000/payment-success/");
   }
 });
 
-test("deferred printing restores the private URL after print, without overwriting subsequent navigation", async () => {
+test("deferred printing keeps the URL private without overwriting subsequent navigation", async () => {
   const options = { hash: `#order=${"e".repeat(64)}`, deferPrint: true };
   const result = await renderResult(options);
   result.nodes.find((node) => node.type === "button" && typeof node.props.onClick === "function").props.onClick();
   assert.equal(result.location.href, "http://127.0.0.1:3000/payment-success/");
   result.finishPrint();
-  assert.equal(result.location.href, result.originalUrl);
+  assert.equal(result.location.href, "http://127.0.0.1:3000/payment-success/");
   const navigated = await renderResult(options);
   navigated.nodes.find((node) => node.type === "button" && typeof node.props.onClick === "function").props.onClick();
   navigated.location.href = "http://127.0.0.1:3000/";
   navigated.finishPrint();
   assert.equal(navigated.location.href, "http://127.0.0.1:3000/");
+});
+
+test("card receipts accept server-verified orders from all shared providers and reject another service", async () => {
+  for (const provider of ["leekpay", "soleaspay", "sebpay"]) {
+    const result = await renderResult({ environment: "production", hash: `#order=${"f".repeat(64)}`, response: { service: "cards", provider, status: "paid", verified: true, amount: 5000, currency: "XOF", productId: "visa-basic" } });
+    assert.equal(result.states[0], "paid");
+    assert.match(result.text, /Paiement Réussi/);
+    assert.doesNotMatch(result.text, /LeekPay/);
+    assert.equal(result.location.hash, "");
+  }
+  const otherService = await renderResult({ hash: `#order=${"f".repeat(64)}`, response: { service: "tiktok", provider: "sebpay", status: "paid", verified: true, amount: 5000, currency: "XAF", productId: "pack-100" } });
+  assert.equal(otherService.states[0], "unconfirmed");
+  assert.doesNotMatch(otherService.text, /Paiement Réussi|Prochaines étapes/);
+});
+
+test("verification replay and retries retain only the original in-memory token after URL cleanup", async () => {
+  const token = "a".repeat(64);
+  const result = await renderResult({ hash: `#order=${token}`, response: { status: "pending", verified: false } });
+  assert.equal(result.location.hash, "");
+  assert.deepEqual(result.calls, [token]);
+  // A retry or Strict Mode replay must not reread an emptied or injected URL.
+  result.location.hash = `#order=${"b".repeat(64)}`;
+  await result.repeatVerification();
+  assert.deepEqual(result.calls, [token, token]);
+});
+
+test("embedded card verification preserves the operator approval link and returns via the supplied callback", async () => {
+  let returned = 0;
+  const result = await renderResult({ embedded: true, orderToken: "a".repeat(64), providerLink: "https://operator.example.test/approve", hash: "#simulation", response: { status: "pending", verified: false }, onReturn: () => { returned++; } });
+  assert.deepEqual(result.calls, ["a".repeat(64)]);
+  assert.doesNotMatch(result.text, /Simulation locale|Paiement Réussi/);
+  assert.equal(result.nodes.some((node) => node.type === "main"), false);
+  const operator = result.nodes.find((node) => node.props?.href === "https://operator.example.test/approve");
+  assert.equal(operator.props.target, "_blank");
+  assert.equal(operator.props.rel, "noopener noreferrer");
+  result.nodes.find((node) => node.type === "button" && node.props.onClick && !node.props.variant).props.onClick();
+  assert.equal(returned, 1);
+  const paid = await renderResult({ embedded: true, orderToken: "a".repeat(64), hash: "#card:visa-basic", onReturn: () => { returned++; } });
+  assert.match(paid.text, /Paiement Réussi/);
+  assert.equal(paid.location.hash, "#card:visa-basic", "An embedded result must not rewrite public catalogue history");
+  paid.nodes.find((node) => node.type === "button" && node.props.onClick && !node.props.variant).props.onClick();
+  assert.equal(returned, 2);
 });

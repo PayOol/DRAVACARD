@@ -19,7 +19,7 @@
   }
 
   .app-layout {
-    --mobile-header-height: calc(4rem + env(safe-area-inset-top));
+    --mobile-header-height: calc(3.25rem + env(safe-area-inset-top));
     --app-blue: #2563eb;
     --app-focus: #2563eb;
     --app-ink: #12223b;
@@ -141,7 +141,7 @@
   .drava-logo {
     position: relative;
     display: block;
-    width: 120px;
+    width: 60px;
     aspect-ratio: 15 / 7;
     flex-shrink: 0;
     overflow: hidden;
@@ -158,7 +158,7 @@
   }
 
   .app-page-header .drava-logo {
-    width: clamp(92px, 28vw, 120px);
+    width: 60px;
   }
 
   .app-header-title {

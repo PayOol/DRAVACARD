@@ -1,6 +1,7 @@
 "use client";
 
 import { withBasePath } from "@/lib/base-path";
+import { DRAVA_CONTACT } from "@/lib/drava-contact";
 import { useLanguage } from "@/lib/language-context";
 import { Mail, Phone } from "lucide-react";
 import Link from "next/link";
@@ -35,11 +36,11 @@ const Footer = () => {
             contact.drava@gmail.com
           </a>
           <a
-            href="tel:+237696161186"
+            href={DRAVA_CONTACT.phoneHref}
             className="flex items-center text-sm text-gray-600 transition-colors hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-300"
           >
             <Phone className="mr-2 h-4 w-4" />
-            +237 696 16 11 86
+            {DRAVA_CONTACT.displayPhone}
           </a>
           <p className="max-w-sm text-xs text-gray-500 dark:text-slate-400">
             {language === "fr"

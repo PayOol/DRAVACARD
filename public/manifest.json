@@ -1,7 +1,7 @@
 {
-  "name": "DRAVA · Cartes virtuelles",
-  "short_name": "DRAVA",
-  "description": "DRAVA - Catalogue de cartes virtuelles",
+  "name": "Drava",
+  "short_name": "Drava",
+  "description": "Cartes virtuelles et pièces TikTok avec Drava.",
   "id": "./",
   "start_url": "./",
   "scope": "./",

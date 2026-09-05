@@ -1,21 +1,21 @@
 # DRAVACARD
 
-Catalogue de cartes virtuelles DRAVA. L'interface reste un export statique Next.js publié sur GitHub Pages à l'adresse `https://drava.click`. La création et la vérification des paiements passent par un proxy Cloudflare Worker distinct ; aucune clé LeekPay n'est envoyée au navigateur.
+Catalogue de cartes virtuelles et de pièces TikTok DRAVA. L'interface reste un export statique Next.js publié sur GitHub Pages à l'adresse `https://drava.click`. Tous les services partagent le même moteur de paiement dans le Worker existant ; aucune clé de prestataire n'est envoyée au navigateur. Voir [l’architecture des paiements](docs/PAYMENTS.md).
 
 ## Architecture
 
-- GitHub Pages sert le catalogue et les pages techniques `/payment-success/` et `/payment-failure/`.
-- Les onglets « Cartes virtuelles » et « Pièces TikTok » sont disponibles sur mobile et desktop. La nouvelle vue `/#tiktok` présente une page « Bientôt disponible », sans offre ni paiement TikTok pour le moment. L’onglet des cartes conserve tout le catalogue et son parcours de commande.
+- GitHub Pages sert le catalogue et les pages techniques `/payment-success/`, `/payment-failure/` et `/tiktok-payment/`.
+- Les onglets « Cartes virtuelles » et « Pièces TikTok » sont disponibles sur mobile et desktop. `/#tiktok` présente les six packs et la quantité personnalisée d’UpCoin dans le thème DRAVA. Les instructions, coordonnées, prestataires et résultats restent disponibles dans les deux layouts.
 - Le sélecteur de thème dans l’en-tête propose « Système », « Clair » et « Sombre ». La préférence visuelle est partagée entre les pages et mémorisée localement ; elle ne contient aucune donnée de commande. Les formulaires et reçus s’adaptent, l’impression conserve un fond blanc.
 - Une seule modale enchaîne les notes d'utilisation, les coordonnées (e-mail et WhatsApp), puis le choix du provider, avec transitions animées et respect de la réduction des animations.
 - À l'ouverture de l'étape coordonnées, `GET /api/location` préremplit l'indicatif WhatsApp à partir du pays IP fourni par Cloudflare. La correspondance pays/indicatif utilise `libphonenumber-js` côté Worker uniquement. Cette estimation n'est pas garantie (VPN, proxy, réseau mobile) : le champ reste modifiable, une saisie déjà commencée n'est jamais remplacée et une indisponibilité n'empêche pas la saisie manuelle. Aucun appel GPS ni enregistrement du pays ou de l'IP dans les commandes ou les journaux applicatifs n'est ajouté.
-- Au clic sur « Payer », le navigateur envoie `{ productId, customer: { email, whatsapp } }` au proxy `https://drava-leekpay.sebpay-proxy.workers.dev`. Les coordonnées restent uniquement en mémoire pendant le parcours et peuvent être corrigées avec « Précédent ».
+- Le registre et le formulaire des prestataires sont communs aux cartes et TikTok. Au clic sur « Payer », le client unique `payment-api.ts` envoie `{ service, productId, provider, customer, consent: true, payment? }` à `/api/checkout` sur `https://drava-leekpay.sebpay-proxy.workers.dev`. Les coordonnées restent uniquement en mémoire pendant le parcours et peuvent être corrigées avec « Précédent ».
 - Le validateur partagé `src/lib/payment-customer.ts` vérifie les coordonnées côté navigateur et côté Worker. Le WhatsApp doit inclure `+` et l'indicatif international ; les espaces, parenthèses et tirets sont normalisés.
-- L'adaptateur LeekPay transmet ces valeurs dans les champs REST documentés `customer_email` et `customer_phone`, et construit côté Worker `customer_name` au format `Client (email normalisé)`, par exemple `Client (client@example.com)`. Aucun champ nom supplémentaire n'est demandé dans le formulaire. Les futurs adaptateurs réutiliseront le contrat `PaymentCustomer` et mapperont les champs selon leur propre documentation. Aucun contact n'est ajouté aux URL, aux logs, à KV ou aux réponses du proxy.
-- Le Worker sélectionne le prix dans son catalogue serveur, impose `XOF`, puis crée le checkout LeekPay avec son secret chiffré.
+- L’adaptateur LeekPay unique transmet les coordonnées dans les champs documentés `customer_email` et `customer_phone`. Pour les cartes, `customer_name` reste `Client (email normalisé)`. Aucun contact de carte n’est ajouté aux URL, aux logs, à KV ou aux réponses du proxy. TikTok conserve séparément les données de traitement chiffrées, comme décrit dans [TIKTOK_BACKEND.md](docs/TIKTOK_BACKEND.md).
+- Le Worker sélectionne le prix et la devise dans le catalogue du service, puis appelle le même adaptateur LeekPay ou SebPay. Les clés sont globales à la plateforme. La préparation TikTok/EmailJS est contrôlée séparément avant création ; elle ne détermine pas la disponibilité du prestataire.
 - Les domaines des liens de paiement ne sont pas limités à une liste : LeekPay choisit le prestataire (par exemple `app.zayono.com`) dans sa réponse API authentifiée. Le Worker et le navigateur acceptent ces liens HTTPS absolus, sans identifiants intégrés ni port non standard. Le navigateur ne contacte que le proxy pour créer la commande ; le Worker ne récupère jamais le contenu de ces liens. La vérification du montant, de la devise et du paiement reste effectuée auprès de LeekPay.
 - Un identifiant de commande aléatoire est placé dans le fragment `#order=…`. Le fragment n'est pas envoyé automatiquement dans la requête HTTP ; la page de résultat le transmet explicitement au proxy pour vérifier la commande.
-- Le proxy relit le statut chez LeekPay avec une requête serveur authentifiée et compare l'identifiant du checkout, le montant et la devise enregistrés avant de répondre `verified: true`.
+- Le proxy relit le statut auprès du prestataire avec une requête serveur authentifiée et compare sa référence, le montant et la devise enregistrés avant de répondre `verified: true`. Le résultat refuse une commande appartenant à un autre service.
 
 Une confirmation de paiement ne déclenche jamais automatiquement l'émission ou la livraison d'une carte. Consultez [SECURITY.md](SECURITY.md).
 
@@ -38,6 +38,18 @@ npm run dev
 Le serveur de développement écoute uniquement en local. Le fichier `.env.example` documente les réglages publics de l'export ; il ne doit contenir aucune clé de paiement.
 
 Les fichiers générés par `npm run dev` sont isolés dans `.next-dev/`. Les builds de production utilisent `.next/` et produisent l'export dans `out/`. On peut donc lancer `npm run build` pendant que le serveur local tourne sans effacer ses fichiers et provoquer une erreur 500. Ne supprimez pas `.next-dev/` tant que le serveur de développement est actif.
+
+### PWA Drava
+
+L’invite d’installation reprend celle d’UpCoin, avec rappel après deux heures, aide iOS et protection des commandes ouvertes. La PWA utilise un cache public borné, un écran hors connexion et des mises à jour explicites. Les paiements nécessitent le réseau. Voir [l’analyse et l’architecture PWA](docs/PWA.md).
+
+```bash
+npm run test:pwa
+npm run build
+npm run preview:pwa
+```
+
+L’aperçu de production écoute sur `http://127.0.0.1:3001/`. `npm run dev` permet de vérifier l’invite mais n’enregistre pas le service worker de production.
 
 ### Simulation locale d’une commande validée
 

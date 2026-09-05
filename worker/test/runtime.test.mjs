@@ -27,6 +27,9 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
   });
   const config = JSON.parse(await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
   assert.equal(config.vars.ENVIRONMENT, "production");
+  // Optional TikTok providers must not add mandatory bindings to card-only deploys.
+  assert.deepEqual(config.secrets.required, ["LEEKPAY_SECRET_KEY"]);
+  assert.deepEqual(config.env.development.secrets.required, ["LEEKPAY_SECRET_KEY"]);
   assert.deepEqual(config.vars.LOCAL_ORIGINS, ["http://127.0.0.1:3000", "http://localhost:3000"]);
   assert.equal(config.ratelimits.find((binding) => binding.name === "CREATE_LIMITER").simple.limit, 10);
   assert.equal(config.ratelimits.find((binding) => binding.name === "STATUS_LIMITER").simple.limit, 30);
@@ -60,7 +63,12 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
           assert.equal(createdBody.customer_name, "Client (client@example.com)");
           assert.equal(createdBody.customer_email, "client@example.com");
           assert.equal(createdBody.customer_phone, "+237699000000");
-          assert.deepEqual(createdBody.metadata, { productId: "visa-basic" });
+          if (createdBody.metadata.service === undefined) {
+            assert.deepEqual(createdBody.metadata, { productId: "visa-basic" });
+          } else {
+            assert.match(createdBody.metadata.orderId, /^DRAVA-PAY-[a-f0-9-]{36}$/);
+            assert.deepEqual(createdBody.metadata, { service: "cards", productId: "visa-basic", orderId: createdBody.metadata.orderId });
+          }
           assert.deepEqual(Object.keys(createdBody).sort(), ["amount", "currency", "description", "return_url", "cancel_url", "metadata", "customer_name", "customer_email", "customer_phone"].sort());
           return RuntimeResponse.json({ success: true, data: {
             id: "checkout_runtime", payment_url: paymentUrl, amount: 5000, currency: "XOF",
@@ -148,6 +156,7 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
     const checkedPayload = await checked.json();
     assert.equal(checked.status, 200, JSON.stringify(checkedPayload));
     assert.deepEqual(checkedPayload, {
+      service: "cards", provider: "leekpay", orderId: "checkout_runtime", transactionReference: "checkout_runtime",
       status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF",
       createdAt: await storedCreationDate(runtime, createdPayload.orderToken),
     });
@@ -164,11 +173,13 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
         assert.equal(localPreflight.headers.get("Access-Control-Allow-Credentials"), null);
       }
       const localCreate = await runtime.dispatchFetch("https://runtime.example/api/checkout", {
-        method: "POST", headers: localHeaders, body: JSON.stringify({ productId: "visa-basic", customer: TEST_CUSTOMER }),
+        method: "POST", headers: localHeaders, body: JSON.stringify({ service: "cards", provider: "leekpay", consent: true, productId: "visa-basic", customer: TEST_CUSTOMER }),
       });
       assert.equal(localCreate.status, 201);
       assert.equal(localCreate.headers.get("Access-Control-Allow-Origin"), origin);
       const localCheckout = await localCreate.json();
+      assert.equal(localCheckout.service, "cards");
+      assert.equal(localCheckout.provider, "leekpay");
       assert.equal(localCheckout.checkoutUrl, paymentUrl);
       assert.equal(createdBody.amount, 5000);
       assert.equal(createdBody.currency, "XOF");
@@ -181,7 +192,8 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
       assert.equal(localStatus.status, 200);
       assert.equal(localStatus.headers.get("Access-Control-Allow-Origin"), origin);
       assert.deepEqual(await localStatus.json(), {
-        status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF",
+        service: "cards", provider: "leekpay", orderId: createdBody.metadata.orderId, transactionReference: "checkout_runtime",
+      status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF",
         createdAt: await storedCreationDate(runtime, localCheckout.orderToken),
       });
     }

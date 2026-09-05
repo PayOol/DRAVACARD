@@ -5,6 +5,7 @@ import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 import { cards } from "../src/lib/catalog.ts";
+import * as tiktokCatalog from "../src/lib/tiktok-catalog.ts";
 import {
   catalogSectionHash,
   readCatalogSection,
@@ -30,8 +31,9 @@ function loadComponent(source, imports, globals = {}) {
     exports: {},
     require(name) {
       if (name === "react/jsx-runtime") return require(name);
-      if (name === "./catalog-sections.css") return {};
+      if (name.endsWith(".css")) return {};
       assert.ok(name in imports, `Unexpected dependency: ${name}`);
+      globals.onImport?.(name);
       return imports[name];
     },
     ...globals,
@@ -67,15 +69,17 @@ function renderTabs({ section = "cards", language = "fr", idPrefix = "desktop" }
   return { tree, tabs, changes, focuses };
 }
 
-function createHome({ hash = "", language = "fr" } = {}) {
+function createHome({ hash = "", language = "fr", failImports = 0 } = {}) {
   const states = [];
   const effects = [];
+  const importsRequested = [];
   const listeners = new Map();
   const pushes = [];
   const historyState = { existingNavigationState: true };
   const location = { pathname: "/DRAVACARD/", search: "", hash };
   let stateCursor = 0;
-  let collectEffects = true;
+  let effectCursor = 0;
+  const pendingEffects = [];
   const Component = loadComponent(homeSource, {
     react: {
       useState(initial) {
@@ -85,15 +89,37 @@ function createHome({ hash = "", language = "fr" } = {}) {
           states[index] = typeof next === "function" ? next(states[index]) : next;
         }];
       },
-      useEffect(effect) { if (collectEffects) effects.push(effect); },
+      useRef(initial) {
+        const index = stateCursor++;
+        return states[index] ??= { current: initial };
+      },
+      useEffect(effect, deps) {
+        const index = effectCursor++;
+        const previous = effects[index];
+        if (!previous || deps.some((value, i) => value !== previous.deps[i])) {
+          pendingEffects.push(() => {
+            previous?.cleanup?.();
+            effects[index] = { deps, cleanup: effect() };
+          });
+        }
+      },
     },
     "@/components/catalog/DesktopCatalog": { default: "desktop-catalog" },
     "@/components/catalog/MobileCatalog": { default: "mobile-catalog" },
     "@/components/layout/MainLayout": { default: "main-layout" },
     "@/components/ui/dialog-checkout": { DialogCheckout: "checkout" },
+    "@/components/tiktok/TikTokCheckout": { TikTokCheckout: "tiktok-checkout" },
     "@/lib/catalog-section": { catalogSectionHash, readCatalogSection },
     "@/lib/language-context": { useLanguage: () => ({ language }) },
   }, {
+    document: { activeElement: null },
+    HTMLElement: class HTMLElement {},
+    onImport(name) {
+      if (/dialog-checkout|TikTokCheckout/.test(name)) {
+        importsRequested.push(name);
+        if (failImports > 0) { failImports--; throw new Error("Mock chunk unavailable"); }
+      }
+    },
     window: {
       location,
       history: {
@@ -103,37 +129,52 @@ function createHome({ hash = "", language = "fr" } = {}) {
           location.hash = new URL(url, "https://example.test").hash;
         },
       },
-      addEventListener(name, callback) { listeners.set(name, callback); },
+      addEventListener(name, callback) {
+        if (!listeners.has(name)) listeners.set(name, new Set());
+        listeners.get(name).add(callback);
+      },
       removeEventListener(name, callback) {
-        assert.equal(listeners.get(name), callback);
-        listeners.delete(name);
+        assert.ok(listeners.get(name)?.has(callback));
+        listeners.get(name).delete(callback);
+        if (!listeners.get(name).size) listeners.delete(name);
       },
     },
   });
   function render() {
     stateCursor = 0;
+    effectCursor = 0;
     const tree = Component();
     const nodes = collectNodes(tree);
     const layout = nodes.find((node) => node.type === "main-layout");
-    return {
+    const view = {
       desktop: nodes.find((node) => node.type === "desktop-catalog"),
       mobile: layout.props.mobileContent,
       checkout: nodes.filter((node) => node.type === "checkout"),
+      tiktokCheckout: nodes.filter((node) => node.type === "tiktok-checkout"),
+      loading: nodes.find((node) => node.props["data-checkout-load-status"] !== undefined),
+      checkoutActive: nodes.find((node) => "data-drava-checkout-active" in node.props)?.props["data-drava-checkout-active"],
+      nodes,
     };
+    for (const effect of pendingEffects.splice(0)) effect();
+    return view;
   }
   render();
-  const cleanups = effects.map((effect) => effect());
-  collectEffects = false;
   return {
     render,
+    importsRequested,
+    async settle() {
+      render();
+      await new Promise((resolve) => setImmediate(resolve));
+      return render();
+    },
     pushes,
     historyState,
     listeners,
     navigate(nextHash, event) {
       location.hash = nextHash;
-      listeners.get(event)?.();
+      for (const listener of [...(listeners.get(event) ?? [])]) listener();
     },
-    cleanup() { for (const cleanup of cleanups) cleanup?.(); },
+    cleanup() { for (const effect of effects) effect?.cleanup?.(); },
   };
 }
 
@@ -240,13 +281,13 @@ test("deep links and browser navigation synchronize both layouts without pushing
   home.cleanup();
 });
 
-test("a selected card retains the one shared checkout and cannot be replaced by a section change", () => {
+test("a selected card retains the one shared checkout and cannot be replaced by a section change", async () => {
   const home = createHome();
   let view = home.render();
   assert.equal(view.desktop.props.onSelect, view.mobile.props.onSelect);
   const card = cards[0];
   view.mobile.props.onSelect(card);
-  view = home.render();
+  view = await home.settle();
   assert.equal(view.checkout.length, 1);
   assert.equal(view.checkout[0].props.card.id, card.id);
   assert.equal(view.checkout[0].props.card.name, card.name.fr);
@@ -262,21 +303,110 @@ test("a selected card retains the one shared checkout and cannot be replaced by 
   home.cleanup();
 });
 
-test("TikTok has a bilingual preparation page without fabricated offers, forms, external links or payment actions", () => {
+test("TikTok exposes the shared UpCoin offers and checkout callbacks in both languages", () => {
   for (const language of ["fr", "en"]) {
+    const selected = [];
     const Component = loadComponent(tiktokSource, {
       "@/lib/language-context": { useLanguage: () => ({ language }) },
-      "lucide-react": { Coins: "coins-icon" },
+      "@/lib/tiktok-catalog": tiktokCatalog,
+      "@/lib/tiktok-sound": { playModalOpen() {}, playPop() {} },
+      "@/components/tiktok/TikTokHelp": { TikTokHelp: "tiktok-help", TikTokSoundToggle: "sound-toggle" },
+      "@/components/tiktok/TikTokHistory": { TikTokHistory: "tiktok-history" },
+      react: { useId: () => "custom-coins" },
+      "lucide-react": { Coins: "coins-icon", ArrowRight: "arrow-icon", Sparkles: "sparkles-icon" },
     });
-    const tree = Component();
+    const tree = Component({ customCoins: 0, selectedPackId: "boost", onCustomCoinsChange() {}, onSelectPack: (pack) => selected.push(pack) });
     const nodes = collectNodes(tree);
     const headings = nodes.filter((node) => node.type === "h1");
     assert.equal(headings.length, 1);
     assert.equal(headings[0].props.tabIndex, -1);
-    assert.equal(textOf(headings[0]), language === "fr" ? "Pièces TikTok" : "TikTok coins");
-    assert.match(textOf(tree), language === "fr" ? /Bientôt disponible.*Les offres seront ajoutées prochainement/s : /Coming soon.*Offers will be added soon/s);
-    assert.equal(nodes.some((node) => ["form", "input", "select", "textarea", "button", "a"].includes(node.type)), false);
-    assert.doesNotMatch(textOf(tree), /\b(?:Fcfa|FCFA|XOF|USD|EUR)\b|https?:\/\//);
+    assert.equal(textOf(headings[0]), language === "fr" ? "Choisissez votre pack" : "Choose your pack");
+    assert.doesNotMatch(textOf(tree), /Bientôt disponible|Coming soon/);
+    const packs = nodes.filter((node) => node.props["data-tiktok-pack"]);
+    assert.deepEqual(packs.map((node) => node.props["data-tiktok-pack"]), tiktokCatalog.tiktokPacks.map((pack) => pack.id));
+    for (const pack of packs) pack.props.onClick();
+    assert.deepEqual(selected, tiktokCatalog.tiktokPacks);
+    assert.deepEqual(nodes.filter((node) => node.type === "tiktok-help").map((node) => node.props.kind), ["video"]);
+    assert.equal(nodes.filter((node) => node.type === "tiktok-history").length, 1);
+    assert.match(textOf(tree), /FCFA/);
+  }
+});
+
+test("TikTok selection and custom amount remain shared across layouts with one checkout", async () => {
+  const home = createHome({ hash: "#tiktok" });
+  let view = home.render();
+  assert.equal(view.desktop.props.tiktok, view.mobile.props.tiktok);
+  assert.equal(view.desktop.props.tiktok.selectedPackId, "boost");
+  view.mobile.props.tiktok.onCustomCoinsChange(735);
+  view = home.render();
+  assert.equal(view.desktop.props.tiktok.customCoins, 735);
+  const custom = tiktokCatalog.customTikTokPack(735);
+  view.desktop.props.tiktok.onSelectPack(custom);
+  view = await home.settle();
+  assert.equal(view.tiktokCheckout.length, 1);
+  assert.equal(view.tiktokCheckout[0].props.pack, custom);
+  assert.equal(view.checkout.length, 0);
+  assert.equal(view.mobile.props.tiktok.customCoins, 735);
+  view.mobile.props.onSectionChange("cards");
+  assert.equal(home.render().desktop.props.section, "tiktok");
+  assert.deepEqual(home.pushes, []);
+  view.tiktokCheckout[0].props.onClose();
+  view = home.render();
+  assert.equal(view.tiktokCheckout.length, 0);
+  view.mobile.props.tiktok.onSelectPack(tiktokCatalog.tiktokPacks[0]);
+  view = home.render();
+  assert.equal(view.desktop.props.tiktok.customCoins, 0);
+  assert.equal(view.desktop.props.tiktok.selectedPackId, "mini");
+  home.cleanup();
+});
+
+test("Home loads only the selected payment module and blocks PWA actions immediately", async () => {
+  for (const service of ["cards", "tiktok"]) {
+    const home = createHome({ hash: service === "tiktok" ? "#tiktok" : "" });
+    let view = home.render();
+    assert.deepEqual(home.importsRequested, []);
+    assert.equal(view.checkoutActive, false);
+    if (service === "cards") view.mobile.props.onSelect(cards[0]);
+    else view.mobile.props.tiktok.onSelectPack(tiktokCatalog.tiktokPacks[2]);
+    view = home.render();
+    assert.equal(view.checkoutActive, true, "Selection must protect checkout before its chunk has loaded");
+    assert.ok(view.loading);
+    assert.match(textOf(view.loading), /Chargement de votre commande/);
+    view = await home.settle();
+    assert.equal(view.loading, undefined);
+    assert.deepEqual(home.importsRequested, [service === "cards" ? "@/components/ui/dialog-checkout" : "@/components/tiktok/TikTokCheckout"]);
+    assert.equal(service === "cards" ? view.checkout.length : view.tiktokCheckout.length, 1);
+    home.cleanup();
+  }
+});
+
+test("a failed checkout chunk can be retried without losing the selected product", async () => {
+  const home = createHome({ failImports: 1 });
+  home.render().mobile.props.onSelect(cards[1]);
+  let view = await home.settle();
+  assert.equal(view.checkoutActive, true);
+  assert.equal(view.checkout.length, 0);
+  assert.match(textOf(view.loading), /Vérifiez votre connexion/);
+  view.nodes.find((node) => node.type === "button" && textOf(node) === "Réessayer").props.onClick();
+  view = await home.settle();
+  assert.equal(view.checkout[0].props.card.id, cards[1].id);
+  assert.equal(home.importsRequested.length, 2);
+  assert.equal(view.loading, undefined);
+  home.cleanup();
+});
+
+test("cancelling or navigating back while a chunk is loading cannot open a late checkout", async () => {
+  for (const cancel of ["button", "back"]) {
+    const home = createHome();
+    home.render().mobile.props.onSelect(cards[0]);
+    const view = home.render();
+    if (cancel === "button") view.nodes.find((node) => node.type === "button" && textOf(node) === "Annuler").props.onClick();
+    else home.navigate("", "popstate");
+    const settled = await home.settle();
+    assert.equal(settled.checkoutActive, false);
+    assert.equal(settled.checkout.length, 0);
+    assert.equal(settled.loading, undefined);
+    home.cleanup();
   }
 });
 

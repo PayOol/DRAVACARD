@@ -5,17 +5,22 @@ import PaymentReceipt from "@/components/payment/PaymentReceipt";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/lib/language-context";
 import {
-  type LeekPayOrder,
+  type PaymentOrder,
   PaymentApiError,
-  getLeekPayOrderStatus,
+  getPaymentOrderStatus,
   readOrderToken,
-} from "@/lib/leekpay";
+} from "@/lib/payment-api";
 import { AlertTriangle, LoaderCircle } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import "./payment-result-embedded.css";
 
 interface PaymentResultProps {
   status: "success" | "failure";
+  orderToken?: string;
+  providerLink?: string;
+  embedded?: boolean;
+  onReturn?: () => void;
 }
 
 type VerificationState =
@@ -31,8 +36,8 @@ const content = {
   checking: {
     title: { fr: "Vérification du paiement", en: "Checking your payment" },
     description: {
-      fr: "Nous vérifions le statut de votre paiement auprès de LeekPay.",
-      en: "We are checking your payment status with LeekPay.",
+      fr: "Nous vérifions le statut de votre paiement auprès du prestataire.",
+      en: "We are checking your payment status with the payment provider.",
     },
     notice: {
       fr: "Veuillez patienter. Le retour sur cette page ne confirme pas à lui seul le paiement.",
@@ -42,8 +47,8 @@ const content = {
   pending: {
     title: { fr: "Paiement en attente", en: "Payment pending" },
     description: {
-      fr: "LeekPay n’a pas encore confirmé ce paiement. Aucun paiement n’est considéré comme validé pour le moment.",
-      en: "LeekPay has not confirmed this payment yet. No payment is considered validated at this time.",
+      fr: "Le prestataire n’a pas encore confirmé ce paiement. Aucun paiement n’est considéré comme validé pour le moment.",
+      en: "The payment provider has not confirmed this payment yet. No payment is considered validated at this time.",
     },
     notice: {
       fr: "Ne payez pas une seconde fois pendant la vérification. Vous pouvez vérifier à nouveau le statut si nécessaire.",
@@ -53,8 +58,8 @@ const content = {
   failed: {
     title: { fr: "Paiement non finalisé", en: "Payment not completed" },
     description: {
-      fr: "LeekPay indique que ce paiement a échoué, a été annulé ou a expiré.",
-      en: "LeekPay reports that this payment failed, was cancelled or expired.",
+      fr: "Le prestataire indique que ce paiement a échoué, a été annulé ou a expiré.",
+      en: "The payment provider reports that this payment failed, was cancelled or expired.",
     },
     notice: {
       fr: "Vous pouvez retourner au catalogue et réessayer lorsque vous le souhaitez.",
@@ -85,20 +90,30 @@ const content = {
   },
 } as const;
 
-export default function PaymentResult({ status }: PaymentResultProps) {
+export default function PaymentResult({
+  status,
+  orderToken: suppliedToken,
+  providerLink,
+  embedded = false,
+  onReturn,
+}: PaymentResultProps) {
   const { language } = useLanguage();
   const [verification, setVerification] =
     useState<VerificationState>("checking");
-  const [order, setOrder] = useState<LeekPayOrder | null>(null);
+  const [order, setOrder] = useState<PaymentOrder | null>(null);
   const [isChecking, setIsChecking] = useState(true);
   const [canRetry, setCanRetry] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const orderTokenRef = useRef<string | null | undefined>(suppliedToken);
+  const Wrapper = embedded ? Fragment : MainLayout;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: an explicit retry restarts this bounded verification cycle.
   useEffect(() => {
     // Local visual preview only; never fabricate a verified provider order.
     if (
       process.env.NODE_ENV === "development" &&
+      !embedded &&
+      suppliedToken === undefined &&
       status === "success" &&
       ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname) &&
       window.location.hash === "#simulation"
@@ -111,7 +126,15 @@ export default function PaymentResult({ status }: PaymentResultProps) {
     }
 
     // Neither the return pathname nor a query parameter is payment evidence.
-    const orderToken = readOrderToken(window.location.hash);
+    if (orderTokenRef.current === undefined) {
+      orderTokenRef.current = readOrderToken(window.location.hash);
+      // Keep the capability only in this mounted result, including retries.
+      // It must not remain in history, copied links or printed receipts.
+      if (window.location.hash || window.location.search) {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    }
+    const orderToken = orderTokenRef.current;
     setCanRetry(Boolean(orderToken));
     setOrder(null);
     if (!orderToken) {
@@ -123,7 +146,7 @@ export default function PaymentResult({ status }: PaymentResultProps) {
     let active = true;
     let delay = 2000;
     let pollTimer: ReturnType<typeof setTimeout> | undefined;
-    let lastOrder: LeekPayOrder | null = null;
+    let lastOrder: PaymentOrder | null = null;
     const controller = new AbortController();
     setVerification("checking");
     setIsChecking(true);
@@ -147,11 +170,15 @@ export default function PaymentResult({ status }: PaymentResultProps) {
     const poll = async () => {
       let retryAfterMs = 0;
       try {
-        const result = await getLeekPayOrderStatus(
+        const result = await getPaymentOrderStatus(
           orderToken,
           controller.signal,
         );
         if (!active || controller.signal.aborted) return;
+        if (result.service !== "cards") {
+          finish("unconfirmed");
+          return;
+        }
         lastOrder = result;
         setOrder(result);
         if (result.status === "paid" && result.verified === true) {
@@ -189,22 +216,23 @@ export default function PaymentResult({ status }: PaymentResultProps) {
       clearTimeout(pollTimer);
       clearTimeout(deadlineTimer);
     };
-  }, [attempt, status]);
+  }, [attempt, status, embedded, suppliedToken]);
 
   const isPaid = verification === "paid" && order?.verified === true;
   const isSimulation =
     process.env.NODE_ENV === "development" && verification === "simulation";
   if ((isPaid && order) || isSimulation) {
     return (
-      <MainLayout>
+      <Wrapper>
         <PaymentReceipt
           amount={isPaid && order ? order.amount : 5000}
           createdAt={
             isPaid && order ? order.createdAt : Date.UTC(2026, 8, 5, 12)
           }
           simulation={isSimulation}
+          onReturn={onReturn}
         />
-      </MainLayout>
+      </Wrapper>
     );
   }
 
@@ -217,7 +245,7 @@ export default function PaymentResult({ status }: PaymentResultProps) {
   const Icon = isChecking ? LoaderCircle : AlertTriangle;
 
   return (
-    <MainLayout>
+    <Wrapper>
       <section className="payment-result-screen flex min-h-[65vh] items-center bg-gradient-to-b from-slate-50 to-white px-4 py-12 dark:from-[#0b1220] dark:to-[#111c2e] md:py-20">
         <div className="payment-result-container mx-auto w-full max-w-2xl">
           <div className="payment-result-card rounded-2xl border border-gray-100 bg-white p-6 text-center shadow-lg dark:border-[#304159] dark:bg-[#111c2e] dark:shadow-black/20 md:p-10">
@@ -246,6 +274,19 @@ export default function PaymentResult({ status }: PaymentResultProps) {
             </div>
 
             <div className="payment-result-actions mt-8 flex flex-wrap justify-center gap-3">
+              {providerLink && canRetry && verification !== "failed" && (
+                <Button asChild variant="outline">
+                  <a
+                    href={providerLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {language === "fr"
+                      ? "Ouvrir la page de validation de l’opérateur"
+                      : "Open the operator’s validation page"}
+                  </a>
+                </Button>
+              )}
               {canRetry &&
                 !isChecking &&
                 !isPaid &&
@@ -259,19 +300,28 @@ export default function PaymentResult({ status }: PaymentResultProps) {
                   </Button>
                 )}
               <Button
-                asChild
+                asChild={!onReturn}
+                onClick={onReturn}
                 className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
               >
-                <Link href="/">
-                  {language === "fr"
-                    ? "Retour au catalogue"
-                    : "Back to catalogue"}
-                </Link>
+                {onReturn ? (
+                  language === "fr" ? (
+                    "Retour au catalogue"
+                  ) : (
+                    "Back to catalogue"
+                  )
+                ) : (
+                  <Link href="/">
+                    {language === "fr"
+                      ? "Retour au catalogue"
+                      : "Back to catalogue"}
+                  </Link>
+                )}
               </Button>
             </div>
           </div>
         </div>
       </section>
-    </MainLayout>
+    </Wrapper>
   );
 }

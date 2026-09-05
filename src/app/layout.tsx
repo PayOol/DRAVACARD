@@ -5,6 +5,8 @@ import "@/components/payment/payment-result-mobile.css";
 import { withBasePath } from "@/lib/base-path";
 import { LanguageProvider } from "@/lib/language-context";
 import { ThemeProvider } from "@/lib/theme-context";
+import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
+import { PwaUpdateNotice } from "@/components/pwa/PwaUpdateNotice";
 import Script from "next/script";
 
 // Fonts
@@ -29,25 +31,25 @@ const contentSecurityPolicy = [
   "script-src 'self' 'unsafe-inline'",
   "script-src-attr 'none'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  "img-src 'self' data: https://img.youtube.com",
   "font-src 'self' data:",
   "connect-src 'self' https://drava-leekpay.sebpay-proxy.workers.dev",
   "worker-src 'self'",
   "manifest-src 'self'",
-  "frame-src 'none'",
+  "frame-src https://www.youtube.com",
   "media-src 'none'",
 ].join("; ");
 
 export const metadata: Metadata = {
   metadataBase: siteUrl,
-  title: "DRAVA - Cartes virtuelles",
-  description: "Découvrez le catalogue de cartes virtuelles DRAVA.",
+  title: "DRAVA - Cartes virtuelles et pièces TikTok",
+  description: "Découvrez les cartes virtuelles et les packs de pièces TikTok DRAVA.",
   referrer: "strict-origin-when-cross-origin",
   manifest: withBasePath("/manifest.json"),
-  applicationName: "DRAVA",
+  applicationName: "Drava",
   appleWebApp: {
     capable: true,
-    title: "DRAVA",
+    title: "Drava",
     statusBarStyle: "default",
   },
   other: { "apple-mobile-web-app-capable": "yes" },
@@ -79,10 +81,10 @@ export const metadata: Metadata = {
     ],
   },
   openGraph: {
-    title: "DRAVA - Cartes virtuelles",
-    description: "Découvrez le catalogue de cartes virtuelles DRAVA.",
+    title: "Drava - Cartes virtuelles et pièces TikTok",
+    description: "Découvrez les cartes virtuelles et les packs de pièces TikTok Drava.",
     url: siteUrl,
-    siteName: "DRAVA",
+    siteName: "Drava",
     images: [
       {
         url: socialImageUrl,
@@ -95,8 +97,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "DRAVA - Cartes virtuelles",
-    description: "Découvrez le catalogue de cartes virtuelles DRAVA.",
+    title: "Drava - Cartes virtuelles et pièces TikTok",
+    description: "Découvrez les cartes virtuelles et les packs de pièces TikTok Drava.",
     images: [socialImageUrl],
   },
 };
@@ -124,14 +126,25 @@ export default function RootLayout({
         {/* This tiny same-origin script must apply the saved theme before first paint. */}
         {/* eslint-disable-next-line @next/next/no-sync-scripts */}
         <script src={withBasePath("/theme-init.js")} />
+        {/* Capture the browser's one-use install event before React hydrates. */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script src={withBasePath("/pwa-install-capture.js")} />
       </head>
       <body
         className={`${inter.variable} ${righteous.variable} font-sans min-h-screen antialiased bg-background text-foreground`}
       >
         <LanguageProvider>
-          <ThemeProvider>{children}</ThemeProvider>
+          <ThemeProvider>
+            {children}
+            <PwaInstallPrompt />
+            <PwaUpdateNotice />
+          </ThemeProvider>
         </LanguageProvider>
-        <Script src={withBasePath("/register-sw.js")} strategy="lazyOnload" />
+        <Script
+          src={withBasePath("/register-sw.js")}
+          strategy="lazyOnload"
+          data-enabled={process.env.NODE_ENV === "production" ? "true" : "false"}
+        />
       </body>
     </html>
   );

@@ -3,7 +3,9 @@
 import { CatalogCardTransition } from "@/components/catalog/MobileTransitions";
 import CatalogSectionPanel from "@/components/catalog/CatalogSectionPanel";
 import CatalogTabs from "@/components/catalog/CatalogTabs";
-import TikTokPanel from "@/components/catalog/TikTokPanel";
+import TikTokPanel, {
+  type TikTokCatalogProps,
+} from "@/components/catalog/TikTokPanel";
 import RecommendedBadge from "@/components/catalog/RecommendedBadge";
 import { Button } from "@/components/ui/button";
 import { withBasePath } from "@/lib/base-path";
@@ -17,10 +19,12 @@ export default function DesktopCatalog({
   onSelect,
   section,
   onSectionChange,
+  tiktok,
 }: {
   onSelect: (card: CatalogCard) => void;
   section: CatalogSection;
   onSectionChange: (section: CatalogSection) => void;
+  tiktok: TikTokCatalogProps;
 }) {
   const { language } = useLanguage();
   const reducedMotion = useReducedMotion() === true;
@@ -158,7 +162,7 @@ export default function DesktopCatalog({
               reducedMotion={reducedMotion}
             >
               {section === "tiktok" ? (
-                <TikTokPanel />
+                <TikTokPanel {...tiktok} />
               ) : (
                 <>
                   <div className="mx-auto mb-16 max-w-7xl text-center">

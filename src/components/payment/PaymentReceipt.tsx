@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { DRAVA_CONTACT } from "@/lib/drava-contact";
 import { useLanguage } from "@/lib/language-context";
 import { CheckCircle2, Printer } from "lucide-react";
 import Link from "next/link";
@@ -9,12 +10,14 @@ interface PaymentReceiptProps {
   amount: number;
   createdAt?: number;
   simulation: boolean;
+  onReturn?: () => void;
 }
 
 export default function PaymentReceipt({
   amount,
   createdAt,
   simulation,
+  onReturn,
 }: PaymentReceiptProps) {
   const { language } = useLanguage();
   const isFrench = language === "fr";
@@ -188,7 +191,7 @@ export default function PaymentReceipt({
                       className="h-auto min-h-10 border-emerald-200 px-4 py-2 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-[#28664b] dark:bg-[#111c2e] dark:text-[#86efac] dark:hover:bg-[#133629] dark:hover:text-green-100"
                     >
                       <a
-                        href="https://chat.whatsapp.com/LotDInVIA5n4i1j185xjxi"
+                        href={DRAVA_CONTACT.whatsappHref}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
@@ -199,8 +202,7 @@ export default function PaymentReceipt({
                   <div className="hidden break-all text-xs print:block">
                     <p>Telegram : https://t.me/PayOolTM</p>
                     <p>
-                      WhatsApp :
-                      https://chat.whatsapp.com/LotDInVIA5n4i1j185xjxi
+                      WhatsApp : {DRAVA_CONTACT.displayPhone} — {DRAVA_CONTACT.whatsappHref}
                     </p>
                   </div>
                 </div>
@@ -219,12 +221,21 @@ export default function PaymentReceipt({
               {isFrench ? "Imprimer le reçu" : "Print receipt"}
             </Button>
             <Button
-              asChild
+              asChild={!onReturn}
+              onClick={onReturn}
               className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700 sm:flex-1"
             >
-              <Link href="/">
-                {isFrench ? "Retour à l’accueil" : "Back to home"}
-              </Link>
+              {onReturn ? (
+                isFrench ? (
+                  "Retour à l’accueil"
+                ) : (
+                  "Back to home"
+                )
+              ) : (
+                <Link href="/">
+                  {isFrench ? "Retour à l’accueil" : "Back to home"}
+                </Link>
+              )}
             </Button>
           </div>
           <p className="mt-6 text-center text-sm font-medium text-slate-600 dark:text-[#b3c1d5]">

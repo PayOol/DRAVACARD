@@ -1,0 +1,40 @@
+.sebpay-form { display: flex; flex-direction: column; gap: 20px; min-width: 0; color: var(--checkout-text); }
+.sebpay-form label { display: flex; flex-direction: column; gap: 8px; min-width: 0; font-size: 14px; font-weight: 500; }
+.sebpay-form label small { color: var(--checkout-muted); font-weight: 400; }
+.sebpay-form input, .sebpay-form select { width: 100%; min-width: 0; max-width: 100%; height: 48px; min-height: 48px; padding: 10px 12px; border: 1px solid var(--checkout-border); border-radius: 8px; background: var(--checkout-field-background); color: var(--checkout-field-text); font-size: 16px; font-weight: 400; scroll-margin-block: 24px; }
+.sebpay-form select { text-overflow: ellipsis; }
+.sebpay-form input:focus, .sebpay-form select:focus, .sebpay-field:focus-within { border-color: var(--checkout-blue); outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--checkout-blue) 18%, transparent); }
+.sebpay-form input:is(:autofill, :-webkit-autofill) { -webkit-box-shadow: 0 0 0 1000px var(--checkout-field-background) inset !important; -webkit-text-fill-color: var(--checkout-field-text) !important; caret-color: var(--checkout-field-text); }
+.sebpay-field { display: flex; align-items: center; gap: 8px; height: 48px; min-width: 0; padding: 0 12px; border: 1px solid var(--checkout-border); border-radius: 8px; background: var(--checkout-field-background); }
+.sebpay-field > span { flex-shrink: 0; color: var(--checkout-muted); font-size: 14px; }
+.sebpay-field > input { flex: 1; height: 46px; min-height: 46px; padding-inline: 0; border: 0; background: transparent; }
+.sebpay-field > input:focus { outline: none; box-shadow: none; }
+.sebpay-fields-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.sebpay-amount { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 14px; border: 1px solid var(--checkout-border); border-radius: 12px; font-size: 14px; background: var(--checkout-subtle); }
+.sebpay-amount strong { overflow-wrap: anywhere; }
+.sebpay-primary-action, .sebpay-secondary-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 16px; border: 1px solid transparent; border-radius: 8px; font-size: 14px; font-weight: 600; line-height: 1.4; text-align: center; touch-action: manipulation; cursor: pointer; transition: background 150ms; }
+.sebpay-primary-action { background: #2563eb; color: #fff; }
+.sebpay-primary-action:hover:not(:disabled) { background: #1d4ed8; }
+.sebpay-secondary-action { background: var(--checkout-surface); border-color: var(--checkout-border); color: var(--checkout-text); }
+.sebpay-secondary-action:hover:not(:disabled) { background: var(--checkout-subtle); }
+.sebpay-primary-action svg, .sebpay-secondary-action svg { flex-shrink: 0; }
+.sebpay-form :disabled { opacity: .55; cursor: not-allowed; }
+.sebpay-form button:focus-visible, .sebpay-loading button:focus-visible { outline: 2px solid var(--checkout-blue); outline-offset: 3px; }
+.sebpay-loading { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 13px; color: var(--checkout-muted); padding: 15px 0; }
+.sebpay-loading p { flex-basis: 100%; }
+.sebpay-error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: 13px; line-height: 1.6; padding: 12px; border-radius: 10px; }
+.dark .sebpay-error { background: #301923; border-color: #653242; color: #fda4af; }
+.sebpay-error .sebpay-secondary-action { margin-top: 10px; }
+.sebpay-ussd { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--checkout-muted); font-weight: 400; line-height: 1.6; }
+.sebpay-ussd code { white-space: normal; overflow-wrap: anywhere; }
+.sebpay-spinner { animation: sebpay-spin 1s linear infinite; }
+@keyframes sebpay-spin { to { transform: rotate(360deg); } }
+@media (max-width: 767px), (max-width: 1023px) and (max-height: 500px) and (pointer: coarse) {
+  .sebpay-form > label, .sebpay-fields-row > label { padding: 18px; border: 1px solid var(--checkout-border); border-radius: 18px; background: var(--checkout-surface); }
+  .sebpay-form input, .sebpay-form select, .sebpay-field { border-radius: 12px; }
+  .sebpay-fields-row { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sebpay-spinner { animation: none; }
+  .sebpay-primary-action, .sebpay-secondary-action { transition: none; }
+}

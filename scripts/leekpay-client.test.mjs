@@ -23,8 +23,9 @@ const order = {
   amount: 5000,
   currency: "XOF",
 };
+const checkout = {service:"cards",productId:"visa-basic",provider:"leekpay",status:"pending",amount:5000,currency:"XOF"};
 const json = (body, status = 200, headers = {}) =>
-  new Response(JSON.stringify(body), {
+  new Response(JSON.stringify(body && Object.hasOwn(body,"checkoutUrl") ? {...checkout,...body} : body), {
     status,
     headers: { "Content-Type": "application/json", ...headers },
   });
@@ -141,7 +142,7 @@ test("checkout sends only a catalogue product ID and normalized customer to the 
   const request = mock.method(globalThis, "fetch", async (url, options) => {
     assert.equal(url, `${LEEKPAY_API_BASE}/api/checkout`);
     assert.equal(options.method, "POST");
-    assert.deepEqual(JSON.parse(options.body), { productId: "visa-basic", customer });
+    assert.deepEqual(JSON.parse(options.body), {service:"cards", productId:"visa-basic", provider:"leekpay", customer, consent:true});
     assert.equal(url.includes(customer.email), false);
     assert.equal(url.includes(customer.whatsapp), false);
     assert.equal(options.credentials, "omit");

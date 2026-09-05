@@ -4,36 +4,99 @@
   "account_id": "ffb51ce02750d7183919b2ea3a31f108",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-05",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "workers_dev": true,
   "preview_urls": false,
   "vars": {
     "ENVIRONMENT": "production",
-    "LOCAL_ORIGINS": ["http://127.0.0.1:3000", "http://localhost:3000"]
+    "LOCAL_ORIGINS": [
+      "http://127.0.0.1:3000",
+      "http://localhost:3000"
+    ],
+    "TIKTOK_BASE_PATH": ""
   },
-  "secrets": { "required": ["LEEKPAY_SECRET_KEY"] },
+  "secrets": {
+    "required": [
+      "LEEKPAY_SECRET_KEY"
+    ]
+  },
   "kv_namespaces": [
-    { "binding": "ORDERS", "id": "15ec2b5376aa4de190a8ae48f54a9721" }
+    {
+      "binding": "ORDERS",
+      "id": "15ec2b5376aa4de190a8ae48f54a9721"
+    }
   ],
   "ratelimits": [
-    { "name": "CREATE_LIMITER", "namespace_id": "2026090501", "simple": { "limit": 10, "period": 60 } },
-    { "name": "STATUS_LIMITER", "namespace_id": "2026090502", "simple": { "limit": 30, "period": 60 } }
+    {
+      "name": "CREATE_LIMITER",
+      "namespace_id": "2026090501",
+      "simple": {
+        "limit": 10,
+        "period": 60
+      }
+    },
+    {
+      "name": "STATUS_LIMITER",
+      "namespace_id": "2026090502",
+      "simple": {
+        "limit": 30,
+        "period": 60
+      }
+    }
   ],
   "observability": {
     "enabled": true,
-    "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false },
-    "traces": { "enabled": false }
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": false
+    },
+    "traces": {
+      "enabled": false
+    }
   },
   "env": {
     "development": {
       "name": "drava-leekpay-development",
       "workers_dev": false,
-      "vars": { "ENVIRONMENT": "development", "LOCAL_ORIGINS": ["http://127.0.0.1:3000", "http://localhost:3000"] },
-      "secrets": { "required": ["LEEKPAY_SECRET_KEY"] },
-      "kv_namespaces": [{ "binding": "ORDERS", "id": "00000000000000000000000000000001" }],
+      "vars": {
+        "ENVIRONMENT": "development",
+        "LOCAL_ORIGINS": [
+          "http://127.0.0.1:3000",
+          "http://localhost:3000"
+        ],
+        "TIKTOK_BASE_PATH": ""
+      },
+      "secrets": {
+        "required": [
+          "LEEKPAY_SECRET_KEY"
+        ]
+      },
+      "kv_namespaces": [
+        {
+          "binding": "ORDERS",
+          "id": "00000000000000000000000000000001"
+        }
+      ],
       "ratelimits": [
-        { "name": "CREATE_LIMITER", "namespace_id": "2026090503", "simple": { "limit": 10, "period": 60 } },
-        { "name": "STATUS_LIMITER", "namespace_id": "2026090504", "simple": { "limit": 30, "period": 60 } }
+        {
+          "name": "CREATE_LIMITER",
+          "namespace_id": "2026090503",
+          "simple": {
+            "limit": 10,
+            "period": 60
+          }
+        },
+        {
+          "name": "STATUS_LIMITER",
+          "namespace_id": "2026090504",
+          "simple": {
+            "limit": 30,
+            "period": 60
+          }
+        }
       ]
     }
   }

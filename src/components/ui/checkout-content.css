@@ -1,0 +1,355 @@
+/* Card and coin checkouts share these surfaces, controls and action states. */
+.checkout-dialog {
+  --checkout-surface: #fff;
+  --checkout-subtle: #f5f7fb;
+  --checkout-border: #e2e8f0;
+  --checkout-text: #0f172a;
+  --checkout-muted: #64748b;
+  --checkout-blue: #2563eb;
+  --checkout-field-background: #fff;
+  --checkout-field-text: #0f172a;
+}
+
+.dark .checkout-dialog {
+  --checkout-surface: #111c2e;
+  --checkout-subtle: #18263b;
+  --checkout-border: #304159;
+  --checkout-text: #e6edf7;
+  --checkout-muted: #b3c1d5;
+  --checkout-blue: #93c5fd;
+  --checkout-field-background: #0b1220;
+  --checkout-field-text: #e6edf7;
+}
+
+.checkout-step-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.checkout-step-panel {
+  display: flex;
+  flex-direction: column;
+  grid-area: 1 / 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.checkout-step-panel[aria-hidden="true"] { pointer-events: none; }
+
+.checkout-dialog .checkout-scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 24px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+
+.checkout-dialog .tiktok-fields { gap: 20px; }
+.checkout-dialog .tiktok-fields label { gap: 8px; font-size: 14px; font-weight: 500; }
+.checkout-dialog .tiktok-fields label small { color: var(--checkout-muted); }
+.checkout-dialog .tiktok-contact-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr);
+  align-items: start;
+  gap: 8px 12px;
+  min-width: 0;
+}
+.checkout-dialog .tiktok-contact-row > small {
+  grid-column: 1 / -1;
+  color: var(--checkout-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.checkout-dialog .tiktok-provider-fieldset legend { font-size: 14px; font-weight: 500; margin-bottom: 12px; }
+
+.checkout-dialog .checkout-customer-fields input,
+.checkout-dialog .tiktok-fields input,
+.checkout-dialog .tiktok-fields select {
+  height: 48px;
+  min-height: 48px;
+  border-radius: 8px;
+  border-color: var(--checkout-border);
+  background: var(--checkout-field-background);
+  color: var(--checkout-field-text);
+  font-size: 16px;
+  font-weight: 400;
+  outline: none;
+  scroll-margin-block: 24px;
+}
+
+.checkout-dialog .checkout-customer-fields input:focus,
+.checkout-dialog .tiktok-fields input:focus,
+.checkout-dialog .tiktok-fields select:focus,
+.checkout-dialog .tiktok-field:focus-within {
+  border-color: var(--checkout-blue);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--checkout-blue) 18%, transparent);
+}
+
+.checkout-dialog .checkout-customer-fields input[aria-invalid="true"] {
+  border-color: #dc2626;
+}
+
+.dark .checkout-dialog .checkout-customer-fields input[aria-invalid="true"] {
+  border-color: #fda4af;
+}
+
+.checkout-dialog .tiktok-field {
+  height: 48px;
+  border-color: var(--checkout-border);
+  border-radius: 8px;
+  background: var(--checkout-field-background);
+}
+
+.checkout-dialog .tiktok-field > input {
+  height: 46px;
+  min-height: 46px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.checkout-dialog .tiktok-field > input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.checkout-dialog .tiktok-fields input:is(:autofill, :-webkit-autofill) {
+  -webkit-box-shadow: 0 0 0 1000px var(--checkout-field-background) inset !important;
+  -webkit-text-fill-color: var(--checkout-field-text) !important;
+  caret-color: var(--checkout-field-text);
+}
+
+.checkout-dialog .checkout-provider-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 12px;
+  min-width: 0;
+  padding-top: 8px;
+}
+
+.checkout-dialog .checkout-provider-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 0;
+  min-height: 74px;
+  padding: 16px 12px;
+  border: 1px solid var(--checkout-border);
+  border-radius: 12px;
+  background: var(--checkout-surface);
+  color: var(--checkout-text);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 150ms, background 150ms;
+}
+
+.checkout-dialog .checkout-provider-option[aria-pressed="true"] {
+  border-color: var(--checkout-blue);
+  background: var(--checkout-subtle);
+}
+
+.checkout-dialog .checkout-provider-option:hover:not(:disabled) {
+  border-color: var(--checkout-blue);
+  background: var(--checkout-subtle);
+}
+
+.checkout-dialog .checkout-provider-option:focus-visible {
+  outline: 2px solid var(--checkout-blue);
+  outline-offset: 3px;
+}
+
+.checkout-dialog .checkout-provider-option:disabled { cursor: not-allowed; opacity: 0.6; }
+.checkout-dialog .checkout-provider-option::after { display: none; }
+
+.checkout-dialog .checkout-provider-logo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #e2e8f0;
+}
+
+.checkout-dialog .checkout-provider-logo > img { width: 32px; height: 32px; object-fit: contain; }
+.checkout-dialog .checkout-provider-logo > .checkout-provider-logo-cropped {
+  position: absolute;
+  top: -35px;
+  left: -28px;
+  width: 160px;
+  max-width: none;
+  height: auto;
+}
+
+.checkout-dialog .checkout-provider-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.checkout-dialog .checkout-provider-name strong { font-weight: 600; }
+.checkout-dialog .checkout-provider-name small { font-size: 11px; color: var(--checkout-muted); }
+.checkout-dialog .checkout-provider-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #059669;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.dark .checkout-dialog .checkout-provider-badge { background: #86efac; color: #052e16; }
+
+.checkout-dialog .checkout-actions {
+  flex-shrink: 0;
+  padding: 16px 24px;
+  border-top: 1px solid var(--checkout-border);
+  background: var(--checkout-surface);
+}
+
+.checkout-dialog .checkout-actions-row { display: flex; gap: 12px; }
+
+.checkout-dialog .checkout-actions button,
+.checkout-dialog .tiktok-primary,
+.checkout-dialog .tiktok-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: auto;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: normal;
+  text-align: center;
+  box-shadow: none;
+  touch-action: manipulation;
+}
+
+.checkout-dialog .checkout-primary-action,
+.checkout-dialog .tiktok-primary {
+  background: #2563eb;
+  color: #fff;
+}
+
+.checkout-dialog .checkout-primary-action:hover:not(:disabled),
+.checkout-dialog .tiktok-primary:hover:not(:disabled) { background: #1d4ed8; }
+.checkout-dialog .checkout-actions-row > .checkout-primary-action { flex: 1; }
+
+.checkout-dialog .checkout-back-action,
+.checkout-dialog .checkout-decline-action,
+.checkout-dialog .tiktok-secondary {
+  border-color: var(--checkout-border);
+  background: var(--checkout-surface);
+  color: var(--checkout-text);
+}
+
+.checkout-dialog .checkout-back-action:hover:not(:disabled),
+.checkout-dialog .checkout-decline-action:hover:not(:disabled),
+.checkout-dialog .tiktok-secondary:hover:not(:disabled) { background: var(--checkout-subtle); }
+
+.checkout-dialog .checkout-actions button:disabled { opacity: 0.55; cursor: not-allowed; }
+.checkout-dialog .checkout-actions button svg { flex-shrink: 0; }
+
+@media (max-width: 767px), (max-width: 1023px) and (max-height: 500px) and (pointer: coarse) {
+  .checkout-dialog { --checkout-field-background: #fafbfe; }
+  .dark .checkout-dialog { --checkout-field-background: #0b1220; }
+  .checkout-mobile-steps li { min-width: 0; }
+  .checkout-mobile-steps li > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+  .checkout-mobile-steps:has(li:nth-child(4)) li { flex: 1; flex-direction: column; text-align: center; }
+
+  .checkout-dialog .checkout-scroll {
+    padding: 20px max(20px, env(safe-area-inset-right)) 24px max(20px, env(safe-area-inset-left));
+    scroll-padding-block: 20px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .checkout-dialog .tiktok-fields > label,
+  .checkout-dialog .tiktok-contact-row,
+  .checkout-dialog .tiktok-fields-row > label,
+  .checkout-dialog .checkout-customer-fields > div {
+    padding: 18px;
+    border: 1px solid var(--checkout-border);
+    border-radius: 18px;
+    background: var(--checkout-surface);
+  }
+
+  .checkout-dialog .checkout-customer-fields input,
+  .checkout-dialog .tiktok-fields input,
+  .checkout-dialog .tiktok-fields select,
+  .checkout-dialog .tiktok-field { border-radius: 12px; }
+
+  .checkout-dialog .tiktok-fields-row { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .checkout-dialog .tiktok-contact-row {
+    grid-template-columns: minmax(112px, 0.9fr) minmax(0, 1.25fr);
+    column-gap: 10px;
+    padding: 14px;
+  }
+  .checkout-dialog .tiktok-contact-row label { font-size: clamp(12px, 3.4vw, 13px); }
+  .checkout-dialog .tiktok-contact-row select { padding-inline: 8px; }
+  .checkout-dialog .tiktok-contact-row .tiktok-field { padding-inline: 8px; gap: 5px; }
+  .checkout-dialog .tiktok-instruction { padding: 18px; border-radius: 18px; background: var(--checkout-surface); }
+  .checkout-dialog .tiktok-warning { background: #fffbeb; }
+  .dark .checkout-dialog .tiktok-warning { background: #312817; }
+
+  .checkout-dialog .checkout-provider-options { grid-template-columns: minmax(0, 1fr); padding-top: 12px; }
+  .checkout-dialog .checkout-provider-option { min-height: 84px; gap: 14px; padding: 22px 20px; border-width: 2px; border-radius: 18px; }
+  .checkout-dialog .checkout-provider-option::after {
+    display: block;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    margin-left: auto;
+    border: 1px solid var(--checkout-border);
+    border-radius: 50%;
+    background: var(--checkout-surface);
+    content: "";
+  }
+
+  .checkout-dialog .checkout-provider-option[aria-pressed="true"]::after { border: 5px solid var(--checkout-blue); }
+  .checkout-dialog .checkout-provider-name { font-size: 16px; }
+
+  .checkout-dialog .checkout-actions {
+    padding: 14px max(20px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  }
+
+  .checkout-dialog .checkout-actions button { min-height: 52px; padding-block: 12px; border-radius: 15px; font-size: 16px; }
+  .checkout-dialog .checkout-actions .checkout-back-action { display: none; }
+  .checkout-dialog .checkout-actions-row:has(> .checkout-back-action:only-child) { display: none; }
+  .checkout-dialog .checkout-actions-row.checkout-notes-actions { flex-direction: column-reverse; gap: 0; }
+  .checkout-dialog .checkout-actions .checkout-decline-action {
+    min-height: 44px;
+    padding-block: 8px;
+    border: 0;
+    background: transparent;
+    color: var(--checkout-muted);
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 767px) and (max-height: 520px), (max-width: 1023px) and (max-height: 500px) and (pointer: coarse) {
+  .checkout-dialog .checkout-scroll { padding-top: 12px; }
+  .checkout-dialog .checkout-actions { padding-top: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .checkout-dialog .checkout-provider-option { transition: none; }
+}

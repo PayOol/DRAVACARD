@@ -81,28 +81,22 @@ export function UsageNotes({ onClose, onAccept }: UsageNotesProps) {
         </div>
       </div>
 
-      <div className="checkout-actions checkout-notes-actions flex shrink-0 flex-col space-y-2 border-t bg-white p-3 dark:border-[#304159] dark:bg-[#111c2e] sm:flex-row sm:space-x-4 sm:space-y-0 sm:p-4">
-        <div className="flex-1">
-          <Button
-            className="checkout-primary-action w-full bg-blue-600 text-white hover:bg-blue-700"
-            onClick={onAccept}
-            type="button"
-          >
-            {language === "fr"
-              ? "Accepter et continuer"
-              : "Accept and continue"}
-          </Button>
-        </div>
-        <div className="flex-1">
-          <Button
-            className="checkout-decline-action w-full"
-            onClick={onClose}
-            type="button"
-            variant="outline"
-          >
-            {language === "fr" ? "Refuser" : "Decline"}
-          </Button>
-        </div>
+      <div className="checkout-actions checkout-actions-row checkout-notes-actions">
+        <Button
+          className="checkout-decline-action"
+          onClick={onClose}
+          type="button"
+          variant="outline"
+        >
+          {language === "fr" ? "Refuser" : "Decline"}
+        </Button>
+        <Button
+          className="checkout-primary-action flex-1"
+          onClick={onAccept}
+          type="button"
+        >
+          {language === "fr" ? "Accepter et continuer" : "Accept and continue"}
+        </Button>
       </div>
     </>
   );

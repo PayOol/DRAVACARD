@@ -7,7 +7,9 @@ import {
   MobileScreenTransition,
 } from "@/components/catalog/MobileTransitions";
 import RecommendedBadge from "@/components/catalog/RecommendedBadge";
-import TikTokPanel from "@/components/catalog/TikTokPanel";
+import TikTokPanel, {
+  type TikTokCatalogProps,
+} from "@/components/catalog/TikTokPanel";
 import DravaLogo from "@/components/layout/DravaLogo";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import { withBasePath } from "@/lib/base-path";
@@ -87,10 +89,12 @@ export default function MobileCatalog({
   onSelect,
   section,
   onSectionChange,
+  tiktok,
 }: {
   onSelect: (card: CatalogCard) => void;
   section: CatalogSection;
   onSectionChange: (section: CatalogSection) => void;
+  tiktok: TikTokCatalogProps;
 }) {
   const { language, setLanguage } = useLanguage();
   const fr = language === "fr";
@@ -296,7 +300,7 @@ export default function MobileCatalog({
             labelledBy={!detail ? `mobile-tab-${screen}` : undefined}
             onEnter={(element) => handleScreenEnter(screen, element)}
           >
-            {screen === "tiktok" && <TikTokPanel />}
+            {screen === "tiktok" && <TikTokPanel {...tiktok} />}
             {screen === "cards" && (
               <>
                 <div className="app-intro app-intro--compact">

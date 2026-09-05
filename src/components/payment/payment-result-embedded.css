@@ -1,0 +1,68 @@
+.checkout-card-result .payment-result-screen {
+  min-height: 0;
+  padding: 20px;
+  background: transparent;
+}
+
+.checkout-card-result .payment-result-card {
+  min-width: 0;
+  padding: 20px;
+}
+
+.checkout-card-result .payment-result-actions > * {
+  height: auto;
+  min-height: 44px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px), (max-width: 1023px) and (max-height: 500px) and (pointer: coarse) {
+  .checkout-card-result .payment-result-screen {
+    padding: 16px;
+  }
+
+  .checkout-card-result .payment-result-card {
+    padding: 8px 0 16px;
+  }
+
+  .checkout-card-result .payment-result-icon {
+    width: 64px;
+    height: 64px;
+  }
+}
+
+@media print {
+  body:has(.checkout-card-result .payment-receipt) > :not(.checkout-dialog) {
+    display: none !important;
+  }
+
+  body:has(.checkout-card-result .payment-receipt),
+  .checkout-dialog:has(.checkout-card-result .payment-receipt),
+  .checkout-dialog:has(.checkout-card-result .payment-receipt) .checkout-step-stack,
+  .checkout-dialog:has(.checkout-card-result .payment-receipt) .checkout-step-panel,
+  .checkout-card-result:has(.payment-receipt) {
+    position: static !important;
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    transform: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .checkout-dialog:has(.checkout-card-result .payment-receipt) > :not(.checkout-step-stack) {
+    display: none !important;
+  }
+
+  .checkout-card-result .payment-receipt,
+  .checkout-card-result .payment-result-card {
+    padding: 0 !important;
+  }
+}

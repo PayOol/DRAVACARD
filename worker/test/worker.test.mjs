@@ -256,7 +256,8 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
       const checked = await worker.fetch(request("/api/orders/status", { orderToken: result.orderToken }, { Origin: origin }), env);
       assert.equal(checked.headers.get("Access-Control-Allow-Origin"), origin);
       assert.deepEqual(await checked.json(), {
-        status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF",
+        service: "cards", provider: "leekpay", orderId: "checkout_42", transactionReference: "checkout_42",
+      status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF",
         createdAt: JSON.parse(puts.at(-1).value).createdAt,
       });
       assert.equal(calls.at(-1).init.method, "GET");
@@ -375,6 +376,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
       assert.equal(JSON.parse(puts.at(-1).value).checkoutId, "checkout_42");
       const response = await worker.fetch(request("/api/orders/status", { orderToken: result.orderToken }), env);
       assert.deepEqual(await response.json(), {
+        service: "cards", provider: "leekpay", orderId: "checkout_42",
         status: "pending", verified: false, productId: "visa-basic", amount: 5000, currency: "XOF",
         createdAt: JSON.parse(puts.at(-1).value).createdAt,
       });
@@ -414,6 +416,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
     const { orderToken } = await create(env);
     const response = await worker.fetch(request("/api/orders/status", { orderToken }), env);
     assert.deepEqual(await response.json(), {
+      service: "cards", provider: "leekpay", orderId: "checkout_42", transactionReference: "checkout_42",
       status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF",
       createdAt: JSON.parse(puts[0].value).createdAt,
     });
@@ -438,6 +441,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
     const response = await worker.fetch(request("/api/orders/status", { orderToken }), env);
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {
+      service: "cards", provider: "leekpay", orderId: "checkout_42", transactionReference: "checkout_42",
       status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF", createdAt,
     });
   });
@@ -526,6 +530,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
     values.set(key, JSON.stringify({ ...JSON.parse(stored), amount: 5500 }));
     const response = await worker.fetch(request("/api/orders/status", { orderToken }), env);
     assert.deepEqual(await response.json(), {
+      service: "cards", provider: "leekpay", orderId: "checkout_42", transactionReference: "checkout_42",
       status: "paid", verified: true, productId: "visa-basic", amount: 5500, currency: "XOF",
       createdAt: JSON.parse(stored).createdAt,
     });
