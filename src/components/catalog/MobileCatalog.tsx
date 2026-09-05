@@ -29,6 +29,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { TikTokHelp } from "@/components/tiktok/TikTokHelp";
 
 type Screen = CatalogSection | `card:${string}`;
 
@@ -306,6 +307,33 @@ export default function MobileCatalog({
                 <h1 className="sr-only" ref={headingRef} tabIndex={-1}>
                   {fr ? "Cartes virtuelles" : "Virtual cards"}
                 </h1>
+                <div className="px-4 pb-4">
+                  <div className="mb-3">
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">
+                      {fr ? "Achat de carte virtuelles" : "Virtual card purchase"}
+                    </p>
+                    <h2 className="text-2xl font-bold">
+                      {fr ? "Choisissez votre carte" : "Choose your card"}
+                    </h2>
+                  </div>
+                  <TikTokHelp
+                    kind="video"
+                    video={{
+                      videoId: "m4lW08PFieE",
+                      startAt: 4,
+                      videoTitle:
+                        fr
+                          ? "Besoin d’aide pour votre carte virtuelle ?"
+                          : "Need help with your virtual card?",
+                      videoSubtitle:
+                        fr ? "Regardez ce tutoriel" : "Watch this tutorial",
+                      watchVideo:
+                        fr
+                          ? "Regarder le tutoriel vidéo"
+                          : "Watch the tutorial video",
+                    }}
+                  />
+                </div>
                 <div className="app-catalog-list">
                   <AnimatePresence initial={false} mode="popLayout">
                     {cards.map((card) => (

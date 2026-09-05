@@ -17,6 +17,7 @@ import {
 import {
   type ReactNode,
   useLayoutEffect,
+  useEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -35,6 +36,21 @@ import {
   SUPPORT_WHATSAPP_CONTACTS,
 } from "@/lib/tiktok-support";
 import "./tiktok-help.css";
+
+const DEFAULT_TIKTOK_VIDEO_ID = "AZgaA8ufCzs";
+
+const buildYoutubeEmbedBase = (videoId: string) =>
+  `https://www.youtube.com/embed/${videoId}`;
+const getVideoSrc = (videoId: string, startAt = 0) =>
+  `${buildYoutubeEmbedBase(videoId)}?autoplay=1&rel=0${startAt > 0 ? `&start=${Math.floor(startAt)}` : ""}`;
+
+type TikTokHelpVideo = {
+  videoId?: string;
+  startAt?: number;
+  videoTitle?: string;
+  videoSubtitle?: string;
+  watchVideo?: string;
+};
 
 const copy = {
   fr: {
@@ -242,41 +258,62 @@ export function TikTokWhatsAppPicker({
   );
 }
 
-export function TikTokHelp({ kind }: { kind: "video" | "support" }) {
+export function TikTokHelp({
+  kind,
+  video,
+}: {
+  kind: "video" | "support";
+  video?: TikTokHelpVideo;
+}) {
   const { language } = useLanguage();
   const t = copy[language];
   const [open, setOpen] = useState(false);
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const videoId = video?.videoId ?? DEFAULT_TIKTOK_VIDEO_ID;
+  const title = video?.videoTitle ?? t.videoTitle;
+  const subtitle = video?.videoSubtitle ?? t.videoSubtitle;
+  const watchVideo = video?.watchVideo ?? t.watchVideo;
+  const startAt = Number.isFinite(video?.startAt ?? 0)
+    ? Math.floor(video?.startAt ?? 0)
+    : 0;
+  const thumbnail = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+  const iframeSrc = getVideoSrc(videoId, startAt);
+
+  useEffect(() => {
+    if (!open || !frameRef.current) return;
+    frameRef.current.src = iframeSrc;
+  }, [iframeSrc, open]);
 
   if (kind === "video") {
     return (
       <HelpDialog
         open={open}
         onOpenChange={setOpen}
-        title={t.videoTitle}
-        description={t.videoSubtitle}
+        title={title}
+        description={subtitle}
         className="tiktok-help-video-dialog"
         trigger={
           <button
             type="button"
             className="tiktok-help-video-banner"
-            aria-label={t.watchVideo}
+            aria-label={watchVideo}
           >
             <span className="tiktok-help-video-copy">
-              <strong>{t.videoTitle}</strong>
+              <strong>{title}</strong>
               <span>
-                {t.videoSubtitle} <ArrowRight size={16} aria-hidden="true" />
+                {subtitle} <ArrowRight size={16} aria-hidden="true" />
               </span>
             </span>
             <span className="tiktok-help-thumbnail">
               <img
-                src="https://img.youtube.com/vi/AZgaA8ufCzs/maxresdefault.jpg"
+                src={thumbnail}
                 alt=""
                 loading="lazy"
                 onError={(event) => {
                   const target = event.currentTarget;
                   if (!target.src.endsWith("/hqdefault.jpg"))
                     target.src =
-                      "https://img.youtube.com/vi/AZgaA8ufCzs/hqdefault.jpg";
+                      `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
                 }}
               />
               <span className="tiktok-help-play">
@@ -289,8 +326,9 @@ export function TikTokHelp({ kind }: { kind: "video" | "support" }) {
         <div className="tiktok-help-video-frame">
           {open && (
             <iframe
+              ref={frameRef}
               src="https://www.youtube.com/embed/AZgaA8ufCzs?autoplay=1&rel=0"
-              title={t.videoTitle}
+              title={title}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
             />
