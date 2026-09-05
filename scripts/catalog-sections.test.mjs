@@ -317,7 +317,17 @@ test("desktop intro keeps the original description on the left and important not
     assert.equal(children[0].type, "p", "Description must be the left-hand element");
     assert.equal(children[1].type, "div", "Important note must be the right-hand element");
     assert.deepEqual(children.map(textOf), expectedCopy[language]);
+    const noteText = collectNodes(children[1]).find((node) => node.type === "p");
+    for (const paragraph of [children[0], noteText]) {
+      assert.ok(paragraph.props.className.split(/\s+/).includes("text-sm"), "Both intro blocks must use the same small text size");
+      assert.doesNotMatch(paragraph.props.className, /\btext-(?:xs|base|lg|xl|\d+xl)\b/);
+    }
     assert.ok(children.every((node) => node.props.className.split(/\s+/).includes("min-w-0")));
-    assert.match(children[1].props.className, /\bborder-red-200\b/);
+    for (const className of ["rounded-lg", "border", "border-green-200", "bg-green-50", "p-4", "text-green-800"]) {
+      assert.ok(children[0].props.className.split(/\s+/).includes(className), `The left description must retain its green container styling: ${className}`);
+    }
+    for (const className of ["rounded-lg", "border", "border-red-200", "bg-red-50", "p-4"]) {
+      assert.ok(children[1].props.className.split(/\s+/).includes(className), `The important note styling must remain unchanged: ${className}`);
+    }
   }
 });

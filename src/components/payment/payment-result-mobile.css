@@ -96,6 +96,19 @@
   .payment-result-actions > *:active {
     transform: scale(0.98);
   }
+
+  html.dark .payment-result-screen {
+    background: #0b1220;
+  }
+
+  html.dark .payment-result-card {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  html.dark .payment-result-icon {
+    box-shadow: 0 0 0 0.7rem #18263b;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -105,5 +118,36 @@
 
   .payment-result-actions > *:active {
     transform: none;
+  }
+}
+
+/* Printing is independent of the screen theme. The simulation label remains
+   present; a printed local preview must never look like payment evidence. */
+@media print {
+  html:has(.payment-receipt),
+  body:has(.payment-receipt),
+  body:has(.payment-receipt) .app-layout,
+  body:has(.payment-receipt) main,
+  .payment-receipt {
+    color-scheme: light;
+    background: #fff !important;
+    background-image: none !important;
+  }
+
+  .payment-receipt,
+  .payment-receipt * {
+    color: #111827 !important;
+    border-color: #d1d5db !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  .payment-receipt * {
+    background: transparent !important;
+    background-image: none !important;
+  }
+
+  .payment-receipt .payment-result-simulation {
+    border: 1px solid #6b7280 !important;
   }
 }

@@ -218,10 +218,10 @@ export default function PaymentResult({ status }: PaymentResultProps) {
 
   return (
     <MainLayout>
-      <section className="payment-result-screen flex min-h-[65vh] items-center bg-gradient-to-b from-slate-50 to-white px-4 py-12 md:py-20">
+      <section className="payment-result-screen flex min-h-[65vh] items-center bg-gradient-to-b from-slate-50 to-white px-4 py-12 dark:from-[#0b1220] dark:to-[#111c2e] md:py-20">
         <div className="payment-result-container mx-auto w-full max-w-2xl">
-          <div className="payment-result-card rounded-2xl border border-gray-100 bg-white p-6 text-center shadow-lg md:p-10">
-            <div className="payment-result-icon mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+          <div className="payment-result-card rounded-2xl border border-gray-100 bg-white p-6 text-center shadow-lg dark:border-[#304159] dark:bg-[#111c2e] dark:shadow-black/20 md:p-10">
+            <div className="payment-result-icon mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-[#312817] dark:text-amber-200">
               <Icon
                 aria-hidden="true"
                 className={`h-9 w-9 ${isChecking ? "animate-spin" : ""}`}
@@ -229,18 +229,18 @@ export default function PaymentResult({ status }: PaymentResultProps) {
             </div>
 
             <div aria-live="polite" aria-atomic="true">
-              <h1 className="payment-result-title text-2xl font-bold text-slate-900 md:text-3xl">
+              <h1 className="payment-result-title text-2xl font-bold text-slate-900 dark:text-[#e6edf7] md:text-3xl">
                 {verification === "missing" && status === "failure"
                   ? language === "fr"
                     ? "Paiement non finalisé"
                     : "Payment not completed"
                   : copy.title[language]}
               </h1>
-              <p className="payment-result-description mx-auto mt-4 max-w-xl text-base leading-7 text-gray-600 md:text-lg">
+              <p className="payment-result-description mx-auto mt-4 max-w-xl text-base leading-7 text-gray-600 dark:text-[#b3c1d5] md:text-lg">
                 {copy.description[language]}
               </p>
 
-              <div className="payment-result-notice mx-auto mt-6 max-w-xl rounded-xl border border-amber-200 bg-amber-50 p-4 text-left text-sm leading-6 text-amber-900">
+              <div className="payment-result-notice mx-auto mt-6 max-w-xl rounded-xl border border-amber-200 bg-amber-50 p-4 text-left text-sm leading-6 text-amber-900 dark:border-[#6b541f] dark:bg-[#312817] dark:text-amber-200">
                 {copy.notice[language]}
               </div>
             </div>
@@ -258,7 +258,10 @@ export default function PaymentResult({ status }: PaymentResultProps) {
                     {language === "fr" ? "Vérifier à nouveau" : "Check again"}
                   </Button>
                 )}
-              <Button asChild className="bg-blue-600 hover:bg-blue-700">
+              <Button
+                asChild
+                className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
+              >
                 <Link href="/">
                   {language === "fr"
                     ? "Retour au catalogue"

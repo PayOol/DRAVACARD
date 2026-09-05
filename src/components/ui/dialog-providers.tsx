@@ -94,17 +94,21 @@ export function PaymentProviders({
   return (
     <>
       <div className="checkout-scroll min-h-0 overflow-y-auto p-4 sm:p-6">
-        <div className="checkout-provider-summary mb-5 rounded-lg border border-blue-100 bg-blue-50 p-4">
-          <p className="text-sm text-blue-700">
+        <div className="checkout-provider-summary mb-5 rounded-lg border border-blue-100 bg-blue-50 p-4 dark:border-[#304159] dark:bg-[#18263b]">
+          <p className="text-sm text-blue-700 dark:text-[#93c5fd]">
             {language === "fr" ? "Carte sélectionnée" : "Selected card"}
           </p>
           <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-            <p className="font-semibold text-slate-900">{card.name}</p>
-            <p className="font-bold text-blue-700">{formattedAmount}</p>
+            <p className="font-semibold text-slate-900 dark:text-[#e6edf7]">
+              {card.name}
+            </p>
+            <p className="font-bold text-blue-700 dark:text-[#93c5fd]">
+              {formattedAmount}
+            </p>
           </div>
         </div>
 
-        <p className="mb-3 text-sm font-medium text-slate-700">
+        <p className="mb-3 text-sm font-medium text-slate-700 dark:text-[#b3c1d5]">
           {language === "fr" ? "Providers disponibles" : "Available providers"}
         </p>
 
@@ -116,16 +120,16 @@ export function PaymentProviders({
         >
           <button
             aria-pressed={selectedProvider === "leekpay"}
-            className={`relative flex min-w-0 items-center justify-center gap-2 rounded-xl border px-2 py-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-wait sm:px-3 ${
+            className={`relative flex min-w-0 items-center justify-center gap-2 rounded-xl border px-2 py-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60 dark:focus-visible:ring-[#93c5fd] dark:focus-visible:ring-offset-[#111c2e] sm:px-3 ${
               selectedProvider === "leekpay"
-                ? "border-blue-500 bg-blue-50/60"
-                : "border-slate-200 bg-white hover:border-blue-300"
+                ? "border-blue-500 bg-blue-50/60 dark:border-[#93c5fd] dark:bg-[#18263b]"
+                : "border-slate-200 bg-white hover:border-blue-300 dark:border-[#304159] dark:bg-[#111c2e] dark:hover:border-[#93c5fd]"
             }`}
             disabled={isProcessing}
             onClick={() => setSelectedProvider("leekpay")}
             type="button"
           >
-            <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-white ring-1 ring-slate-200">
+            <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-white ring-1 ring-slate-200 dark:ring-[#304159]">
               <img
                 src={withBasePath("/images/leekpay.webp")}
                 alt=""
@@ -134,21 +138,21 @@ export function PaymentProviders({
                 className="absolute -left-7 -top-[35px] h-auto w-40 max-w-none"
               />
             </span>
-            <span className="whitespace-nowrap text-xs font-semibold text-slate-900 sm:text-sm">
+            <span className="whitespace-nowrap text-xs font-semibold text-slate-900 dark:text-[#e6edf7] sm:text-sm">
               LeekPay
             </span>
-            <span className="absolute -top-2 right-2 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold leading-4 text-white shadow-sm">
+            <span className="absolute -top-2 right-2 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold leading-4 text-white shadow-sm dark:bg-[#86efac] dark:text-emerald-950">
               {language === "fr" ? "Recommandé" : "Recommended"}
             </span>
           </button>
         </fieldset>
       </div>
 
-      <div className="checkout-actions shrink-0 border-t border-slate-100 p-4 sm:px-6">
+      <div className="checkout-actions shrink-0 border-t border-slate-100 p-4 dark:border-[#304159] sm:px-6">
         {isProcessing && (
           <div
             aria-live="polite"
-            className="mb-3 flex items-start gap-2 rounded-md bg-slate-50 p-3 text-sm text-slate-600"
+            className="mb-3 flex items-start gap-2 rounded-md bg-slate-50 p-3 text-sm text-slate-600 dark:bg-[#18263b] dark:text-[#b3c1d5]"
           >
             <LoaderCircle
               aria-hidden="true"
@@ -163,7 +167,7 @@ export function PaymentProviders({
         {checkoutState === "error" && (
           <div
             aria-live="assertive"
-            className="mb-3 flex items-start gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700"
+            className="mb-3 flex items-start gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-rose-950/40 dark:text-[#fda4af]"
             role="alert"
           >
             <AlertCircle
@@ -190,7 +194,7 @@ export function PaymentProviders({
             {language === "fr" ? "Précédent" : "Back"}
           </Button>
           <Button
-            className="checkout-pay-action h-11 flex-1 gap-2 bg-emerald-600 text-sm text-white hover:bg-emerald-700"
+            className="checkout-pay-action h-11 flex-1 gap-2 bg-emerald-600 text-sm text-white hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-800"
             disabled={isProcessing}
             onClick={handleCheckout}
             type="button"

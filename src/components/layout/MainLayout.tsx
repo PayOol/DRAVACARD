@@ -3,6 +3,7 @@
 import DravaLogo from "@/components/layout/DravaLogo";
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
+import ThemeToggle from "@/components/layout/ThemeToggle";
 import { useLanguage } from "@/lib/language-context";
 import { ArrowLeft, Globe } from "lucide-react";
 import Link from "next/link";
@@ -36,17 +37,20 @@ export default function MainLayout({
             <ArrowLeft aria-hidden="true" size={22} />
           </Link>
           <DravaLogo />
-          <button
-            className="app-language"
-            type="button"
-            onClick={() => setLanguage(language === "fr" ? "en" : "fr")}
-            aria-label={
-              language === "fr" ? "Switch to English" : "Passer en français"
-            }
-          >
-            <Globe aria-hidden="true" size={16} />
-            {language.toUpperCase()}
-          </button>
+          <div className="app-header-actions flex shrink-0 items-center gap-2">
+            <ThemeToggle />
+            <button
+              className="app-language"
+              type="button"
+              onClick={() => setLanguage(language === "fr" ? "en" : "fr")}
+              aria-label={
+                language === "fr" ? "Switch to English" : "Passer en français"
+              }
+            >
+              <Globe aria-hidden="true" size={16} />
+              {language.toUpperCase()}
+            </button>
+          </div>
         </header>
       )}
       <main className="app-main flex-grow md:pt-20">

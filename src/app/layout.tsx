@@ -4,6 +4,7 @@ import "./globals.css";
 import "@/components/payment/payment-result-mobile.css";
 import { withBasePath } from "@/lib/base-path";
 import { LanguageProvider } from "@/lib/language-context";
+import { ThemeProvider } from "@/lib/theme-context";
 import Script from "next/script";
 
 // Fonts
@@ -105,7 +106,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: "#ffffff",
-  colorScheme: "light",
+  colorScheme: "light dark",
 };
 
 export default function RootLayout({
@@ -114,17 +115,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className="scroll-smooth">
+    <html lang="fr" className="scroll-smooth" suppressHydrationWarning>
       <head>
         <meta
           httpEquiv="Content-Security-Policy"
           content={contentSecurityPolicy}
         />
+        {/* This tiny same-origin script must apply the saved theme before first paint. */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script src={withBasePath("/theme-init.js")} />
       </head>
       <body
-        className={`${inter.variable} ${righteous.variable} font-sans min-h-screen antialiased bg-white`}
+        className={`${inter.variable} ${righteous.variable} font-sans min-h-screen antialiased bg-background text-foreground`}
       >
-        <LanguageProvider>{children}</LanguageProvider>
+        <LanguageProvider>
+          <ThemeProvider>{children}</ThemeProvider>
+        </LanguageProvider>
         <Script src={withBasePath("/register-sw.js")} strategy="lazyOnload" />
       </body>
     </html>

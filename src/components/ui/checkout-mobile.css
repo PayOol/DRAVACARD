@@ -1,4 +1,30 @@
 /* One checkout state machine, with a shared presence fade and mobile surfaces. */
+.checkout-dialog {
+  --checkout-field-background: #fff;
+  --checkout-field-text: #0f172a;
+  --checkout-field-focus: #2563eb;
+}
+
+.dark .checkout-dialog {
+  --checkout-field-background: #0b1220;
+  --checkout-field-text: #e6edf7;
+  --checkout-field-focus: #93c5fd;
+}
+
+/* Browser autofill must remain readable in both themes, including focus. */
+.checkout-customer-fields input:is(:autofill, :-webkit-autofill) {
+  -webkit-box-shadow: 0 0 0 1000px var(--checkout-field-background) inset !important;
+  -webkit-text-fill-color: var(--checkout-field-text) !important;
+  caret-color: var(--checkout-field-text);
+  background-color: var(--checkout-field-background) !important;
+  color: var(--checkout-field-text) !important;
+}
+
+.checkout-customer-fields input:is(:autofill, :-webkit-autofill):focus-visible {
+  outline: 2px solid var(--checkout-field-focus);
+  outline-offset: 2px;
+}
+
 .checkout-dialog[data-state="open"],
 .checkout-overlay[data-state="open"] {
   animation: checkout-dialog-enter 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -46,6 +72,7 @@
 
   .checkout-dialog {
     --checkout-blue: #2563eb;
+    --checkout-field-background: #fafbfe;
     top: var(--checkout-viewport-top, 0) !important;
     left: 0 !important;
     width: 100% !important;
@@ -387,6 +414,137 @@
 
   .checkout-dialog[data-keyboard-open="true"] .checkout-mobile-steps {
     margin-bottom: 10px;
+  }
+
+  /* Mobile surfaces keep their independent layout and follow the shared theme. */
+  .dark .checkout-dialog {
+    --checkout-blue: #93c5fd;
+    --checkout-field-background: #0b1220;
+    background: #0b1220;
+    color: #e6edf7;
+  }
+
+  .dark .checkout-dialog .checkout-heading {
+    border-color: #304159;
+    background: #111c2e;
+    color: #e6edf7;
+  }
+
+  .dark .checkout-dialog .checkout-mobile-back,
+  .dark .checkout-dialog .checkout-close {
+    background: #18263b;
+    color: #b3c1d5;
+  }
+
+  .dark .checkout-dialog .checkout-mobile-back:hover,
+  .dark .checkout-dialog .checkout-close:hover {
+    background: #25364f;
+    color: #e6edf7;
+  }
+
+  .dark .checkout-mobile-steps li,
+  .dark .checkout-selection-label,
+  .dark .checkout-limits h4 {
+    color: #b3c1d5;
+  }
+
+  .dark .checkout-step-number,
+  .dark .checkout-mobile-selection,
+  .dark .checkout-dialog .checkout-notes-summary,
+  .dark .checkout-customer-fields > div {
+    border-color: #304159;
+    background: #111c2e;
+  }
+
+  .dark .checkout-mobile-steps li[aria-current="step"],
+  .dark .checkout-mobile-steps li[data-complete] {
+    color: var(--checkout-blue);
+  }
+
+  .dark .checkout-mobile-steps li[aria-current="step"] .checkout-step-number,
+  .dark .checkout-mobile-steps li[data-complete] .checkout-step-number {
+    border-color: var(--checkout-blue);
+    background: var(--checkout-blue);
+    color: #0b1220;
+  }
+
+  .dark .checkout-card-icon {
+    background: #18263b;
+  }
+
+  .dark .checkout-notes-summary h3 {
+    color: #e6edf7;
+  }
+
+  .dark .checkout-notes-summary p {
+    color: #b3c1d5;
+  }
+
+  .dark .checkout-dialog .checkout-limits {
+    border-color: #304159;
+    background: #304159;
+  }
+
+  .dark .checkout-limits > div {
+    background: #111c2e;
+  }
+
+  .dark .checkout-dialog .checkout-notes-warnings {
+    border-color: #653242;
+    background: #301923;
+  }
+
+  .dark .checkout-customer-fields input {
+    background: #0b1220;
+  }
+
+  .dark .checkout-provider-options > button {
+    border-color: #304159;
+    background: #111c2e;
+  }
+
+  .dark .checkout-provider-options > button[aria-pressed="true"] {
+    border-color: var(--checkout-blue);
+    background: #18263b;
+  }
+
+  .dark .checkout-provider-options > button:hover:not(:disabled) {
+    border-color: var(--checkout-blue);
+    background: #25364f;
+  }
+
+  .dark .checkout-provider-options > button::after {
+    border-color: #304159;
+    background: #111c2e;
+  }
+
+  .dark .checkout-provider-options > button[aria-pressed="true"]::after {
+    border-color: var(--checkout-blue);
+  }
+
+  .dark .checkout-dialog .checkout-actions {
+    border-color: #304159;
+    background: #111c2e;
+    box-shadow: 0 -4px 18px #0003;
+  }
+
+  .dark .checkout-actions .checkout-pay-action {
+    background: #2563eb;
+    color: #fff;
+  }
+
+  .dark .checkout-actions .checkout-pay-action:hover:not(:disabled) {
+    background: #1d4ed8;
+  }
+
+  .dark .checkout-actions .checkout-decline-action {
+    background: transparent;
+    color: #b3c1d5;
+  }
+
+  .dark .checkout-actions .checkout-decline-action:hover {
+    background: #18263b;
+    color: #e6edf7;
   }
 }
 

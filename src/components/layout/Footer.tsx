@@ -9,17 +9,17 @@ const Footer = () => {
   const { language } = useLanguage();
 
   return (
-    <footer className="border-t border-gray-100 bg-gray-50">
+    <footer className="border-t border-gray-100 bg-gray-50 dark:border-slate-700 dark:bg-[#111c2e]">
       <div className="container mx-auto flex flex-col items-center justify-between gap-6 px-4 py-8 md:flex-row md:px-6">
         <div className="flex flex-col items-center md:items-start">
           <Link href="/" aria-label="DRAVA">
             <img
               src={withBasePath("/images/drava-logo-transparent.svg")}
               alt="DRAVA Logo"
-              className="h-24 w-auto"
+              className="desktop-brand-logo h-24 w-auto"
             />
           </Link>
-          <p className="text-center text-sm text-gray-600 md:text-left">
+          <p className="text-center text-sm text-gray-600 md:text-left dark:text-slate-300">
             {language === "fr"
               ? "© 2026 DRAVA. Tous droits réservés."
               : "© 2026 DRAVA. All rights reserved."}
@@ -29,19 +29,19 @@ const Footer = () => {
         <div className="space-y-2">
           <a
             href="mailto:contact.drava@gmail.com"
-            className="flex items-center text-sm text-gray-600 transition-colors hover:text-blue-600"
+            className="flex items-center text-sm text-gray-600 transition-colors hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-300"
           >
             <Mail className="mr-2 h-4 w-4" />
             contact.drava@gmail.com
           </a>
           <a
             href="tel:+237696161186"
-            className="flex items-center text-sm text-gray-600 transition-colors hover:text-blue-600"
+            className="flex items-center text-sm text-gray-600 transition-colors hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-300"
           >
             <Phone className="mr-2 h-4 w-4" />
             +237 696 16 11 86
           </a>
-          <p className="max-w-sm text-xs text-gray-500">
+          <p className="max-w-sm text-xs text-gray-500 dark:text-slate-400">
             {language === "fr"
               ? "Ne transmettez aucune donnée de carte ou de paiement par e-mail ou téléphone."
               : "Do not send card or payment data by email or phone."}

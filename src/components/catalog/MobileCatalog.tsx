@@ -1,14 +1,15 @@
 "use client";
 
+import CatalogTabs from "@/components/catalog/CatalogTabs";
 import {
   CatalogCardTransition,
   MobileChromeTransition,
   MobileScreenTransition,
 } from "@/components/catalog/MobileTransitions";
 import RecommendedBadge from "@/components/catalog/RecommendedBadge";
-import CatalogTabs from "@/components/catalog/CatalogTabs";
 import TikTokPanel from "@/components/catalog/TikTokPanel";
 import DravaLogo from "@/components/layout/DravaLogo";
+import ThemeToggle from "@/components/layout/ThemeToggle";
 import { withBasePath } from "@/lib/base-path";
 import { type CatalogCard, cards } from "@/lib/catalog";
 import type { CatalogSection } from "@/lib/catalog-section";
@@ -254,15 +255,18 @@ export default function MobileCatalog({
             )}
           </MobileChromeTransition>
         </AnimatePresence>
-        <button
-          className="app-language"
-          type="button"
-          onClick={() => setLanguage(fr ? "en" : "fr")}
-          aria-label={fr ? "Switch to English" : "Passer en français"}
-        >
-          <Globe size={16} aria-hidden="true" />
-          {language.toUpperCase()}
-        </button>
+        <div className="app-header-actions">
+          <ThemeToggle />
+          <button
+            className="app-language"
+            type="button"
+            onClick={() => setLanguage(fr ? "en" : "fr")}
+            aria-label={fr ? "Switch to English" : "Passer en français"}
+          >
+            <Globe size={16} aria-hidden="true" />
+            {language.toUpperCase()}
+          </button>
+        </div>
       </header>
 
       {offline && (

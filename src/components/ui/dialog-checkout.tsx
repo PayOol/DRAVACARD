@@ -269,7 +269,7 @@ export function DialogCheckout({
       }}
     >
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="checkout-overlay fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm" />
+        <DialogPrimitive.Overlay className="checkout-overlay fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm dark:bg-black/[0.65]" />
         <DialogPrimitive.Content
           asChild
           onOpenAutoFocus={(event) => {
@@ -338,9 +338,9 @@ export function DialogCheckout({
             layout={reducedMotion ? false : "size"}
             transition={{ layout: { duration: 0.28, ease: "easeInOut" } }}
             style={{ x: "-50%", y: "-50%" }}
-            className="checkout-dialog fixed left-1/2 top-1/2 z-[61] flex max-h-[92dvh] w-[calc(100%-1rem)] max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-2xl focus:outline-none sm:w-[calc(100%-2rem)]"
+            className="checkout-dialog fixed left-1/2 top-1/2 z-[61] flex max-h-[92dvh] w-[calc(100%-1rem)] max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-2xl focus:outline-none dark:bg-[#111c2e] dark:text-[#e6edf7] dark:shadow-black/40 sm:w-[calc(100%-2rem)]"
           >
-            <div className="checkout-heading flex shrink-0 items-start justify-between gap-4 border-b bg-gradient-to-r from-blue-600 to-blue-800 p-4 text-white sm:p-5">
+            <div className="checkout-heading flex shrink-0 items-start justify-between gap-4 border-b bg-gradient-to-r from-blue-600 to-blue-800 p-4 text-white dark:border-[#304159] dark:from-blue-800 dark:to-blue-950 sm:p-5">
               <button
                 type="button"
                 className="checkout-mobile-back"

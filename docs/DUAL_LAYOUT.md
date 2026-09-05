@@ -30,6 +30,14 @@ La carte recommandée est définie par `recommended` dans le catalogue partagé.
 
 Les styles mobiles restent dans les feuilles dédiées aux composants. Leur requête est `(max-width: 767px), (max-width: 1023px) and (max-height: 500px) and (pointer: coarse)`, identique à `MOBILE_LAYOUT_QUERY`. Ne pas choisir un layout à partir d’un appareil supposé ou de l’agent utilisateur. La branche masquée ne doit ni prendre le focus ni déclencher des effets réservés à l’écran visible. Un changement de largeur ou une rotation ne doit pas réinitialiser la sélection ou la commande ouverte.
 
+## Thèmes clair et sombre
+
+`ThemeProvider` (`src/lib/theme-context.tsx`) gère la préférence unique `system` / `light` / `dark`. Le sélecteur `ThemeToggle`, disponible dans les headers desktop et mobiles (catalogue, fiche et pages de résultat), utilise un contrôle natif avec trois options françaises/anglaises et une cible de 44 px. Par défaut, le thème suit le système ; un choix explicite est mémorisé uniquement sous la clé `drava-theme`. Le retour à « Système » supprime ce choix, et les onglets ouverts se synchronisent. Une indisponibilité du stockage ne bloque pas l’interface.
+
+`public/theme-init.js`, chargé dans le head avant le contenu, applique la classe `dark` et `color-scheme` avant affichage. Son chemin respecte `NEXT_PUBLIC_BASE_PATH`. Le provider reprend cet état sans remonter le contenu ni réinitialiser le checkout. Les composants Tailwind utilisent leurs variantes `dark` ; les feuilles mobiles conservent leurs requêtes isolées et déclinent les couleurs par tokens. Aucun filtre d’inversion n’est appliqué aux cartes ou logos. Le reçu imprimé reste sur fond blanc avec texte foncé, y compris lorsque le site est sombre.
+
+Lors d’un changement de style, vérifier les deux thèmes et « Système », les états focus/hover/disabled/erreur, la lisibilité des logos et l’impression, sans modifier les règles de paiement. La page de paiement externe du prestataire n’est pas une interface DRAVA et conserve son propre thème.
+
 ## Parcours de commande à préserver
 
 1. Afficher les notes d’utilisation et recueillir leur acceptation explicite.
@@ -60,6 +68,7 @@ Exécuter :
 npm run lint
 npm run build
 npm run test:payments
+npm run test:theme
 node --test scripts/pwa.test.mjs
 ```
 
@@ -70,3 +79,10 @@ Si le changement touche les règles de paiement, la sécurité, le déploiement 
 - Navigateur local, français et anglais : deux sections, quatre cartes conservées, aucune barre de défilement horizontale aux largeurs CSS mesurées de 320, 390, 766, 768 et 1440 px, ainsi qu’en 844 × 390 px avec une souris.
 - Vérifiés : lien direct `#tiktok` après rechargement, flèches clavier et focus, retour fiche → cartes → TikTok, commande notes → coordonnées fictives → prestataires sans paiement, redimensionnement avec commande ouverte, retour système vers les coordonnées et fermeture avec restauration du focus.
 - Limites : le zoom du navigateur de contrôle ne permet pas de mesurer exactement 767 px (766 et 768 encadrent le seuil). Aucun appareil iOS/Android réel, clavier logiciel, mode tactile `pointer: coarse` ni réglage système de réduction des animations n’a été émulé ; ces vérifications restent à effectuer. Les comportements de réduction des animations et d’inertie sont conservés dans le code.
+
+### Validation des thèmes — 5 septembre 2026
+
+- Edge local : catalogue et TikTok dans les deux thèmes, en français et anglais, aux largeurs CSS 320, 390, 766, 768, 1440 px et en paysage 844 × 390 px avec souris (48 combinaisons). Un seul sélecteur visible, sans débordement horizontal. Reçu de simulation contrôlé aux mêmes dimensions et dans les deux langues (24 combinaisons) ; pages d’échec et 404 contrôlées en clair/sombre à 320 et 1440 px.
+- Parcours vérifié sans paiement : fiche, consentement, validation des coordonnées fictives et prestataire ; conservation du formulaire lors d’un changement de thème depuis un autre onglet. Choix sombre conservé après navigation, et option Système conforme à la préférence réellement exposée par le navigateur.
+- Contrôles réussis : lint/types, 63 tests du parcours et du catalogue, 11 tests de thème, 6 tests PWA, auto-tests du scanner de sécurité et analyse de l’export. Compilation statique vérifiée à la racine et avec `/DRAVACARD`, puis export racine rétabli.
+- Limites : même réserve sur 767 px exact, iOS/Android, clavier logiciel, paysage tactile et réduction des animations que ci-dessus. Les changements de préférence système et les restrictions de stockage sont testés par mocks ; l’impression claire est contrôlée par tests de rendu/CSS, sans impression physique ni aperçu système. Aucun paiement réel ni déploiement effectué.

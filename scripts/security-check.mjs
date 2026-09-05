@@ -24,6 +24,7 @@ const paymentCustomerPath = 'src/lib/payment-customer.ts'
 const customerLocationPath = 'src/lib/customer-location.ts'
 const paymentResultPath = 'src/components/payment/PaymentResult.tsx'
 const paymentReceiptPath = 'src/components/payment/PaymentReceipt.tsx'
+const themeTogglePath = 'src/components/layout/ThemeToggle.tsx'
 const workerSourcePath = 'worker/src/index.ts'
 const workerConfigPath = 'worker/wrangler.jsonc'
 
@@ -607,6 +608,108 @@ function validateCustomerDialog(source) {
   return failures
 }
 
+// This one non-transactional selector is not a general form-control exemption.
+// Its static choices and only handler must remain the reviewed theme preference.
+function validateThemeToggleControl(source) {
+  const sourceFile = ts.createSourceFile(themeTogglePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  if (sourceFile.parseDiagnostics.length > 0) return ['Theme selector cannot be parsed']
+  const failures = []
+  const elements = []
+  const expectedImports = new Map([
+    ['lucide-react', ['Monitor', 'Moon', 'Sun']],
+    ['@/lib/language-context', ['useLanguage']],
+    ['@/lib/theme-context', ['readThemePreference', 'useTheme']],
+  ])
+  const expectedCalls = new Set([
+    'useLanguage()',
+    'useTheme()',
+    'setPreference(readThemePreference(event.target.value))',
+    'readThemePreference(event.target.value)',
+  ])
+  function visit(node) {
+    const openingElement = getJsxOpeningElement(node)
+    if (openingElement) elements.push({ node, openingElement })
+    if (ts.isImportDeclaration(node)) {
+      const module = ts.isStringLiteral(node.moduleSpecifier) ? node.moduleSpecifier.text : ''
+      const bindings = node.importClause?.namedBindings
+      const names = bindings && ts.isNamedImports(bindings)
+        ? bindings.elements.map((binding) => binding.propertyName ? '' : binding.name.text).sort()
+        : []
+      const expected = expectedImports.get(module)
+      if (!expected || node.importClause?.name || node.attributes || JSON.stringify(names) !== JSON.stringify([...expected].sort())) {
+        failures.push('Theme selector may import only its reviewed icons and theme/language hooks')
+      }
+      expectedImports.delete(module)
+    }
+    if (ts.isCallExpression(node)) {
+      const call = compact(node.getText(sourceFile))
+      if (!expectedCalls.delete(call)) failures.push('Theme selector may call only the reviewed preference handler and hooks once')
+    }
+    if (ts.isNewExpression(node) || ts.isTaggedTemplateExpression(node) || ts.isExportDeclaration(node)
+      || ts.isExportAssignment(node) || ts.isDeleteExpression(node)
+      || ts.isPostfixUnaryExpression(node)
+      || (ts.isPrefixUnaryExpression(node) && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator))
+      || (ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+        && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment)) {
+      failures.push('Theme selector must not construct, re-export or mutate external state')
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  if (expectedImports.size || expectedCalls.size) failures.push('Theme selector must retain the reviewed imports and preference handler')
+  if (/\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon|axios|localStorage|sessionStorage|indexedDB|caches|cookie|window|document|navigator|globalThis|customer|email|whatsapp|phone|card|payment|checkout|createLeekPayCheckout|requestPaymentApi|handleCheckout|contentEditable)\b/i.test(source)) {
+    failures.push('Theme selector must not collect, send or store data or interact with payment/customer state')
+  }
+  const selects = elements.filter(({ openingElement }) => openingElement.tagName.getText() === 'select')
+  const options = elements.filter(({ openingElement }) => openingElement.tagName.getText() === 'option')
+  if (selects.length !== 1 || options.length !== 3) failures.push('Theme selector must contain exactly one select with three static options')
+  const allowedAttributes = new Map([
+    ['label', new Set(['className', 'title'])],
+    ['Icon', new Set(['size', 'aria-hidden'])],
+    ['select', new Set(['aria-label', 'value', 'onChange'])],
+    ['option', new Set(['value'])],
+  ])
+  for (const { openingElement } of elements) {
+    const tag = openingElement.tagName.getText()
+    const allowed = allowedAttributes.get(tag)
+    const seen = new Set()
+    for (const attribute of openingElement.attributes.properties) {
+      const name = ts.isJsxAttribute(attribute) ? attribute.name.getText() : ''
+      if (!allowed?.has(name) || seen.has(name)) failures.push('Theme selector has an unapproved or repeated JSX attribute')
+      seen.add(name)
+    }
+    if (!allowed) failures.push('Theme selector must not contain other controls or components')
+  }
+  if (selects.length === 1) {
+    const select = selects[0]
+    const attributes = select.openingElement.attributes.properties.filter(ts.isJsxAttribute)
+    const expression = (name) => attributes.find((attribute) => attribute.name.getText() === name)?.initializer
+    if (compact(expression('value')?.getText(sourceFile) ?? '') !== '{preference}'
+      || compact(expression('onChange')?.getText(sourceFile) ?? '') !== '{(event)=>setPreference(readThemePreference(event.target.value))}') {
+      failures.push('Theme selector must change only the normalized theme preference')
+    }
+    if (!ts.isJsxElement(select.node) || select.node.children.some((child) =>
+      !(ts.isJsxText(child) && !child.text.trim())
+      && !(ts.isJsxElement(child) && child.openingElement.tagName.getText() === 'option'))) {
+      failures.push('Theme selector options must be direct static children')
+    }
+  }
+  const values = options.map(({ openingElement }) => {
+    const attribute = openingElement.attributes.properties.find((item) => ts.isJsxAttribute(item) && item.name.getText() === 'value')
+    return attribute?.initializer && ts.isStringLiteral(attribute.initializer) ? attribute.initializer.text : ''
+  })
+  if (JSON.stringify(values) !== JSON.stringify(['system', 'light', 'dark'])) failures.push('Theme selector options must be exactly system, light and dark')
+  return failures
+}
+
+function validateDataCollectionControls(source, relativePath) {
+  if (relativePath === themeTogglePath) return validateThemeToggleControl(source)
+  if (relativePath !== customerDialogPath && /<(?:form|input|select|textarea)\b|\bcontentEditable\b/i.test(source)) {
+    return [`Data-collection controls are allowed only in ${customerDialogPath}: ${relativePath}`]
+  }
+  return []
+}
+
 function validateProviderDialog(source) {
   const failures = []
   const condensed = compact(source)
@@ -988,6 +1091,63 @@ function selfTest() {
   assert.ok(validateCustomerDialog(safeCustomerDialog.replace('</form>', '<input name="name" type="text" required maxLength={80} /></form>')).length > 0)
   assert.ok(validateCustomerDialog(safeCustomerDialog.replace('aria-hidden="true"', 'aria-hidden="false"')).length > 0)
 
+  const safeThemeToggle = `
+    import { Monitor, Moon, Sun } from "lucide-react";
+    import { useLanguage } from "@/lib/language-context";
+    import { readThemePreference, useTheme } from "@/lib/theme-context";
+    export default function ThemeToggle() {
+      const { language } = useLanguage();
+      const { preference, setPreference } = useTheme();
+      const Icon = preference === "system" ? Monitor : preference === "dark" ? Moon : Sun;
+      return <label className="theme-toggle"><Icon size={18} aria-hidden="true" />
+        <select aria-label={language === "fr" ? "Thème" : "Theme"} value={preference}
+          onChange={(event) => setPreference(readThemePreference(event.target.value))}>
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>;
+    }
+  `
+  assert.deepEqual(validateDataCollectionControls(safeThemeToggle, themeTogglePath), [])
+  assert.deepEqual(validateDataCollectionControls(safeThemeToggle.replace('className="theme-toggle"', 'className="theme-toggle dark:text-white"'), themeTogglePath), [])
+  assert.ok(validateDataCollectionControls(safeThemeToggle, 'src/components/layout/OtherToggle.tsx').length > 0)
+  assert.ok(validateDataCollectionControls(safeThemeToggle, `${themeTogglePath}.bak`).length > 0)
+  for (const mutation of [
+    safeThemeToggle.replace('</label>', '<input /></label>'),
+    safeThemeToggle.replace('</label>', '<textarea /></label>'),
+    safeThemeToggle.replace('</label>', '<form /></label>'),
+    safeThemeToggle.replace('</label>', '<select /></label>'),
+    safeThemeToggle.replace('</label>', '<CustomInput /></label>'),
+    safeThemeToggle.replace('<label ', '<label contentEditable '),
+    safeThemeToggle.replace('<select ', '<select {...extra} '),
+    safeThemeToggle.replace('<select ', '<select onBlur={onChange} '),
+    safeThemeToggle.replace('<select ', '<select name="email" '),
+    safeThemeToggle.replace('<option value="dark">', '<option value="dark" onClick={onChange}>'),
+    safeThemeToggle.replace('value="dark"', 'value="customer"'),
+    safeThemeToggle.replace('value="dark"', 'value="light"'),
+    safeThemeToggle.replace('value="dark"', 'value={preference}'),
+    safeThemeToggle.replace('</select>', '<option value="other">Other</option></select>'),
+    safeThemeToggle.replace('</select>', '{extraOptions}</select>'),
+    safeThemeToggle.replace('</select>', '{true && <option value="dark">Other</option>}</select>'),
+    safeThemeToggle.replace('value={preference}', 'value={customer.email}'),
+    safeThemeToggle.replace('setPreference(readThemePreference(event.target.value))', 'setPreference(event.target.value)'),
+    safeThemeToggle.replace('onChange={(event) => setPreference(readThemePreference(event.target.value))}', 'onChange={handleCheckout}'),
+    safeThemeToggle.replace('from "@/lib/theme-context"', 'from "./unreviewed-context"'),
+    safeThemeToggle.replace('import { Monitor, Moon, Sun }', 'import { Monitor, Moon, Sun, send }'),
+    safeThemeToggle.replace('return <label', 'fetch("/api/checkout"); return <label'),
+    safeThemeToggle.replace('return <label', 'createLeekPayCheckout(); return <label'),
+    safeThemeToggle.replace('return <label', 'localStorage.setItem("theme", preference); return <label'),
+    safeThemeToggle.replace('return <label', 'const storage = globalThis["localStorage"]; return <label'),
+    safeThemeToggle.replace('return <label', 'new WebSocket("wss://example.invalid"); return <label'),
+    safeThemeToggle.replace('return <label', 'preference.current = "dark"; return <label'),
+  ]) {
+    assert.ok(validateDataCollectionControls(mutation, themeTogglePath).length > 0, 'Theme-only exception must reject unreviewed collection or effects')
+  }
+  assert.deepEqual(validateDataCollectionControls('<form><input /></form>', customerDialogPath), [])
+  assert.ok(validateDataCollectionControls('<select />', 'src/app/page.tsx').length > 0)
+  assert.ok(validateDataCollectionControls('<input />', providerDialogPath).length > 0)
+
   const safeCustomerLocation = `
     import { LEEKPAY_API_BASE } from "./leekpay.ts";
     export interface CustomerLocation { readonly countryCode: string; readonly callingCode: string; }
@@ -1252,10 +1412,7 @@ for (const file of frontendFiles) {
   if (/^src\/(?:app|components)\//.test(relativePath) && /\bfetch\s*\(/.test(source)) {
     failures.push(`Direct fetch is forbidden in UI code: ${relativePath}`)
   }
-  if (relativePath !== customerDialogPath
-    && (/<(?:form|input|select|textarea)\b|\bcontentEditable\b/i.test(source))) {
-    failures.push(`Data-collection controls are allowed only in ${customerDialogPath}: ${relativePath}`)
-  }
+  failures.push(...validateDataCollectionControls(source, relativePath))
 }
 
 const routeSources = frontendFiles

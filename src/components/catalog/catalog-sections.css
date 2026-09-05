@@ -114,6 +114,28 @@
   line-height: 1.7;
 }
 
+.dark .catalog-tabs {
+  border-color: #304159;
+  background: #111c2e;
+}
+.dark .catalog-tab { color: #b3c1d5; }
+.dark .catalog-tab:hover { color: #bfdbfe; background: #18263b; }
+.dark .catalog-tab[aria-selected="true"] {
+  color: #bfdbfe;
+  background: #233858;
+  box-shadow: 0 2px 6px #0003;
+}
+.dark .catalog-tiktok {
+  border-color: #304159;
+  background: linear-gradient(150deg, #111c2e, #18263b);
+}
+.dark .catalog-tiktok-icon { color: #93c5fd; border-color: #304e79; background: #172f50; }
+.dark .catalog-tiktok h1 { color: #e6edf7; }
+.dark .catalog-tiktok-status { color: #bfdbfe; background: #233858; }
+.dark .catalog-tiktok p { color: #b3c1d5; }
+.dark .catalog-tab:focus-visible,
+.dark .catalog-section-panel:focus-visible { outline-color: #93c5fd; }
+
 @media (max-width: 767px), (max-width: 1023px) and (max-height: 500px) and (pointer: coarse) {
   .mobile-app .catalog-tabs {
     width: auto;

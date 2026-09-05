@@ -356,7 +356,7 @@ test("customer collection is limited to validated email and WhatsApp", () => {
   assert.match(customerSource, /event\.preventDefault\(\)/);
   assert.match(customerSource, /onNext\(customer\)/);
   const requiredStars = customerSource.match(
-    /<label\b[^>]*>\s*<span aria-hidden="true" className="mr-1 text-red-600">\s*\*\s*<\/span>/g,
+    /<label\b[^>]*>\s*<span\b(?=[^>]*\baria-hidden\s*=\s*["']true["'])(?=[^>]*\bclassName\s*=\s*["'][^"']*\btext-red-600\b[^"']*["'])[^>]*>\s*\*\s*<\/span>/g,
   );
   assert.equal(requiredStars?.length, 2);
   assert.match(customerSource, /"\+ Indicatif et numéro"/);

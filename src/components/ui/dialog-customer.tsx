@@ -46,7 +46,7 @@ export function CustomerDetails({
   };
 
   const fieldClass =
-    "h-12 w-full rounded-lg border bg-white pl-11 pr-3 text-base text-slate-900 outline-none transition-shadow placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
+    "h-12 w-full rounded-lg border bg-white pl-11 pr-3 text-base text-slate-900 outline-none transition-shadow placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:bg-[#0b1220] dark:text-[#e6edf7] dark:caret-[#93c5fd] dark:placeholder:text-[#8193ad] dark:focus:border-[#93c5fd] dark:focus:ring-blue-400/30";
 
   return (
     <form
@@ -57,10 +57,13 @@ export function CustomerDetails({
       <div className="checkout-scroll checkout-customer-fields min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
         <div>
           <label
-            className="mb-2 block text-sm font-medium text-slate-800"
+            className="mb-2 block text-sm font-medium text-slate-800 dark:text-[#e6edf7]"
             htmlFor={`${id}-email`}
           >
-            <span aria-hidden="true" className="mr-1 text-red-600">
+            <span
+              aria-hidden="true"
+              className="mr-1 text-red-600 dark:text-[#fda4af]"
+            >
               *
             </span>
             {language === "fr" ? "Adresse e-mail" : "Email address"}
@@ -68,7 +71,7 @@ export function CustomerDetails({
           <div className="relative">
             <Mail
               aria-hidden="true"
-              className="pointer-events-none absolute left-3.5 top-3.5 h-5 w-5 text-slate-400"
+              className="pointer-events-none absolute left-3.5 top-3.5 h-5 w-5 text-slate-400 dark:text-[#8193ad]"
             />
             <input
               ref={emailRef}
@@ -102,13 +105,15 @@ export function CustomerDetails({
               aria-describedby={emailInvalid ? `${id}-email-error` : undefined}
               className={
                 fieldClass +
-                (emailInvalid ? " border-red-500" : " border-slate-200")
+                (emailInvalid
+                  ? " border-red-500 dark:border-[#fda4af]"
+                  : " border-slate-200 dark:border-[#304159]")
               }
             />
           </div>
           {emailInvalid && (
             <p
-              className="mt-2 text-sm text-red-600"
+              className="mt-2 text-sm text-red-600 dark:text-[#fda4af]"
               id={`${id}-email-error`}
               role="alert"
             >
@@ -121,10 +126,13 @@ export function CustomerDetails({
 
         <div>
           <label
-            className="mb-2 block text-sm font-medium text-slate-800"
+            className="mb-2 block text-sm font-medium text-slate-800 dark:text-[#e6edf7]"
             htmlFor={`${id}-whatsapp`}
           >
-            <span aria-hidden="true" className="mr-1 text-red-600">
+            <span
+              aria-hidden="true"
+              className="mr-1 text-red-600 dark:text-[#fda4af]"
+            >
               *
             </span>
             {language === "fr" ? "Numéro WhatsApp" : "WhatsApp number"}
@@ -132,7 +140,7 @@ export function CustomerDetails({
           <div className="relative">
             <MessageCircle
               aria-hidden="true"
-              className="pointer-events-none absolute left-3.5 top-3.5 h-5 w-5 text-slate-400"
+              className="pointer-events-none absolute left-3.5 top-3.5 h-5 w-5 text-slate-400 dark:text-[#8193ad]"
             />
             <input
               ref={whatsappRef}
@@ -159,13 +167,15 @@ export function CustomerDetails({
               }
               className={
                 fieldClass +
-                (whatsappInvalid ? " border-red-500" : " border-slate-200")
+                (whatsappInvalid
+                  ? " border-red-500 dark:border-[#fda4af]"
+                  : " border-slate-200 dark:border-[#304159]")
               }
             />
           </div>
           {whatsappInvalid && (
             <p
-              className="mt-2 text-sm text-red-600"
+              className="mt-2 text-sm text-red-600 dark:text-[#fda4af]"
               id={`${id}-whatsapp-error`}
               role="alert"
             >
@@ -177,7 +187,7 @@ export function CustomerDetails({
         </div>
       </div>
 
-      <div className="checkout-actions flex shrink-0 gap-3 border-t border-slate-100 p-4 sm:px-6">
+      <div className="checkout-actions flex shrink-0 gap-3 border-t border-slate-100 p-4 dark:border-[#304159] sm:px-6">
         <Button
           className="checkout-back-action h-11 gap-2"
           onClick={onBack}
