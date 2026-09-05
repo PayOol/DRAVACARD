@@ -3,51 +3,196 @@
 import MainLayout from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/lib/language-context";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import {
+  type LeekPayOrder,
+  PaymentApiError,
+  getLeekPayOrderStatus,
+  readOrderToken,
+} from "@/lib/leekpay";
+import { AlertTriangle, CheckCircle2, LoaderCircle } from "lucide-react";
 import Link from "next/link";
-
-type PaymentResultStatus = "success" | "failure";
+import { useEffect, useState } from "react";
 
 interface PaymentResultProps {
-  status: PaymentResultStatus;
+  status: "success" | "failure";
 }
 
+type VerificationState =
+  | "checking"
+  | "pending"
+  | "paid"
+  | "failed"
+  | "unconfirmed"
+  | "missing";
+
 const content = {
-  success: {
-    title: {
-      fr: "Retour de paiement reçu",
-      en: "Payment return received",
-    },
+  checking: {
+    title: { fr: "Vérification du paiement", en: "Checking your payment" },
     description: {
-      fr: "Le parcours LeekPay a renvoyé vers DRAVA. La commande doit être vérifiée avant toute émission ou livraison de carte.",
-      en: "The LeekPay flow returned to DRAVA. The order must be verified before any card is issued or delivered.",
+      fr: "Nous vérifions le statut de votre paiement auprès de LeekPay.",
+      en: "We are checking your payment status with LeekPay.",
     },
     notice: {
-      fr: "Cette page est uniquement un écran de retour. Elle ne constitue pas une validation définitive de la commande.",
-      en: "This page is only a return screen. It is not final validation of the order.",
+      fr: "Veuillez patienter. Le retour sur cette page ne confirme pas à lui seul le paiement.",
+      en: "Please wait. Returning to this page does not, on its own, confirm payment.",
     },
   },
-  failure: {
-    title: {
-      fr: "Paiement non finalisé",
-      en: "Payment not completed",
-    },
+  pending: {
+    title: { fr: "Paiement en attente", en: "Payment pending" },
     description: {
-      fr: "Le paiement a été annulé ou n’a pas pu aboutir. Aucun achat n’est considéré comme confirmé.",
-      en: "The payment was cancelled or could not be completed. No purchase is considered confirmed.",
+      fr: "LeekPay n’a pas encore confirmé ce paiement. Aucun paiement n’est considéré comme validé pour le moment.",
+      en: "LeekPay has not confirmed this payment yet. No payment is considered validated at this time.",
+    },
+    notice: {
+      fr: "Ne payez pas une seconde fois pendant la vérification. Vous pouvez vérifier à nouveau le statut si nécessaire.",
+      en: "Do not pay again while verification is in progress. You can check the status again if needed.",
+    },
+  },
+  paid: {
+    title: { fr: "Paiement confirmé", en: "Payment confirmed" },
+    description: {
+      fr: "Votre paiement a été confirmé auprès de LeekPay par notre serveur sécurisé.",
+      en: "Your payment has been confirmed with LeekPay by our secure server.",
+    },
+    notice: {
+      fr: "La confirmation du paiement est distincte de l’émission et de la livraison de votre carte.",
+      en: "Payment confirmation is separate from the issue and delivery of your card.",
+    },
+  },
+  failed: {
+    title: { fr: "Paiement non finalisé", en: "Payment not completed" },
+    description: {
+      fr: "LeekPay indique que ce paiement a échoué, a été annulé ou a expiré.",
+      en: "LeekPay reports that this payment failed, was cancelled or expired.",
     },
     notice: {
       fr: "Vous pouvez retourner au catalogue et réessayer lorsque vous le souhaitez.",
       en: "You can return to the catalogue and try again whenever you wish.",
     },
   },
+  unconfirmed: {
+    title: { fr: "Paiement non confirmé", en: "Payment not confirmed" },
+    description: {
+      fr: "Le statut du paiement n’a pas pu être vérifié. Cela ne signifie pas que votre paiement a échoué.",
+      en: "The payment status could not be verified. This does not mean your payment failed.",
+    },
+    notice: {
+      fr: "Vérifiez à nouveau le statut avant de recommencer un paiement afin d’éviter un double paiement.",
+      en: "Check the status again before starting another payment to avoid paying twice.",
+    },
+  },
+  missing: {
+    title: { fr: "Paiement non confirmé", en: "Payment not confirmed" },
+    description: {
+      fr: "Aucune référence de commande valide n’est présente sur cette page.",
+      en: "There is no valid order reference on this page.",
+    },
+    notice: {
+      fr: "Ouvrir directement cette page ne prouve pas qu’un paiement a été effectué.",
+      en: "Opening this page directly is not proof that a payment was made.",
+    },
+  },
 } as const;
 
 export default function PaymentResult({ status }: PaymentResultProps) {
   const { language } = useLanguage();
-  const isSuccess = status === "success";
-  const copy = content[status];
-  const Icon = isSuccess ? CheckCircle2 : AlertTriangle;
+  const [verification, setVerification] =
+    useState<VerificationState>("checking");
+  const [order, setOrder] = useState<LeekPayOrder | null>(null);
+  const [isChecking, setIsChecking] = useState(true);
+  const [canRetry, setCanRetry] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: an explicit retry restarts this bounded verification cycle.
+  useEffect(() => {
+    // Neither the return pathname nor a query parameter is payment evidence.
+    const orderToken = readOrderToken(window.location.hash);
+    setCanRetry(Boolean(orderToken));
+    setOrder(null);
+    if (!orderToken) {
+      setVerification("missing");
+      setIsChecking(false);
+      return;
+    }
+
+    let active = true;
+    let delay = 2000;
+    let pollTimer: ReturnType<typeof setTimeout> | undefined;
+    let lastOrder: LeekPayOrder | null = null;
+    const controller = new AbortController();
+    setVerification("checking");
+    setIsChecking(true);
+
+    const deadlineTimer = setTimeout(() => {
+      controller.abort();
+      clearTimeout(pollTimer);
+      if (active) {
+        setVerification(lastOrder ? "pending" : "unconfirmed");
+        setIsChecking(false);
+      }
+    }, 90000);
+
+    const finish = (next: VerificationState) => {
+      clearTimeout(deadlineTimer);
+      clearTimeout(pollTimer);
+      setVerification(next);
+      setIsChecking(false);
+    };
+
+    const poll = async () => {
+      let retryAfterMs = 0;
+      try {
+        const result = await getLeekPayOrderStatus(
+          orderToken,
+          controller.signal,
+        );
+        if (!active || controller.signal.aborted) return;
+        lastOrder = result;
+        setOrder(result);
+        if (result.status === "paid" && result.verified === true) {
+          finish("paid");
+          return;
+        }
+        if (
+          result.status === "failed" ||
+          result.status === "cancelled" ||
+          result.status === "expired"
+        ) {
+          finish("failed");
+          return;
+        }
+        setVerification("pending");
+      } catch (error) {
+        if (!active || controller.signal.aborted) return;
+        if (error instanceof PaymentApiError && !error.retryable) {
+          finish("unconfirmed");
+          return;
+        }
+        if (error instanceof PaymentApiError) retryAfterMs = error.retryAfterMs;
+        setVerification("checking");
+      }
+      if (active && !controller.signal.aborted) {
+        pollTimer = setTimeout(poll, Math.max(delay, retryAfterMs));
+        delay = Math.min(delay * 2, 10000);
+      }
+    };
+
+    void poll();
+    return () => {
+      active = false;
+      controller.abort();
+      clearTimeout(pollTimer);
+      clearTimeout(deadlineTimer);
+    };
+  }, [attempt]);
+
+  const isPaid = verification === "paid" && order?.verified === true;
+  const copy = content[verification];
+  const Icon = isChecking
+    ? LoaderCircle
+    : isPaid
+      ? CheckCircle2
+      : AlertTriangle;
 
   return (
     <MainLayout>
@@ -56,39 +201,70 @@ export default function PaymentResult({ status }: PaymentResultProps) {
           <div className="rounded-2xl border border-gray-100 bg-white p-6 text-center shadow-lg md:p-10">
             <div
               className={`mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full ${
-                isSuccess
+                isPaid
                   ? "bg-emerald-100 text-emerald-600"
                   : "bg-amber-100 text-amber-700"
               }`}
             >
-              <Icon aria-hidden="true" className="h-9 w-9" />
+              <Icon
+                aria-hidden="true"
+                className={`h-9 w-9 ${isChecking ? "animate-spin" : ""}`}
+              />
             </div>
 
-            <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">
-              {copy.title[language]}
-            </h1>
-            <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-gray-600 md:text-lg">
-              {copy.description[language]}
-            </p>
+            <div aria-live="polite" aria-atomic="true">
+              <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">
+                {verification === "missing" && status === "failure"
+                  ? language === "fr"
+                    ? "Paiement non finalisé"
+                    : "Payment not completed"
+                  : copy.title[language]}
+              </h1>
+              <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-gray-600 md:text-lg">
+                {copy.description[language]}
+              </p>
 
-            <div
-              aria-live="polite"
-              className={`mx-auto mt-6 max-w-xl rounded-xl border p-4 text-left text-sm leading-6 ${
-                isSuccess
-                  ? "border-blue-200 bg-blue-50 text-blue-900"
-                  : "border-amber-200 bg-amber-50 text-amber-900"
-              }`}
-            >
-              {copy.notice[language]}
+              {isPaid && order && (
+                <p className="mt-4 font-semibold text-emerald-700">
+                  {order.amount.toLocaleString(
+                    language === "fr" ? "fr-FR" : "en-US",
+                  )}{" "}
+                  Fcfa
+                </p>
+              )}
+
+              <div
+                className={`mx-auto mt-6 max-w-xl rounded-xl border p-4 text-left text-sm leading-6 ${
+                  isPaid
+                    ? "border-blue-200 bg-blue-50 text-blue-900"
+                    : "border-amber-200 bg-amber-50 text-amber-900"
+                }`}
+              >
+                {copy.notice[language]}
+              </div>
             </div>
 
-            <Button asChild className="mt-8 bg-blue-600 hover:bg-blue-700">
-              <Link href="/">
-                {language === "fr"
-                  ? "Retour au catalogue"
-                  : "Back to catalogue"}
-              </Link>
-            </Button>
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
+              {canRetry &&
+                !isChecking &&
+                !isPaid &&
+                verification !== "failed" && (
+                  <Button
+                    onClick={() => setAttempt((current) => current + 1)}
+                    type="button"
+                    variant="outline"
+                  >
+                    {language === "fr" ? "Vérifier à nouveau" : "Check again"}
+                  </Button>
+                )}
+              <Button asChild className="bg-blue-600 hover:bg-blue-700">
+                <Link href="/">
+                  {language === "fr"
+                    ? "Retour au catalogue"
+                    : "Back to catalogue"}
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
       </section>

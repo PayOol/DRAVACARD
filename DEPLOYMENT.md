@@ -1,8 +1,49 @@
 # Publication sur GitHub Pages
 
-GitHub Pages est l'unique cible de publication de DRAVACARD. Les configurations Netlify, Render, Docker, Nginx et VPS ont été retirées.
+GitHub Pages reste l'unique hébergement de l'interface DRAVACARD. Le paiement utilise séparément un Cloudflare Worker REST à l'adresse `https://drava-leekpay.sebpay-proxy.workers.dev`. Les configurations Netlify, Render, Docker, Nginx et VPS restent retirées.
 
-> **Prérequis de forfait** — GitHub Pages n'est disponible depuis un dépôt privé qu'avec GitHub Pro, Team ou Enterprise. Avec GitHub Free, conservez ce dépôt privé et mettez le forfait à niveau, ou publiez depuis un dépôt public dont l'historique a d'abord été assaini. Ne rendez pas ce dépôt public tant que les anciens identifiants Soleas n'ont pas été révoqués et retirés de l'historique.
+> **Dépôt public et historique** — ce dépôt est public. Considérez toute ancienne valeur présente dans son historique comme exposée : révoquez-la chez le fournisseur, purgez les caches concernés et ne vous contentez jamais de la supprimer du dernier commit.
+
+## Déployer le proxy Cloudflare Worker
+
+Le Worker doit être disponible avant de publier une interface qui active le bouton LeekPay.
+
+1. Ouvrez un terminal dans `worker/` et installez exactement le lockfile :
+
+   ```bash
+   npm ci
+   ```
+
+2. Créez l'espace KV de production si nécessaire :
+
+   ```bash
+   npx wrangler kv namespace create ORDERS
+   ```
+
+   Reportez l'identifiant renvoyé dans le binding `ORDERS` de la configuration Wrangler. Ne réutilisez pas un namespace de test pour la production.
+
+3. Vérifiez que la configuration déclare les bindings `ORDERS`, `CREATE_LIMITER` et `STATUS_LIMITER`. Les rate limiters distribués réduisent les abus mais restent approximatifs ; ils ne remplacent ni la validation serveur ni la surveillance.
+
+4. Enregistrez la clé serveur dans le gestionnaire chiffré de Cloudflare, sans la copier dans un fichier :
+
+   ```bash
+   npx wrangler secret put LEEKPAY_SECRET_KEY
+   ```
+
+   Saisissez la valeur uniquement dans l'invite Wrangler. N'utilisez jamais `wrangler.toml`, `.dev.vars`, `.env`, GitHub Actions ou une variable `NEXT_PUBLIC_*` pour cette valeur réelle.
+
+5. Exécutez les contrôles du Worker puis déployez depuis ce dossier :
+
+   ```bash
+   npm test
+   npm run check
+   npm run build
+   npm run deploy
+   ```
+
+6. Vérifiez les réponses CORS pour les origines prévues, les limites de requêtes et les journaux sans données sensibles. CORS n'authentifie pas l'appelant : les deux routes publiques doivent toujours valider méthode, taille et forme du corps.
+
+Le proxy crée un checkout à partir d'un `productId`; le montant et `XOF` viennent exclusivement du catalogue Worker. La vérification de statut relit LeekPay avec l'authentification serveur et compare l'identifiant, le montant et la devise stockés dans `ORDERS`. En raison de la cohérence éventuelle de KV, une page de retour peut devoir réessayer brièvement une commande encore introuvable. Un paiement vérifié ne doit jamais déclencher automatiquement l'émission d'une carte.
 
 ## Première activation
 
@@ -58,6 +99,8 @@ Avant tout déploiement, le workflow :
 - exécute le lint et la vérification TypeScript ;
 - produit l'export statique avec le `basePath` Pages ;
 - analyse le contenu final avant de téléverser l'artefact.
+
+Le déploiement Pages n'embarque ni le code du Worker ni son secret. Si l'URL du Worker change, mettez à jour ensemble l'adaptateur frontal, la CSP et les garde-fous de sécurité avant tout déploiement.
 
 Les pull requests vers `master` exécutent les mêmes contrôles sans déployer. Seuls un push ou un lancement manuel sur `master` peuvent publier.
 

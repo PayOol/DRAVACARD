@@ -2,20 +2,31 @@
 
 ## Financial operations
 
-Card checkout initiation is enabled through LeekPay's hosted payment page. Top-ups, balance checks, withdrawals, newsletter and reseller data collection, the global WhatsApp contact form, and the demo admin route remain disabled.
+Card checkout initiation uses a dedicated Cloudflare Worker REST proxy. Top-ups, balance checks, withdrawals, newsletter and reseller data collection, the global WhatsApp contact form, and the demo admin route remain disabled.
 
-The LeekPay `pk_live_*` publishable key is intentionally exposed to the browser. A LeekPay secret key (`sk_live_*` or `sk_test_*`) must never be added to this repository, a `NEXT_PUBLIC_*` variable, or a browser bundle. DRAVA sends the displayed numeric price to LeekPay with the provider currency code `XOF`; it does not collect payment details itself.
+Neither a LeekPay public key nor a LeekPay secret key belongs in the Pages source, a `NEXT_PUBLIC_*` variable, a browser bundle, GitHub Actions configuration, or a committed environment file. `LEEKPAY_SECRET_KEY` is an encrypted Cloudflare Worker secret and is read only as `env.LEEKPAY_SECRET_KEY` at runtime.
 
-The browser-side `onSuccess` callback and the `/payment-success` page are interface signals only. Before issuing or delivering a card, manually verify the payment status, amount, currency, and intended product in the LeekPay dashboard. Client-side amounts and descriptions can be modified by a visitor and must never authorize fulfillment on their own.
+The browser sends only an immutable `productId` to `POST /api/checkout`. The Worker owns the product catalogue, amount, description and `XOF` currency. It stores the LeekPay checkout identifier and expected values under a random order token in the `ORDERS` KV namespace. The static return and cancellation pages receive only `#order=` followed by 64 hexadecimal characters.
+
+`POST /api/orders/status` accepts that opaque order token. The Worker retrieves the stored checkout identifier, performs an authenticated server-to-server `GET` to LeekPay, and compares the provider identifier, amount and currency with the stored order. A response may contain `verified: true` only when the authenticated provider response is `paid` and every comparison succeeds.
 
 The server implementation must:
 
-- keep Soleas, LeekPay secret keys, and webhook credentials in a runtime secret manager, never in `NEXT_PUBLIC_*` variables or browser bundles;
-- accept immutable product identifiers and calculate prices, currencies, fees, order identifiers, and callback URLs on the server;
-- verify payment state and amount through an authenticated provider API or signed, idempotent webhook before fulfillment;
-- use provider-hosted fields or tokenization for card data and never store or email a full PAN, CVV, or withdrawal code;
-- authenticate card owners, enforce authorization, rate limits, attempt limits, expiry, and single use for withdrawals;
-- validate request types and sizes and add abuse protection to public forms.
+- keep all provider credentials in a runtime secret manager, never in source, logs, responses or browser storage;
+- accept immutable product identifiers and calculate prices, currencies, descriptions and callback URLs on the server;
+- validate methods, content types, body sizes, JSON shape and response shape;
+- use cryptographically random, unguessable order tokens and expire stored orders;
+- authenticate every provider status lookup and fail closed on network, parsing or comparison errors;
+- inspect upstream redirects manually and reject every 3xx response, so the bearer secret is never forwarded to another origin;
+- use provider-hosted payment pages and never collect or proxy a full PAN, CVV, OTP or withdrawal code;
+- rate-limit both checkout creation and status polling, while treating those distributed limits as approximate abuse controls;
+- keep payment confirmation separate from fulfillment. No browser callback, redirect or `verified` response may automatically issue, reveal or deliver a card.
+
+CORS limits which browsers can read a response; it is not authentication. The public proxy endpoints remain reachable outside a browser, so server-side validation, rate limits and monitoring are mandatory.
+
+Cloudflare KV is eventually consistent. A result page can briefly receive a not-found or pending response immediately after redirection and should retry with a bounded delay. It must never reinterpret an unavailable result as paid.
+
+The integration deliberately uses authenticated polling rather than trusting a browser callback or an unauthenticated webhook signature.
 
 ## Incident action required
 
@@ -27,8 +38,9 @@ Any full card data previously received through FormSubmit, email, or local brows
 
 - Use the maintained Node.js 24 LTS toolchain declared by this repository.
 - Publish only through the pinned GitHub Pages workflow on the protected `master` branch.
+- Deploy the Worker from `worker/` and verify `ORDERS`, `CREATE_LIMITER`, `STATUS_LIMITER`, and the encrypted `LEEKPAY_SECRET_KEY` binding before enabling checkout.
 - Keep Pages configured with **Source: GitHub Actions** and enable **Enforce HTTPS** for the custom domain.
-- Run `npm run security:check`, `npm run lint`, `npm run build`, and `npm run security:output` before every deployment.
+- Run the root security/build checks and the Worker tests/typecheck before every deployment.
 - Remember that GitHub Pages cannot set repository-defined HTTP security headers; the in-document CSP is defense in depth, not an equivalent replacement for HSTS or `frame-ancestors`.
 - Purge abandoned platform and service-worker caches after a security release, then verify the live routes and assets.
 

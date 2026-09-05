@@ -1,8 +1,5 @@
-export const LEEKPAY_SCRIPT_URL = "https://leekpay.fr/js/leekpay.js";
-
-export const LEEKPAY_PUBLISHABLE_KEY =
-  "pk_live_L1EjmvxLXb4Djtyk0bN78dmQVIPPBYfh";
-
+export const LEEKPAY_API_BASE =
+  "https://drava-leekpay.sebpay-proxy.workers.dev";
 export const LEEKPAY_CHECKOUT_CURRENCY = "XOF" as const;
 
 export interface PaymentCardSelection {
@@ -12,191 +9,186 @@ export interface PaymentCardSelection {
   readonly displayCurrency: string;
 }
 
-export interface LeekPaySuccessData {
-  readonly status: string | null;
-  readonly amount: number | null;
-  readonly currency: string | null;
-  readonly payment_id: string | null;
+export interface LeekPayCheckout {
+  readonly checkoutUrl: string;
+  readonly orderToken: string;
 }
 
-export type LeekPayFailureCode =
+export type LeekPayOrderStatus =
+  | "pending"
+  | "processing"
+  | "paid"
+  | "failed"
   | "cancelled"
-  | "invalid_amount"
-  | "invalid_publishable_key"
-  | "invalid_return_url"
-  | "sdk_unavailable"
-  | "checkout_error";
+  | "expired";
 
-export interface LeekPayFailure {
-  readonly code: LeekPayFailureCode;
-  readonly providerCode?: string;
+export interface LeekPayOrder {
+  readonly status: LeekPayOrderStatus;
+  readonly verified: boolean;
+  readonly productId: string;
+  readonly amount: number;
+  readonly currency: typeof LEEKPAY_CHECKOUT_CURRENCY;
 }
 
-interface LeekPayCheckoutOptions {
-  amount: number;
-  currency: typeof LEEKPAY_CHECKOUT_CURRENCY;
-  apiKey: string;
-  description: string;
-  returnUrl: string;
-  onSuccess: (data: unknown) => void;
-  onCancel: () => void;
-  onError: (error: unknown) => void;
-}
+export class PaymentApiError extends Error {
+  readonly retryable: boolean;
+  readonly retryAfterMs: number;
 
-interface LeekPaySdk {
-  checkout: (options: LeekPayCheckoutOptions) => void;
-  close?: (triggerCancel?: boolean) => void;
-}
-
-declare global {
-  interface Window {
-    LeekPay?: LeekPaySdk;
+  constructor(retryable = true, retryAfterMs = 0) {
+    super("Payment service unavailable");
+    this.name = "PaymentApiError";
+    this.retryable = retryable;
+    this.retryAfterMs = retryAfterMs;
   }
 }
 
-interface StartLeekPayCheckoutOptions {
-  amount: number;
-  description: string;
-  returnUrl: string;
-  onSuccess: (data: LeekPaySuccessData) => void;
-  onCancel: () => void;
-  onError: (failure: LeekPayFailure) => void;
+const productIds = new Set([
+  "visa-basic",
+  "mastercard-basic",
+  "mastercard-premium",
+  "mastercard-platinum",
+]);
+const checkoutHosts = new Set([
+  "leekpay.fr",
+  "www.leekpay.fr",
+  "leekpay.me",
+  "www.leekpay.me",
+]);
+const orderStatuses = new Set<LeekPayOrderStatus>([
+  "pending",
+  "processing",
+  "paid",
+  "failed",
+  "cancelled",
+  "expired",
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export type StartLeekPayCheckoutResult =
-  | { readonly started: true }
-  | { readonly started: false; readonly failure: LeekPayFailure };
-
-const safeProviderCodePattern = /^[A-Za-z0-9_.-]{1,64}$/;
-const leekPayPublishableKeyPattern = /^pk_live_[A-Za-z0-9]{32}$/;
-
-function toSafeString(value: unknown, maximumLength: number): string | null {
-  if (typeof value !== "string") return null;
-
-  const normalized = value.trim();
-  if (!normalized || normalized.length > maximumLength) return null;
-  return normalized;
+export function isValidOrderToken(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 }
 
-function normalizeSuccessData(data: unknown): LeekPaySuccessData {
-  const payload =
-    typeof data === "object" && data !== null
-      ? (data as Record<string, unknown>)
-      : {};
-  const parsedAmount =
-    typeof payload.amount === "number"
-      ? payload.amount
-      : typeof payload.amount === "string"
-        ? Number(payload.amount)
-        : Number.NaN;
-
-  return {
-    status: toSafeString(payload.status, 64),
-    amount:
-      Number.isFinite(parsedAmount) && parsedAmount >= 0 ? parsedAmount : null,
-    currency: toSafeString(payload.currency, 8)?.toUpperCase() ?? null,
-    payment_id: toSafeString(payload.payment_id, 128),
-  };
+export function readOrderToken(fragment: string): string | null {
+  const match = /^#order=([a-f0-9]{64})$/.exec(fragment);
+  return match?.[1] ?? null;
 }
 
-function normalizeFailure(error: unknown): LeekPayFailure {
-  if (typeof error !== "object" || error === null) {
-    return { code: "checkout_error" };
-  }
-
-  const rawCode = (error as Record<string, unknown>).error;
-  const providerCode =
-    typeof rawCode === "string" && safeProviderCodePattern.test(rawCode)
-      ? rawCode
-      : undefined;
-
-  return providerCode
-    ? { code: "checkout_error", providerCode }
-    : { code: "checkout_error" };
-}
-
-export function isLeekPaySdkReady(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof window.LeekPay?.checkout === "function"
-  );
-}
-
-export function isLeekPayPublishableKeyValid(): boolean {
-  return leekPayPublishableKeyPattern.test(LEEKPAY_PUBLISHABLE_KEY);
-}
-
-function isSafeReturnUrl(returnUrl: string): boolean {
-  if (typeof window === "undefined") return false;
-
+function isSafeCheckoutUrl(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 2048) return false;
   try {
-    const parsedUrl = new URL(returnUrl);
+    const url = new URL(value);
     return (
-      parsedUrl.origin === window.location.origin &&
-      (parsedUrl.protocol === "https:" || parsedUrl.protocol === "http:")
+      url.protocol === "https:" &&
+      checkoutHosts.has(url.hostname) &&
+      !url.port &&
+      !url.username &&
+      !url.password
     );
   } catch {
     return false;
   }
 }
 
-export function startLeekPayCheckout({
-  amount,
-  description,
-  returnUrl,
-  onSuccess,
-  onCancel,
-  onError,
-}: StartLeekPayCheckoutOptions): StartLeekPayCheckoutResult {
-  if (!Number.isSafeInteger(amount) || amount <= 0) {
-    return {
-      started: false,
-      failure: { code: "invalid_amount" },
-    };
-  }
-
-  if (!isLeekPayPublishableKeyValid()) {
-    return {
-      started: false,
-      failure: { code: "invalid_publishable_key" },
-    };
-  }
-
-  if (!isSafeReturnUrl(returnUrl)) {
-    return {
-      started: false,
-      failure: { code: "invalid_return_url" },
-    };
-  }
-
-  if (!isLeekPaySdkReady()) {
-    return {
-      started: false,
-      failure: { code: "sdk_unavailable" },
-    };
-  }
+async function requestPaymentApi(
+  path: "/api/checkout" | "/api/orders/status",
+  body: { productId: string } | { orderToken: string },
+  signal?: AbortSignal,
+): Promise<unknown> {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener("abort", abort, { once: true });
+  const timeout = setTimeout(abort, 20000);
 
   try {
-    window.LeekPay?.checkout({
-      amount,
-      currency: LEEKPAY_CHECKOUT_CURRENCY,
-      apiKey: LEEKPAY_PUBLISHABLE_KEY,
-      description: description.slice(0, 160),
-      returnUrl,
-      onSuccess: (data) => onSuccess(normalizeSuccessData(data)),
-      onCancel,
-      onError: (error) => onError(normalizeFailure(error)),
+    const response = await fetch(`${LEEKPAY_API_BASE}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      credentials: "omit",
+      cache: "no-store",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
+      signal: controller.signal,
     });
-    return { started: true };
-  } catch {
-    return {
-      started: false,
-      failure: { code: "checkout_error" },
-    };
+    if (!response.ok) {
+      const retryAfter = Number(response.headers.get("retry-after"));
+      throw new PaymentApiError(
+        response.status === 404 ||
+          response.status === 408 ||
+          response.status === 429 ||
+          response.status >= 500,
+        Number.isFinite(retryAfter) && retryAfter > 0
+          ? Math.min(retryAfter * 1000, 60000)
+          : 0,
+      );
+    }
+    if (!response.headers.get("content-type")?.includes("application/json")) {
+      throw new PaymentApiError(false);
+    }
+    const text = await response.text();
+    if (text.length > 16384) throw new PaymentApiError(false);
+    return JSON.parse(text) as unknown;
+  } catch (error) {
+    if (error instanceof PaymentApiError) throw error;
+    throw new PaymentApiError();
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener("abort", abort);
   }
 }
 
-export function closeLeekPayCheckout(): void {
-  if (typeof window === "undefined") return;
-  window.LeekPay?.close?.(true);
+export async function createLeekPayCheckout(
+  productId: string,
+  signal?: AbortSignal,
+): Promise<LeekPayCheckout> {
+  if (!productIds.has(productId)) throw new PaymentApiError(false);
+  const data = await requestPaymentApi("/api/checkout", { productId }, signal);
+  if (
+    !isRecord(data) ||
+    !isSafeCheckoutUrl(data.checkoutUrl) ||
+    !isValidOrderToken(data.orderToken)
+  ) {
+    throw new PaymentApiError(false);
+  }
+  return { checkoutUrl: data.checkoutUrl, orderToken: data.orderToken };
+}
+
+export async function getLeekPayOrderStatus(
+  orderToken: string,
+  signal?: AbortSignal,
+): Promise<LeekPayOrder> {
+  if (!isValidOrderToken(orderToken)) throw new PaymentApiError(false);
+  const data = await requestPaymentApi(
+    "/api/orders/status",
+    { orderToken },
+    signal,
+  );
+  if (
+    !isRecord(data) ||
+    typeof data.status !== "string" ||
+    !orderStatuses.has(data.status as LeekPayOrderStatus) ||
+    data.verified !== (data.status === "paid") ||
+    typeof data.productId !== "string" ||
+    !productIds.has(data.productId) ||
+    typeof data.amount !== "number" ||
+    !Number.isSafeInteger(data.amount) ||
+    data.amount <= 0 ||
+    data.currency !== LEEKPAY_CHECKOUT_CURRENCY
+  ) {
+    throw new PaymentApiError(false);
+  }
+  return {
+    status: data.status as LeekPayOrderStatus,
+    verified: data.verified,
+    productId: data.productId,
+    amount: data.amount,
+    currency: data.currency,
+  };
 }

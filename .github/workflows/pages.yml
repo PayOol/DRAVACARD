@@ -12,6 +12,35 @@ on:
 permissions: {}
 
 jobs:
+  worker:
+    name: Verify payment proxy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.20.0'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - name: Install and audit proxy dependencies
+        run: npm ci && npm audit --audit-level=low
+      - name: Generate binding types and type-check
+        run: npm run types && npm run check
+      - name: Test payment validation without live payments
+        run: npm test
+      - name: Validate Worker deployment bundle
+        run: npm run build
+
   build:
     name: Verify and build static site
     runs-on: ubuntu-latest
@@ -45,6 +74,9 @@ jobs:
       - name: Lint and type-check
         run: npm run lint
 
+      - name: Test payment client with mocked responses
+        run: npm run test:payments
+
       - name: Build static export for GitHub Pages
         run: npm run build
         env:
@@ -67,7 +99,7 @@ jobs:
   deploy:
     name: Deploy to GitHub Pages
     if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-    needs: build
+    needs: [build, worker]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:

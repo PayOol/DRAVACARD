@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+**/node_modules/
 /.pnp
 .pnp.js
 .yarn/*
@@ -33,6 +34,11 @@ yarn-error.log*
 # local env files and deployment secrets
 .env*
 !.env.example
+.dev.vars*
+.wrangler/
+worker/worker-configuration.d.ts
+worker/dist/
+/logs/
 
 # vercel
 .vercel

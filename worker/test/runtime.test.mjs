@@ -1,0 +1,104 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { stripTypeScriptTypes } from "node:module";
+import { it } from "node:test";
+import { Miniflare, convertV4MiniflareOptions, Response as RuntimeResponse } from "miniflare";
+
+// Miniflare/workerd ships with our exact pinned Wrangler version. Every outbound
+// fetch is intercepted locally; these tests never contact a payment provider.
+it("runs the Worker in workerd with actual KV/rate bindings and blocked external network", { timeout: 30_000 }, async () => {
+  const source = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const config = JSON.parse(await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
+  let outboundCalls = 0;
+  let allowMockCheckout = false;
+  let simulateRedirect = false;
+  let createdBody;
+  const runtime = new Miniflare(convertV4MiniflareOptions({
+    name: "drava-payment-runtime-test",
+    modules: true,
+    script: stripTypeScriptTypes(source),
+    compatibilityDate: config.compatibility_date,
+    compatibilityFlags: config.compatibility_flags,
+    cf: false,
+    telemetry: { enabled: false },
+    logRequests: false,
+    bindings: { ENVIRONMENT: "production", LOCAL_ORIGIN: "", LEEKPAY_SECRET_KEY: "test-only-provider-credential" },
+    kvNamespaces: ["ORDERS"],
+    ratelimits: Object.fromEntries(config.ratelimits.map((binding) => [binding.name, {
+      namespace_id: binding.namespace_id, simple: binding.simple,
+    }])),
+    outboundService: async (request) => {
+      outboundCalls++;
+      if (allowMockCheckout) {
+        assert.equal(request.headers.get("Authorization"), "Bearer test-only-provider-credential");
+        if (simulateRedirect) return RuntimeResponse.redirect("https://attacker.example/pay", 302);
+        if (request.method === "POST") {
+          assert.equal(request.url, "https://leekpay.fr/api/v1/checkout");
+          createdBody = await request.json();
+          return RuntimeResponse.json({ success: true, data: {
+            id: "checkout_runtime", payment_url: "https://leekpay.me/pay_runtime", amount: 5000, currency: "XOF",
+            status: "pending", return_url: createdBody.return_url,
+          } }, { status: 201 });
+        }
+        assert.equal(request.method, "GET");
+        assert.equal(request.url, "https://leekpay.fr/api/v1/checkout/checkout_runtime");
+        return RuntimeResponse.json({ success: true, data: { id: "checkout_runtime", amount: 5000, currency: "XOF", status: "paid" } });
+      }
+      return RuntimeResponse.json({ error: "outbound-network-blocked-in-test" }, { status: 503 });
+    },
+  }));
+  try {
+    const health = await runtime.dispatchFetch("https://runtime.example/health");
+    assert.equal(health.status, 200);
+    assert.deepEqual(await health.json(), { status: "ready" });
+    const headers = { Origin: "https://drava.click", "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.24" };
+    const preflight = await runtime.dispatchFetch("https://runtime.example/api/checkout", { method: "OPTIONS", headers: {
+      Origin: headers.Origin, "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type",
+    } });
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get("Access-Control-Allow-Origin"), headers.Origin);
+    const invalid = await runtime.dispatchFetch("https://runtime.example/api/checkout", {
+      method: "POST", headers, body: JSON.stringify({ productId: "visa-basic", amount: 1 }),
+    });
+    assert.equal(invalid.status, 400);
+    assert.deepEqual(await invalid.json(), { error: { code: "invalid_product" } });
+    const unknown = await runtime.dispatchFetch("https://runtime.example/api/orders/status", {
+      method: "POST", headers, body: JSON.stringify({ orderToken: "a".repeat(64) }),
+    });
+    assert.equal(unknown.status, 404);
+    assert.deepEqual(await unknown.json(), { error: { code: "order_not_found" } });
+    const forbidden = await runtime.dispatchFetch("https://runtime.example/api/checkout", {
+      method: "POST", headers: { ...headers, Origin: "https://attacker.example" }, body: JSON.stringify({ productId: "visa-basic" }),
+    });
+    assert.equal(forbidden.status, 403);
+    assert.equal(forbidden.headers.get("Access-Control-Allow-Origin"), null);
+    assert.equal(outboundCalls, 0);
+    allowMockCheckout = true;
+    const created = await runtime.dispatchFetch("https://runtime.example/api/checkout", {
+      method: "POST", headers, body: JSON.stringify({ productId: "visa-basic" }),
+    });
+    const createdPayload = await created.json();
+    assert.equal(created.status, 201, JSON.stringify(createdPayload));
+    assert.equal(createdPayload.checkoutUrl, "https://leekpay.me/pay_runtime");
+    assert.match(createdPayload.orderToken, /^[a-f0-9]{64}$/);
+    assert.equal(createdBody.amount, 5000);
+    assert.equal(createdBody.currency, "XOF");
+    const checked = await runtime.dispatchFetch("https://runtime.example/api/orders/status", {
+      method: "POST", headers, body: JSON.stringify({ orderToken: createdPayload.orderToken }),
+    });
+    const checkedPayload = await checked.json();
+    assert.equal(checked.status, 200, JSON.stringify(checkedPayload));
+    assert.deepEqual(checkedPayload, { status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF" });
+    assert.equal(outboundCalls, 2);
+    simulateRedirect = true;
+    const redirected = await runtime.dispatchFetch("https://runtime.example/api/checkout", {
+      method: "POST", headers, body: JSON.stringify({ productId: "visa-basic" }),
+    });
+    assert.equal(redirected.status, 502);
+    assert.deepEqual(await redirected.json(), { error: { code: "provider_unavailable" } });
+    // Exactly one additional provider fetch: never follow Location with Authorization.
+    assert.equal(outboundCalls, 3);
+  } finally {
+    await runtime.dispose();
+  }
+});

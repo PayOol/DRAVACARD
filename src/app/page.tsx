@@ -8,10 +8,6 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { withBasePath } from "@/lib/base-path";
 import { useLanguage } from "@/lib/language-context";
 import {
-  LEEKPAY_CHECKOUT_CURRENCY,
-  type LeekPaySuccessData,
-} from "@/lib/leekpay";
-import {
   BadgeCheck,
   Check,
   Clock,
@@ -221,27 +217,6 @@ export default function Home() {
   const handleBuyClick = (card: Card) => {
     setSelectedCard(card);
     setCheckoutStep("notes");
-  };
-
-  const navigateToPaymentResult = (pathname: string) => {
-    window.location.assign(withBasePath(pathname));
-  };
-
-  const handlePaymentSuccess = (data: LeekPaySuccessData) => {
-    const expectedAmount = selectedCard
-      ? Number.parseInt(selectedCard.price, 10)
-      : Number.NaN;
-    const matchesSelection =
-      Number.isSafeInteger(expectedAmount) &&
-      data.status === "paid" &&
-      data.amount === expectedAmount &&
-      data.currency === LEEKPAY_CHECKOUT_CURRENCY &&
-      Boolean(data.payment_id);
-
-    setCheckoutStep("closed");
-    navigateToPaymentResult(
-      matchesSelection ? "/payment-success/" : "/payment-failure/",
-    );
   };
 
   const getCardGradient = (color: string) => {
@@ -589,11 +564,6 @@ export default function Home() {
           }}
           isOpen
           onClose={() => setCheckoutStep("closed")}
-          onFailure={() => {
-            setCheckoutStep("closed");
-            navigateToPaymentResult("/payment-failure/");
-          }}
-          onSuccess={handlePaymentSuccess}
         />
       )}
     </MainLayout>
