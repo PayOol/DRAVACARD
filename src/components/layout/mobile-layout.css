@@ -286,10 +286,6 @@
     padding-inline: 12px;
   }
 
-  .app-intro {
-    padding-block: 25px 22px;
-  }
-
   .app-eyebrow {
     margin-bottom: 9px;
     color: var(--app-secondary);
@@ -297,33 +293,6 @@
     font-weight: 750;
     line-height: 1.4;
     letter-spacing: 1.5px;
-  }
-
-  .app-intro h1 {
-    margin: 0;
-    color: var(--app-heading);
-    font-size: clamp(30px, 8.7vw, 38px);
-    font-weight: 750;
-    line-height: 1.13;
-    letter-spacing: -1.6px;
-  }
-
-  .app-intro > p:last-child:not(.app-eyebrow) {
-    max-width: 310px;
-    margin-top: 12px;
-    color: var(--app-secondary);
-    font-size: 13px;
-    line-height: 1.65;
-  }
-
-  .app-intro--compact {
-    padding-block: 28px 23px;
-  }
-
-  .app-intro--compact h1 {
-    font-size: clamp(27px, 7.6vw, 34px);
-    line-height: 1.2;
-    letter-spacing: -1px;
   }
 
   .app-currency {
@@ -375,12 +344,6 @@
 
   .app-section-title {
     margin-bottom: 14px;
-  }
-
-  .app-list-count {
-    margin: 18px 2px 12px;
-    color: var(--app-muted);
-    font-size: 11px;
   }
 
   .app-catalog-list {

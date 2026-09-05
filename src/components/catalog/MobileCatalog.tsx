@@ -303,25 +303,9 @@ export default function MobileCatalog({
             {screen === "tiktok" && <TikTokPanel {...tiktok} />}
             {screen === "cards" && (
               <>
-                <div className="app-intro app-intro--compact">
-                  <p className="app-eyebrow">
-                    {fr ? "LE CATALOGUE DRAVA" : "THE DRAVA COLLECTION"}
-                  </p>
-                  <h1 ref={headingRef} tabIndex={-1}>
-                    {fr ? "Trouvez votre carte." : "Find your card."}
-                  </h1>
-                  <p>
-                    {fr
-                      ? "Comparez, choisissez, et passez à la suite."
-                      : "Compare, choose, and take the next step."}
-                  </p>
-                </div>
-                <p className="app-list-count" aria-live="polite">
-                  {cards.length}{" "}
-                  {fr
-                    ? `carte${cards.length > 1 ? "s" : ""} disponible${cards.length > 1 ? "s" : ""}`
-                    : `card${cards.length > 1 ? "s" : ""} available`}
-                </p>
+                <h1 className="sr-only" ref={headingRef} tabIndex={-1}>
+                  {fr ? "Cartes virtuelles" : "Virtual cards"}
+                </h1>
                 <div className="app-catalog-list">
                   <AnimatePresence initial={false} mode="popLayout">
                     {cards.map((card) => (

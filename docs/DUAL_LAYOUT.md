@@ -27,6 +27,8 @@ Les layouts consomment les mêmes données et callbacks. Une modification d’un
 
 Le mobile s’ouvre directement sur les cartes. Les écrans Découvrir et Aide ainsi que la navigation basse ont été supprimés à la demande de l’utilisateur. Toute la surface d’une carte permet de la choisir et d’ouvrir sa fiche, avec la même action accessible au clavier que le bouton « Choisir ».
 
+Le catalogue mobile commence directement sous les onglets : son ancien titre d’introduction, son sous-texte et le compteur de cartes ont été retirés. Un titre masqué visuellement conserve la structure accessible et la cible de focus au retour depuis une fiche. L’introduction desktop garde sa présentation.
+
 Les deux layouts affichent toutes les cartes. Le filtre « Toutes / Visa / Mastercard » a été supprimé sur mobile et desktop à la demande de l’utilisateur.
 
 Les onglets « Cartes virtuelles » et « Pièces TikTok » sont placés en haut des deux catalogues. Ils changent de section, sans filtrer les réseaux de cartes. La section TikTok (`/#tiktok`) reprend les six packs, bonus et prix personnalisés d’UpCoin. Son catalogue est partagé dans `src/lib/tiktok-catalog.ts`, son formulaire dans `TikTokCheckout` et sa vérification dans `TikTokResult`. L’accueil sans fragment reste le catalogue de cartes. La sélection d’onglet est partagée lors d’un changement de layout et respecte l’historique ; les fragments de fiches mobiles `#card:…` sont conservés. Les onglets utilisent des identifiants ARIA distincts par layout, les flèches et Home/End ; le focus clavier reste sur l’onglet actif lors des transitions. Les panneaux sortants sont inertes.
