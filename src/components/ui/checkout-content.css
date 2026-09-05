@@ -66,6 +66,16 @@
   font-size: 12px;
   line-height: 1.5;
 }
+.checkout-dialog .tiktok-account-fields .tiktok-contact-row {
+  margin: 2px 0 0;
+}
+.tiktok-checkout .payment-providers { margin-top: 20px; }
+.tiktok-checkout .payment-providers legend {
+  color: var(--tk-text, var(--checkout-text));
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
 .checkout-dialog .tiktok-provider-fieldset legend { font-size: 14px; font-weight: 500; margin-bottom: 12px; }
 
 .checkout-dialog .checkout-customer-fields input,
@@ -302,6 +312,13 @@
     grid-template-columns: minmax(112px, 0.9fr) minmax(0, 1.25fr);
     column-gap: 10px;
     padding: 14px;
+  }
+  .checkout-dialog .tiktok-account-fields .tiktok-contact-row {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
   }
   .checkout-dialog .tiktok-contact-row label { font-size: clamp(12px, 3.4vw, 13px); }
   .checkout-dialog .tiktok-contact-row select { padding-inline: 8px; }

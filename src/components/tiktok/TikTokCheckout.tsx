@@ -611,84 +611,69 @@ export function TikTokCheckout({
                         </button>
                       </span>
                     </label>
-                  </div>
-                  <div className="tiktok-contact-row">
-                    <label>
-                      {fr ? "Pays" : "Country"}
-                      <select
-                        value={countryCode}
-                        onChange={(event) => {
-                          manualCountry.current = true;
-                          setCountryCode(event.target.value);
-                        }}
-                      >
-                        <optgroup
-                          label={fr ? "Pays populaires" : "Popular countries"}
-                        >
-                          {POPULAR_COUNTRIES.map((country) => (
-                            <option key={country.code} value={country.code}>
-                              {optionLabel(country)}
-                            </option>
-                          ))}
-                        </optgroup>
-                        <optgroup
-                          label={fr ? "Tous les pays" : "All countries"}
-                        >
-                          {ALL_COUNTRIES.map((country) => (
-                            <option key={country.code} value={country.code}>
-                              {optionLabel(country)}
-                            </option>
-                          ))}
-                        </optgroup>
-                      </select>
-                    </label>
-                    <label>
-                      {fr ? "Numéro WhatsApp" : "WhatsApp number"}
-                      <span className="tiktok-field">
-                        <input
-                          type="tel"
-                          data-tiktok-field="whatsapp"
-                          inputMode="numeric"
-                          value={whatsapp}
-                          maxLength={15}
+                    <div className="tiktok-contact-row">
+                      <label>
+                        {fr ? "Pays" : "Country"}
+                        <select
+                          value={countryCode}
                           onChange={(event) => {
-                            manualPhone.current = true;
-                            setWhatsapp(event.target.value.replace(/\D/g, ""));
+                            manualCountry.current = true;
+                            setCountryCode(event.target.value);
                           }}
-                          autoComplete="tel-national"
-                          aria-describedby={`${historyId}-whatsapp-help`}
-                          placeholder="6 00 00 00 00"
-                          required
-                        />
-                      </span>
-                    </label>
-                    <small id={`${historyId}-whatsapp-help`}>
-                      {fr
-                        ? "Pour vous contacter en cas de besoin"
-                        : "So we can contact you about the order"}
-                    </small>
+                        >
+                          <optgroup
+                            label={fr ? "Pays populaires" : "Popular countries"}
+                          >
+                            {POPULAR_COUNTRIES.map((country) => (
+                              <option key={country.code} value={country.code}>
+                                {optionLabel(country)}
+                              </option>
+                            ))}
+                          </optgroup>
+                          <optgroup
+                            label={fr ? "Tous les pays" : "All countries"}
+                          >
+                            {ALL_COUNTRIES.map((country) => (
+                              <option key={country.code} value={country.code}>
+                                {optionLabel(country)}
+                              </option>
+                            ))}
+                          </optgroup>
+                        </select>
+                      </label>
+                      <label>
+                        {fr ? "Numéro WhatsApp" : "WhatsApp number"}
+                        <span className="tiktok-field">
+                          <input
+                            type="tel"
+                            data-tiktok-field="whatsapp"
+                            inputMode="numeric"
+                            value={whatsapp}
+                            maxLength={15}
+                            onChange={(event) => {
+                              manualPhone.current = true;
+                              setWhatsapp(
+                                event.target.value.replace(/\D/g, ""),
+                              );
+                            }}
+                            autoComplete="tel-national"
+                            aria-describedby={`${historyId}-whatsapp-help`}
+                            placeholder="6 00 00 00 00"
+                            required
+                          />
+                        </span>
+                      </label>
+                      <small id={`${historyId}-whatsapp-help`}>
+                        {fr
+                          ? "Pour vous contacter en cas de besoin"
+                          : "So we can contact you about the order"}
+                      </small>
+                    </div>
                   </div>
                 </div>
               )}
               {step === 3 && (
                 <>
-                  <dl className="tiktok-summary">
-                    <div>
-                      <dt>{fr ? "Compte TikTok" : "TikTok account"}</dt>
-                      <dd>@{username}</dd>
-                    </div>
-                    <div>
-                      <dt>{fr ? "Recharge" : "Recharge"}</dt>
-                      <dd>
-                        {deliveredCoins.toLocaleString(locale)}{" "}
-                        {fr ? "pièces" : "coins"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Total</dt>
-                      <dd>{pack.price.toLocaleString(locale)} FCFA</dd>
-                    </div>
-                  </dl>
                   <div className="tiktok-fields">
                     <label>
                       {fr ? "Adresse e-mail" : "Email address"}
