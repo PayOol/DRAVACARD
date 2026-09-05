@@ -18,7 +18,6 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   AlertCircle,
   CheckCircle2,
-  CreditCard,
   LoaderCircle,
   X,
 } from "lucide-react";
@@ -206,13 +205,16 @@ export function DialogProviders({
 
                 <div className="rounded-xl border border-slate-200 p-4 shadow-sm">
                   <div className="flex items-start gap-3">
-                    <div className="rounded-lg bg-emerald-50 p-2 text-emerald-700">
-                      <CreditCard aria-hidden="true" className="h-5 w-5" />
-                    </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-slate-900">
-                          LeekPay
+                        <h3 className="relative h-12 w-48 shrink-0 overflow-hidden">
+                          <img
+                            src={withBasePath("/images/leekpay.webp")}
+                            alt="LeekPay"
+                            width={1536}
+                            height={1024}
+                            className="absolute left-1/2 top-1/2 h-auto w-64 max-w-none -translate-x-[53%] -translate-y-[48%]"
+                          />
                         </h3>
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs font-medium ${
