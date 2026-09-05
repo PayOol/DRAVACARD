@@ -73,10 +73,12 @@ function serviceReady(env: Env): boolean {
 function allowedOrigin(request: Request, env: Env): string | null {
   const origin = request.headers.get("Origin");
   if (origin === SITE_ORIGIN) return origin;
-  if (env.ENVIRONMENT === "development" && origin === env.LOCAL_ORIGIN) {
+  // Explicit loopback opt-in; never switch production rate limiting to development.
+  if (origin && Array.isArray(env.LOCAL_ORIGINS) && env.LOCAL_ORIGINS.some((allowed) => allowed === origin)) {
     try {
       const local = new URL(origin);
-      if (local.protocol === "http:" && (local.hostname === "localhost" || local.hostname === "127.0.0.1")) {
+      if (local.origin === origin && local.protocol === "http:" &&
+        (local.hostname === "localhost" || local.hostname === "127.0.0.1")) {
         return origin;
       }
     } catch { /* Invalid development configuration must fail closed. */ }

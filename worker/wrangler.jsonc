@@ -9,7 +9,7 @@
   "preview_urls": false,
   "vars": {
     "ENVIRONMENT": "production",
-    "LOCAL_ORIGIN": ""
+    "LOCAL_ORIGINS": ["http://127.0.0.1:3000", "http://localhost:3000"]
   },
   "secrets": { "required": ["LEEKPAY_SECRET_KEY"] },
   "kv_namespaces": [
@@ -28,7 +28,7 @@
     "development": {
       "name": "drava-leekpay-development",
       "workers_dev": false,
-      "vars": { "ENVIRONMENT": "development", "LOCAL_ORIGIN": "http://127.0.0.1:3000" },
+      "vars": { "ENVIRONMENT": "development", "LOCAL_ORIGINS": ["http://127.0.0.1:3000", "http://localhost:3000"] },
       "secrets": { "required": ["LEEKPAY_SECRET_KEY"] },
       "kv_namespaces": [{ "binding": "ORDERS", "id": "00000000000000000000000000000001" }],
       "ratelimits": [

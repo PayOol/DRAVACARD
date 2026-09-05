@@ -9,6 +9,10 @@ import { Miniflare, convertV4MiniflareOptions, Response as RuntimeResponse } fro
 it("runs the Worker in workerd with actual KV/rate bindings and blocked external network", { timeout: 30_000 }, async () => {
   const source = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
   const config = JSON.parse(await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
+  assert.equal(config.vars.ENVIRONMENT, "production");
+  assert.deepEqual(config.vars.LOCAL_ORIGINS, ["http://127.0.0.1:3000", "http://localhost:3000"]);
+  assert.equal(config.ratelimits.find((binding) => binding.name === "CREATE_LIMITER").simple.limit, 10);
+  assert.equal(config.ratelimits.find((binding) => binding.name === "STATUS_LIMITER").simple.limit, 30);
   let outboundCalls = 0;
   let allowMockCheckout = false;
   let simulateRedirect = false;
@@ -22,7 +26,7 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
     cf: false,
     telemetry: { enabled: false },
     logRequests: false,
-    bindings: { ENVIRONMENT: "production", LOCAL_ORIGIN: "", LEEKPAY_SECRET_KEY: "test-only-provider-credential" },
+    bindings: { ...config.vars, LEEKPAY_SECRET_KEY: "test-only-provider-credential" },
     kvNamespaces: ["ORDERS"],
     ratelimits: Object.fromEntries(config.ratelimits.map((binding) => [binding.name, {
       namespace_id: binding.namespace_id, simple: binding.simple,
@@ -72,6 +76,13 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
     });
     assert.equal(forbidden.status, 403);
     assert.equal(forbidden.headers.get("Access-Control-Allow-Origin"), null);
+    for (const origin of ["http://127.0.0.1:3012", "http://localhost:3012", "https://localhost:3000", "http://localhost.attacker.example:3000"]) {
+      const denied = await runtime.dispatchFetch("https://runtime.example/api/checkout", { method: "OPTIONS", headers: {
+        Origin: origin, "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type",
+      } });
+      assert.equal(denied.status, 403);
+      assert.equal(denied.headers.get("Access-Control-Allow-Origin"), null);
+    }
     assert.equal(outboundCalls, 0);
     allowMockCheckout = true;
     const created = await runtime.dispatchFetch("https://runtime.example/api/checkout", {
@@ -90,6 +101,35 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
     assert.equal(checked.status, 200, JSON.stringify(checkedPayload));
     assert.deepEqual(checkedPayload, { status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF" });
     assert.equal(outboundCalls, 2);
+    for (const origin of config.vars.LOCAL_ORIGINS) {
+      const localHeaders = { ...headers, Origin: origin };
+      for (const path of ["/api/checkout", "/api/orders/status"]) {
+        const localPreflight = await runtime.dispatchFetch(`https://runtime.example${path}`, { method: "OPTIONS", headers: {
+          Origin: origin, "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type",
+        } });
+        assert.equal(localPreflight.status, 204);
+        assert.equal(localPreflight.headers.get("Access-Control-Allow-Origin"), origin);
+        assert.equal(localPreflight.headers.get("Access-Control-Allow-Credentials"), null);
+      }
+      const localCreate = await runtime.dispatchFetch("https://runtime.example/api/checkout", {
+        method: "POST", headers: localHeaders, body: JSON.stringify({ productId: "visa-basic" }),
+      });
+      assert.equal(localCreate.status, 201);
+      assert.equal(localCreate.headers.get("Access-Control-Allow-Origin"), origin);
+      const localCheckout = await localCreate.json();
+      assert.equal(createdBody.amount, 5000);
+      assert.equal(createdBody.currency, "XOF");
+      assert.equal(createdBody.return_url, `https://drava.click/payment-success/#order=${localCheckout.orderToken}`);
+      assert.equal(createdBody.cancel_url, `https://drava.click/payment-failure/#order=${localCheckout.orderToken}`);
+      assert.ok(!JSON.stringify(localCheckout).includes("test-only-provider-credential"));
+      const localStatus = await runtime.dispatchFetch("https://runtime.example/api/orders/status", {
+        method: "POST", headers: localHeaders, body: JSON.stringify({ orderToken: localCheckout.orderToken }),
+      });
+      assert.equal(localStatus.status, 200);
+      assert.equal(localStatus.headers.get("Access-Control-Allow-Origin"), origin);
+      assert.deepEqual(await localStatus.json(), { status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF" });
+    }
+    assert.equal(outboundCalls, 6);
     simulateRedirect = true;
     const redirected = await runtime.dispatchFetch("https://runtime.example/api/checkout", {
       method: "POST", headers, body: JSON.stringify({ productId: "visa-basic" }),
@@ -97,7 +137,7 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
     assert.equal(redirected.status, 502);
     assert.deepEqual(await redirected.json(), { error: { code: "provider_unavailable" } });
     // Exactly one additional provider fetch: never follow Location with Authorization.
-    assert.equal(outboundCalls, 3);
+    assert.equal(outboundCalls, 7);
   } finally {
     await runtime.dispose();
   }

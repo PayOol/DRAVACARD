@@ -13,7 +13,7 @@ function setup(t, upstream) {
   const limits = [];
   const env = {
     ENVIRONMENT: "production",
-    LOCAL_ORIGIN: "",
+    LOCAL_ORIGINS: [],
     LEEKPAY_SECRET_KEY: MOCK_CREDENTIAL,
     ORDERS: {
       async put(key, value, options) { values.set(key, value); puts.push({ key, value, options }); },
@@ -111,13 +111,97 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
     assert.equal(calls.length, 0);
   });
 
-  it("allows localhost only in explicit development, never changes return URLs", async (t) => {
+  it("allows exactly configured loopback origins in production for preflight, checkout and status", async (t) => {
+    const { env, calls, limits } = setup(t);
+    env.LOCAL_ORIGINS = ["http://127.0.0.1:3000", "http://localhost:3000"];
+    for (const origin of env.LOCAL_ORIGINS) {
+      for (const path of ["/api/checkout", "/api/orders/status"]) {
+        const preflight = await worker.fetch(new Request(`${ORIGIN}${path}`, { method: "OPTIONS", headers: {
+          Origin: origin, "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type",
+        } }), env);
+        assert.equal(preflight.status, 204);
+        assert.equal(preflight.headers.get("Access-Control-Allow-Origin"), origin);
+        assert.equal(preflight.headers.get("Access-Control-Allow-Credentials"), null);
+      }
+      const created = await worker.fetch(request("/api/checkout", { productId: "visa-basic" }, { Origin: origin }), env);
+      assert.equal(created.status, 201);
+      assert.equal(created.headers.get("Access-Control-Allow-Origin"), origin);
+      const result = await created.json();
+      assert.ok(!JSON.stringify(result).includes(MOCK_CREDENTIAL));
+      const payload = JSON.parse(calls.at(-1).init.body);
+      assert.equal(payload.amount, 5000);
+      assert.equal(payload.currency, "XOF");
+      assert.equal(payload.return_url, `${ORIGIN}/payment-success/#order=${result.orderToken}`);
+      assert.equal(payload.cancel_url, `${ORIGIN}/payment-failure/#order=${result.orderToken}`);
+      assert.equal(calls.at(-1).init.headers.Authorization, `Bearer ${MOCK_CREDENTIAL}`);
+      const checked = await worker.fetch(request("/api/orders/status", { orderToken: result.orderToken }, { Origin: origin }), env);
+      assert.equal(checked.headers.get("Access-Control-Allow-Origin"), origin);
+      assert.deepEqual(await checked.json(), { status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF" });
+      assert.equal(calls.at(-1).init.method, "GET");
+      assert.equal(calls.at(-1).init.headers.Authorization, `Bearer ${MOCK_CREDENTIAL}`);
+      assert.deepEqual(limits.slice(-2), [
+        { kind: "create", key: "drava:203.0.113.24" }, { kind: "status", key: "drava:203.0.113.24" },
+      ]);
+    }
+    assert.equal(env.ENVIRONMENT, "production");
+    assert.equal(calls.length, 4);
+  });
+
+  it("requires an opt-in JSON array and keeps unconfigured local ports and hosts blocked", async (t) => {
     const { env, calls } = setup(t);
-    env.ENVIRONMENT = "development";
-    env.LOCAL_ORIGIN = "http://127.0.0.1:3000";
-    const response = await worker.fetch(request("/api/checkout", { productId: "visa-basic" }, { Origin: env.LOCAL_ORIGIN }), env);
-    assert.equal(response.status, 201);
-    assert.ok(JSON.parse(calls[0].init.body).return_url.startsWith(`${ORIGIN}/payment-success/`));
+    const local = "http://127.0.0.1:3000";
+    for (const configuration of [undefined, null, [], local, { origin: local }, [null, 3000]]) {
+      env.LOCAL_ORIGINS = configuration;
+      const response = await worker.fetch(request("/api/checkout", { productId: "visa-basic" }, { Origin: local }), env);
+      assert.equal(response.headers.get("Access-Control-Allow-Origin"), null);
+      await errorCode(response, 403, "origin_forbidden");
+      const production = await worker.fetch(new Request(`${ORIGIN}/api/checkout`, { method: "OPTIONS", headers: {
+        Origin: ORIGIN, "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type",
+      } }), env);
+      assert.equal(production.status, 204);
+    }
+    env.LOCAL_ORIGINS = [local, "http://localhost:3000"];
+    for (const origin of ["http://127.0.0.1:3012", "http://localhost:3012", "http://127.0.0.1:3001", "http://localhost", "http://127.0.0.2:3000", "http://[::1]:3000"]) {
+      await errorCode(await worker.fetch(request("/api/checkout", { productId: "visa-basic" }, { Origin: origin }), env), 403, "origin_forbidden");
+    }
+    assert.equal(calls.length, 0);
+  });
+
+  it("rejects malformed and non-loopback origins even if added to local configuration", async (t) => {
+    const { env, calls } = setup(t);
+    for (const origin of [
+      "https://localhost:3000", "ftp://localhost:3000", "https://attacker.example", "http://attacker.example:3000",
+      "http://localhost.attacker.example:3000", "http://127.0.0.1.attacker.example:3000", "http://localhost.:3000",
+      "http://localhost:3000/", "http://127.0.0.1:3000/path", "http://localhost:3000?next=x", "http://localhost:3000#section",
+      "http://user:password@localhost:3000", "http://localhost:99999", "http://localhost:03000", "http://localhost:word",
+      "http://LOCALHOST:3000", "http://127.1:3000", "http://2130706433:3000", "null", "*", "",
+    ]) {
+      env.LOCAL_ORIGINS = [origin];
+      const response = await worker.fetch(request("/api/checkout", { productId: "visa-basic" }, { Origin: origin }), env);
+      assert.equal(response.headers.get("Access-Control-Allow-Origin"), null);
+      await errorCode(response, 403, "origin_forbidden");
+    }
+    assert.equal(calls.length, 0);
+  });
+
+  it("does not relax IP requirements, rate limits or server-price validation for local origins", async (t) => {
+    const { env, calls } = setup(t);
+    const origin = "http://localhost:3000";
+    env.LOCAL_ORIGINS = [origin];
+    for (const path of ["/api/checkout", "/api/orders/status"]) {
+      await errorCode(await worker.fetch(request(path, {}, { Origin: origin, "CF-Connecting-IP": "" }), env), 403, "request_forbidden");
+    }
+    await errorCode(await worker.fetch(request("/api/checkout", { productId: "visa-basic", amount: 1 }, { Origin: origin }), env), 400, "invalid_product");
+    env.CREATE_LIMITER.limit = async () => ({ success: false });
+    env.STATUS_LIMITER.limit = async () => ({ success: false });
+    for (const path of ["/api/checkout", "/api/orders/status"]) {
+      const response = await worker.fetch(request(path, {}, { Origin: origin }), env);
+      assert.equal(response.headers.get("Access-Control-Allow-Origin"), origin);
+      assert.equal(response.headers.get("Retry-After"), "60");
+      assert.equal(response.headers.get("Access-Control-Expose-Headers"), "Retry-After");
+      await errorCode(response, 429, "rate_limited");
+    }
+    assert.equal(calls.length, 0);
   });
 
   it("has a minimal non-provider health check and fails closed with missing configuration", async (t) => {

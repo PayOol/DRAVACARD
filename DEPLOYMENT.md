@@ -45,6 +45,14 @@ Le Worker doit être disponible avant de publier une interface qui active le bou
 
 Le proxy crée un checkout à partir d'un `productId`; le montant et `XOF` viennent exclusivement du catalogue Worker. La vérification de statut relit LeekPay avec l'authentification serveur et compare l'identifiant, le montant et la devise stockés dans `ORDERS`. En raison de la cohérence éventuelle de KV, une page de retour peut devoir réessayer brièvement une commande encore introuvable. Un paiement vérifié ne doit jamais déclencher automatiquement l'émission d'une carte.
 
+## Paiement depuis le site local
+
+Le site local utilise le même proxy Cloudflare que `drava.click` : aucune clé n'est nécessaire dans le navigateur ou sur le poste de développement. La variable JSON `LOCAL_ORIGINS` du Worker autorise explicitement `http://127.0.0.1:3000` et `http://localhost:3000`. Les autres ports, adresses du réseau local et domaines restent refusés. Pour désactiver cet accès, remplacez cette liste par `[]`, puis redéployez le Worker.
+
+Gardez `ENVIRONMENT` à `production` sur le Worker publié : les contrôles d'IP, les limites de requêtes et le catalogue serveur restent actifs. L'environnement Wrangler `development` est réservé à l'exécution locale du Worker, pas à l'autorisation CORS du site local.
+
+**Les paiements lancés depuis localhost utilisent les clés de production : ce n'est pas un bac à sable.** Les pages de retour restent sur `https://drava.click/payment-success/` et `https://drava.click/payment-failure/`, où la commande est vérifiée par le même proxy. Les tests automatisés du dépôt simulent tous les appels au fournisseur et ne créent aucun paiement réel.
+
 ## Première activation
 
 1. Dans le dépôt GitHub, ouvrez **Settings → Pages**.
