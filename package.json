@@ -11,7 +11,7 @@
     "worker:check": "npm --prefix worker run types && npm --prefix worker run check",
     "worker:build": "npm --prefix worker run build",
     "worker:deploy": "npm --prefix worker run deploy",
-    "test:payments": "node --test scripts/leekpay-client.test.mjs scripts/provider-dialog.test.mjs",
+    "test:payments": "node --test scripts/leekpay-client.test.mjs scripts/provider-dialog.test.mjs scripts/customer-location.test.mjs",
     "security:audit": "npm audit --audit-level=low",
     "security:source": "node scripts/security-check.mjs",
     "security:output": "node scripts/security-check.mjs --output",

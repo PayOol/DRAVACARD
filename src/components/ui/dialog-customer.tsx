@@ -59,6 +59,9 @@ export function CustomerDetails({
             className="mb-2 block text-sm font-medium text-slate-800"
             htmlFor={`${id}-email`}
           >
+            <span aria-hidden="true" className="mr-1 text-red-600">
+              *
+            </span>
             {language === "fr" ? "Adresse e-mail" : "Email address"}
           </label>
           <div className="relative">
@@ -110,6 +113,9 @@ export function CustomerDetails({
             className="mb-2 block text-sm font-medium text-slate-800"
             htmlFor={`${id}-whatsapp`}
           >
+            <span aria-hidden="true" className="mr-1 text-red-600">
+              *
+            </span>
             {language === "fr" ? "Numéro WhatsApp" : "WhatsApp number"}
           </label>
           <div className="relative">
@@ -126,24 +132,23 @@ export function CustomerDetails({
               autoComplete="tel"
               required
               maxLength={40}
-              placeholder="+237 6XX XXX XXX"
+              placeholder={
+                language === "fr" ? "+ Indicatif et numéro" : "+ Code and number"
+              }
               value={value.whatsapp}
               onChange={(event) =>
                 onChange({ ...value, whatsapp: event.target.value })
               }
               aria-invalid={whatsappInvalid || undefined}
-              aria-describedby={`${id}-whatsapp-hint${whatsappInvalid ? ` ${id}-whatsapp-error` : ""}`}
+              aria-describedby={
+                whatsappInvalid ? `${id}-whatsapp-error` : undefined
+              }
               className={
                 fieldClass +
                 (whatsappInvalid ? " border-red-500" : " border-slate-200")
               }
             />
           </div>
-          <p className="mt-2 text-xs text-slate-500" id={`${id}-whatsapp-hint`}>
-            {language === "fr"
-              ? "Incluez l’indicatif du pays, par exemple +237 pour le Cameroun."
-              : "Include the country code, for example +237 for Cameroon."}
-          </p>
           {whatsappInvalid && (
             <p
               className="mt-2 text-sm text-red-600"

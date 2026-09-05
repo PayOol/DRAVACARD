@@ -22,6 +22,12 @@ const paymentCustomerPath = new URL(
   "../src/lib/payment-customer.ts",
   import.meta.url,
 );
+const customerLocationPath = new URL(
+  "../src/lib/customer-location.ts",
+  import.meta.url,
+);
+const workerPath = new URL("../worker/src/index.ts", import.meta.url);
+const workerPackagePath = new URL("../worker/package.json", import.meta.url);
 const pagePath = new URL("../src/app/page.tsx", import.meta.url);
 const [
   providerSource,
@@ -29,6 +35,9 @@ const [
   customerSource,
   notesSource,
   paymentCustomerSource,
+  customerLocationSource,
+  workerSource,
+  workerPackageSource,
   pageSource,
 ] =
   await Promise.all(
@@ -38,6 +47,9 @@ const [
       customerPath,
       notesPath,
       paymentCustomerPath,
+      customerLocationPath,
+      workerPath,
+      workerPackagePath,
       pagePath,
     ].map((file) => readFile(file, "utf8")),
   );
@@ -186,11 +198,11 @@ test("one Radix dialog owns the consent-to-customer-to-provider sequence", () =>
   );
   assert.match(
     compactCheckout,
-    /<UsageNotesonAccept=\{\(\)=>setStep\("customer"\)\}onClose=\{onClose\}\/>/,
+    /<UsageNotesonAccept=\{\(\)=>\{setStep\("customer"\);setLocationRequested\(true\);\}\}onClose=\{onClose\}\/>/,
   );
   assert.match(
     compactCheckout,
-    /<CustomerDetailsvalue=\{customer\}onChange=\{setCustomer\}onNext=\{\(details\)=>\{setCustomer\(details\);setStep\("providers"\);\}\}onBack=\{\(\)=>setStep\("notes"\)\}\/>/,
+    /<CustomerDetailsvalue=\{customer\}onChange=\{\(details\)=>\{if\(details\.whatsapp!==customer\.whatsapp\)whatsappEditedRef\.current=true;setCustomer\(details\);\}\}onNext=\{\(details\)=>\{setCustomer\(details\);setStep\("providers"\);\}\}onBack=\{\(\)=>setStep\("notes"\)\}\/>/,
   );
   assert.match(
     compactCheckout,
@@ -215,6 +227,109 @@ test("one Radix dialog owns the consent-to-customer-to-provider sequence", () =>
   assert.match(compactCheckout, /ref=\{panelRef\}/);
 });
 
+test("calling-code detection is consent-gated, single-shot and cannot overwrite WhatsApp", () => {
+  const compactCheckout = checkoutSource.replace(/\s+/g, "");
+  assert.match(
+    checkoutSource,
+    /import \{ detectCustomerLocation \} from "@\/lib\/customer-location";/,
+  );
+  assert.match(
+    compactCheckout,
+    /const\[locationRequested,setLocationRequested\]=useState\(false\)/,
+  );
+  assert.equal(
+    checkoutSource.match(/\bsetLocationRequested\s*\(/g)?.length,
+    1,
+    "Consent may enable the lookup only once per mounted dialog",
+  );
+  assert.equal(
+    checkoutSource.match(/\bdetectCustomerLocation\s*\(/g)?.length,
+    1,
+    "The dialog may invoke the location helper from only one place",
+  );
+  assert.match(
+    compactCheckout,
+    /useEffect\(\(\)=>\{if\(!locationRequested\)return;constcontroller=newAbortController\(\);voiddetectCustomerLocation\(controller\.signal\)\.then\(\(location\)=>\{if\(!location\|\|controller\.signal\.aborted\)return;setCustomer\(\(current\)=>whatsappEditedRef\.current\|\|current\.whatsapp\?current:\{\.\.\.current,whatsapp:location\.callingCode\},?\);\}\);return\(\)=>controller\.abort\(\);\},\[locationRequested\]\)/,
+  );
+  assert.match(
+    compactCheckout,
+    /if\(details\.whatsapp!==customer\.whatsapp\)whatsappEditedRef\.current=true;setCustomer\(details\)/,
+    "Typing or clearing WhatsApp must permanently mark the draft as touched",
+  );
+  assert.doesNotMatch(
+    checkoutSource,
+    /\bfetch\s*\(|navigator\.(?:geolocation|permissions)|getCurrentPosition|watchPosition|localStorage|sessionStorage|console\.(?:log|info|warn|error|debug)/,
+  );
+});
+
+test("location helper performs one bounded private proxy GET with null fallback", () => {
+  assert.match(
+    customerLocationSource,
+    /fetch\(`\$\{LEEKPAY_API_BASE\}\/api\/location`,/,
+  );
+  assert.equal(customerLocationSource.match(/\bfetch\s*\(/g)?.length, 1);
+  for (const option of [
+    /method: "GET"/,
+    /credentials: "omit"/,
+    /cache: "no-store"/,
+    /redirect: "error"/,
+    /referrerPolicy: "no-referrer"/,
+    /setTimeout\(abort, 4000\)/,
+    /MAX_RESPONSE_BYTES = 1024/,
+  ]) {
+    assert.match(customerLocationSource, option);
+  }
+  assert.match(customerLocationSource, /response\.body\?\.getReader\(\)/);
+  assert.match(customerLocationSource, /keys\.length !== 2/);
+  assert.match(customerLocationSource, /\^\[A-Z\]\{2\}\$/);
+  assert.match(customerLocationSource, /\^\\\+\[1-9\]\[0-9\]\{0,2\}\$/);
+  assert.match(customerLocationSource, /catch \{\s*return null;/);
+  assert.doesNotMatch(
+    customerLocationSource,
+    /navigator\.(?:geolocation|permissions)|getCurrentPosition|watchPosition|CF-IPCountry|localStorage|sessionStorage|indexedDB|document\.cookie|console\.(?:log|info|warn|error|debug)|\bbody\s*:/,
+  );
+});
+
+test("Worker returns only a calling code derived from Cloudflare country metadata", () => {
+  assert.match(
+    workerSource,
+    /import \{ getCountryCallingCode, isSupportedCountry \} from "libphonenumber-js";/,
+  );
+  const locationFunction = blockAround(
+    workerSource,
+    "request.cf?.country",
+    "function locationResponse",
+    "\n}\n",
+  );
+  assert.match(locationFunction, /const country: unknown = request\.cf\?\.country/);
+  assert.match(locationFunction, /!\/\^\[A-Z\]\{2\}\$\/\.test\(country\)/);
+  assert.match(locationFunction, /!isSupportedCountry\(country\)/);
+  assert.match(
+    locationFunction,
+    /\{ countryCode: null, callingCode: null \}/,
+  );
+  assert.match(
+    locationFunction,
+    /\{ countryCode: country, callingCode: `\+\$\{getCountryCallingCode\(country\)\}` \}/,
+  );
+  assert.doesNotMatch(
+    locationFunction,
+    /headers\.get|CF-IPCountry|\b(?:city|region|postal|timezone|latitude|longitude|coordinates|address)\b|ORDERS|LEEKPAY_SECRET_KEY|providerJson|console\./i,
+  );
+  const route = workerSource.slice(
+    workerSource.indexOf('if (url.pathname === "/api/location")'),
+    workerSource.indexOf("const create =", workerSource.indexOf('if (url.pathname === "/api/location")')),
+  );
+  assert.match(route, /if \(url\.search\) throw new ApiError\(404, "not_found"\)/);
+  assert.match(route, /request\.method !== "GET"/);
+  assert.match(route, /await enforceRateLimit\(request, env, false\)/);
+  assert.doesNotMatch(route, /serviceReady|providerJson|ORDERS|LEEKPAY_SECRET_KEY/);
+  assert.equal(
+    JSON.parse(workerPackageSource).dependencies["libphonenumber-js"],
+    "1.13.12",
+  );
+});
+
 test("customer collection is limited to validated email and WhatsApp", () => {
   assert.equal(customerSource.match(/<input\b/g)?.length, 2);
   assert.match(
@@ -228,6 +343,16 @@ test("customer collection is limited to validated email and WhatsApp", () => {
   assert.match(customerSource, /normalizePaymentCustomer\(value\)/);
   assert.match(customerSource, /event\.preventDefault\(\)/);
   assert.match(customerSource, /onNext\(customer\)/);
+  const requiredStars = customerSource.match(
+    /<span aria-hidden="true" className="mr-1 text-red-600">[\s\S]*?\*[\s\S]*?<\/span>/g,
+  );
+  assert.equal(requiredStars?.length, 2);
+  assert.match(customerSource, /"\+ Indicatif et numéro"/);
+  assert.match(customerSource, /"\+ Code and number"/);
+  assert.doesNotMatch(
+    customerSource,
+    /Incluez l.indicatif du pays|Include the country code|whatsapp-hint|placeholder="\+\d/,
+  );
   assert.doesNotMatch(
     customerSource,
     /\bfetch\s*\(|createLeekPayCheckout|localStorage|sessionStorage|window\.location/,

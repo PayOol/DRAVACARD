@@ -3,6 +3,7 @@
 import { CustomerDetails } from "@/components/ui/dialog-customer";
 import { UsageNotes } from "@/components/ui/dialog-notes";
 import { PaymentProviders } from "@/components/ui/dialog-providers";
+import { detectCustomerLocation } from "@/lib/customer-location";
 import { useLanguage } from "@/lib/language-context";
 import type { PaymentCardSelection } from "@/lib/leekpay";
 import {
@@ -63,6 +64,9 @@ export function DialogCheckout({ card, onClose }: DialogCheckoutProps) {
     email: "",
     whatsapp: "",
   });
+  const [locationRequested, setLocationRequested] = useState(false);
+  // Keep manual edits (including clearing the field) authoritative until close.
+  const whatsappEditedRef = useRef(false);
   const validCustomer = normalizePaymentCustomer(customer);
   const reducedMotion = useReducedMotion() === true;
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -71,6 +75,20 @@ export function DialogCheckout({ card, onClose }: DialogCheckoutProps) {
   useEffect(() => {
     titleRef.current?.focus({ preventScroll: step !== "notes" });
   }, [step]);
+
+  useEffect(() => {
+    if (!locationRequested) return;
+    const controller = new AbortController();
+    void detectCustomerLocation(controller.signal).then((location) => {
+      if (!location || controller.signal.aborted) return;
+      setCustomer((current) =>
+        whatsappEditedRef.current || current.whatsapp
+          ? current
+          : { ...current, whatsapp: location.callingCode },
+      );
+    });
+    return () => controller.abort();
+  }, [locationRequested]);
 
   const titles =
     language === "fr"
@@ -158,13 +176,20 @@ export function DialogCheckout({ card, onClose }: DialogCheckoutProps) {
               <CheckoutPanel key={step} reducedMotion={reducedMotion}>
                 {step === "notes" ? (
                   <UsageNotes
-                    onAccept={() => setStep("customer")}
+                    onAccept={() => {
+                      setStep("customer");
+                      setLocationRequested(true);
+                    }}
                     onClose={onClose}
                   />
                 ) : step === "customer" ? (
                   <CustomerDetails
                     value={customer}
-                    onChange={setCustomer}
+                    onChange={(details) => {
+                      if (details.whatsapp !== customer.whatsapp)
+                        whatsappEditedRef.current = true;
+                      setCustomer(details);
+                    }}
                     onNext={(details) => {
                       setCustomer(details);
                       setStep("providers");

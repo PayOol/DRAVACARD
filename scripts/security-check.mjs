@@ -21,6 +21,7 @@ const customerDialogPath = 'src/components/ui/dialog-customer.tsx'
 const providerDialogPath = 'src/components/ui/dialog-providers.tsx'
 const usageNotesDialogPath = 'src/components/ui/dialog-notes.tsx'
 const paymentCustomerPath = 'src/lib/payment-customer.ts'
+const customerLocationPath = 'src/lib/customer-location.ts'
 const paymentResultPath = 'src/components/payment/PaymentResult.tsx'
 const workerSourcePath = 'worker/src/index.ts'
 const workerConfigPath = 'worker/wrangler.jsonc'
@@ -57,6 +58,7 @@ const requiredPaths = [
   paymentResultPath,
   frontendAdapterPath,
   paymentCustomerPath,
+  customerLocationPath,
   workerSourcePath,
   workerConfigPath,
   'worker/package.json',
@@ -454,6 +456,59 @@ function validatePaymentCustomer(source) {
   return failures
 }
 
+function validateCustomerLocation(source) {
+  const failures = []
+  const condensed = compact(source)
+  if (!hasExactInterfaceProperties(source, 'CustomerLocation', ['countryCode', 'callingCode'])) {
+    failures.push('CustomerLocation must expose only countryCode and callingCode')
+  }
+  if (!/import\{LEEKPAY_API_BASE\}from["']\.\/leekpay\.ts["']/.test(condensed)
+    || !/exportasyncfunctiondetectCustomerLocation\(signal\?:AbortSignal,?\):Promise<CustomerLocation\|null>/.test(condensed)) {
+    failures.push('Location detection must use the reviewed proxy helper contract')
+  }
+  if ((source.match(/\bfetch\s*\(/g)?.length ?? 0) !== 1
+    || (source.match(/\/api\/location/g)?.length ?? 0) !== 1
+    || !/fetch\(`\$\{LEEKPAY_API_BASE\}\/api\/location`,\{/.test(condensed)
+    || !/method:["']GET["']/.test(condensed)
+    || !/headers:\{Accept:["']application\/json["']\}/.test(condensed)
+    || !/credentials:["']omit["']/.test(condensed)
+    || !/cache:["']no-store["']/.test(condensed)
+    || !/redirect:["']error["']/.test(condensed)
+    || !/referrerPolicy:["']no-referrer["']/.test(condensed)) {
+    failures.push('Location lookup must be one bodyless, uncached GET to the fixed proxy')
+  }
+  if (!/constMAX_RESPONSE_BYTES=1024;?/.test(condensed)
+    || !/consttimeout=setTimeout\(abort,4000\)/.test(condensed)
+    || !/newAbortController\(\)/.test(condensed)
+    || !/signal\?\.addEventListener\(["']abort["'],abort,\{once:true\}\)/.test(condensed)
+    || !/signal\?\.removeEventListener\(["']abort["'],abort\)/.test(condensed)
+    || !/clearTimeout\(timeout\)/.test(condensed)
+    || !/response\.body\?\.getReader\(\)/.test(condensed)) {
+    failures.push('Location lookup must enforce caller cancellation, a 4-second deadline and a 1 KiB response limit')
+  }
+  if (!/Object\.keys\(location\)/.test(source)
+    || !/keys\.length\s*!==\s*2/.test(source)
+    || !/keys\.includes\(["']countryCode["']\)/.test(source)
+    || !/keys\.includes\(["']callingCode["']\)/.test(source)
+    || !/\^\[A-Z\]\{2\}\$/.test(source)
+    || !/\^\\\+\[1-9\]\[0-9\]\{0,2\}\$/.test(source)
+    || !/return\s*\{\s*countryCode:\s*location\.countryCode,\s*callingCode:\s*location\.callingCode,?\s*\}/.test(source)) {
+    failures.push('Location response must contain only a strict country code and calling code')
+  }
+  if (!/catch\s*\{\s*return null;?\s*\}/.test(source)
+    || !/if\s*\(signal\?\.aborted\)\s*return null/.test(source)) {
+    failures.push('Location detection must quietly fall back to null, including cancellation')
+  }
+  if (/\b(?:navigator\s*\.\s*(?:geolocation|permissions)|geolocation|getCurrentPosition|watchPosition|coordinates|latitude|longitude|city|region|postal|timezone|address|CF-IPCountry)\b/i.test(source)
+    || /\b(?:localStorage|sessionStorage|indexedDB|document\.cookie)\b/.test(source)
+    || /\bconsole\.(?:log|info|warn|error|debug)\s*\(/.test(source)
+    || /\b(?:URLSearchParams|new URL)\b|\bbody\s*:/.test(source)
+    || extractHttpUrls(source).length > 0) {
+    failures.push('Location detection must not use GPS, spoofable hints, storage, logs, request data or another origin')
+  }
+  return failures
+}
+
 function validateUsageNotesStructure(source) {
   const failures = []
   const condensed = compact(source)
@@ -528,10 +583,21 @@ function validateCustomerDialog(source) {
     || !/emailRef\.current\?\.focus\(\)/.test(source)
     || !/whatsappRef\.current\?\.focus\(\)/.test(source)) failures.push('Customer form must validate and focus the first invalid field')
   if (!/onClick=\{onBack\}/.test(source) || !/type=["']submit["']/.test(source)) failures.push('Customer form must retain Back and explicit submit controls')
+  const labels = source.match(/<label\b[\s\S]*?<\/label>/g) ?? []
+  if (labels.length !== 2 || labels.some((label) =>
+    !/<span\s+aria-hidden=["']true["']\s+className=["'][^"']*\bmr-1\b[^"']*\btext-red-600\b[^"']*["']\s*>\s*\*\s*<\/span>/.test(label))
+    || (source.match(/aria-hidden=["']true["'][^>]*\btext-red-600\b/g)?.length ?? 0) !== 2) {
+    failures.push('Both required customer labels must start with one red aria-hidden asterisk')
+  }
+  if (!source.includes('"+ Indicatif et numéro"') || !source.includes('"+ Code and number"')
+    || /Incluez l.indicatif du pays|Include the country code|whatsapp-hint|placeholder\s*=\s*["']\+\d/i.test(source)) {
+    failures.push('WhatsApp must use only the generic international placeholder without a country-code hint')
+  }
   if (/\b(?:fetch|createLeekPayCheckout|requestPaymentApi|handleCheckout)\s*\(|\b(?:localStorage|sessionStorage)\b|window\.location/.test(source)) {
     failures.push('Customer details must not send, persist or place PII in a URL')
   }
   if (/\bconsole\.(?:log|info|warn|error|debug)\s*\(/.test(source)
+    || /\b(?:navigator\s*\.\s*(?:geolocation|permissions)|geolocation|getCurrentPosition|watchPosition)\b/i.test(source)
     || /\b(?:password|cardNumber|card_number|cvv|otp|pan)\b/i.test(source)) {
     failures.push('Customer details must not collect or log additional personal/payment data')
   }
@@ -589,18 +655,44 @@ function validateCheckoutDialog(source) {
   if (countOpeningTags(source, 'DialogPrimitive.Description') !== 1) failures.push('Checkout dialog must own one persistent accessible description')
   if (!/<DialogPrimitive\.Root\b[^>]*\bopen\b/.test(source)) failures.push('Checkout dialog must keep its single Radix root open while mounted')
   if (!/onOpenChange=\{\(open\)=>\{if\(!open\)onClose\(\);?\}\}/.test(condensed)) failures.push('Checkout dialog dismiss must call onClose')
-  if (!/<UsageNotesonAccept=\{\(\)=>setStep\(["']customer["']\)\}onClose=\{onClose\}\/>/.test(condensed)) {
-    failures.push('Usage-notes acceptance must only advance to customer details')
+  if (!/<UsageNotesonAccept=\{\(\)=>\{setStep\(["']customer["']\);setLocationRequested\(true\);?\}\}onClose=\{onClose\}\/>/.test(condensed)) {
+    failures.push('Usage-notes acceptance must advance to customer details and enable one location lookup')
   }
-  if (!/<CustomerDetailsvalue=\{customer\}onChange=\{setCustomer\}onNext=\{\(details\)=>\{setCustomer\(details\);setStep\(["']providers["']\);?\}\}onBack=\{\(\)=>setStep\(["']notes["']\)\}\/>/.test(condensed)) {
+  if (!/<CustomerDetailsvalue=\{customer\}onChange=\{\(details\)=>\{if\(details\.whatsapp!==customer\.whatsapp\)whatsappEditedRef\.current=true;setCustomer\(details\);?\}\}onNext=\{\(details\)=>\{setCustomer\(details\);setStep\(["']providers["']\);?\}\}onBack=\{\(\)=>setStep\(["']notes["']\)\}\/>/.test(condensed)) {
     failures.push('Customer details must control the draft and advance only canonical details')
   }
   if (!/validCustomer\?\(?<PaymentProviderscard=\{card\}customer=\{validCustomer\}onBack=\{\(\)=>setStep\(["']customer["']\)\}\/?>\)?:null/.test(condensed)) {
     failures.push('Providers must receive a valid customer and retain a Back path')
   }
   if (!/step===["']notes["']\?\(?<UsageNotes/.test(condensed)) failures.push('Provider selection must remain gated behind the notes step')
+  if (!/from\s*["']@\/lib\/customer-location["']/.test(source)
+    || !/const\[locationRequested,setLocationRequested\]=useState\(false\)/.test(condensed)
+    || !/constwhatsappEditedRef=useRef\(false\)/.test(condensed)
+    || (source.match(/\bsetLocationRequested\s*\(/g)?.length ?? 0) !== 1
+    || (source.match(/\bdetectCustomerLocation\s*\(/g)?.length ?? 0) !== 1) {
+    failures.push('Checkout must request the calling code at most once after consent')
+  }
+  const locationEffectStart = condensed.indexOf('useEffect(()=>{if(!locationRequested)return;')
+  const locationEffectEnd = condensed.indexOf('},[locationRequested]);', locationEffectStart)
+  const locationEffect = locationEffectStart >= 0 && locationEffectEnd > locationEffectStart
+    ? condensed.slice(locationEffectStart, locationEffectEnd + '},[locationRequested]);'.length)
+    : ''
+  if (!locationEffect
+    || !/constcontroller=newAbortController\(\)/.test(locationEffect)
+    || !/voiddetectCustomerLocation\(controller\.signal\)\.then\(\(location\)=>\{/.test(locationEffect)
+    || !/if\(!location\|\|controller\.signal\.aborted\)return/.test(locationEffect)
+    || !/setCustomer\(\(current\)=>whatsappEditedRef\.current\|\|current\.whatsapp\?current:\{\.\.\.current,whatsapp:location\.callingCode\},?\)/.test(locationEffect)
+    || !/return\(\)=>controller\.abort\(\)/.test(locationEffect)
+    || /setStep|setLocationRequested|\bfetch\s*\(/.test(locationEffect)) {
+    failures.push('Calling-code lookup must be abortable and must never overwrite a touched or existing WhatsApp value')
+  }
   if (/\b(?:createLeekPayCheckout|requestPaymentApi|handleCheckout)\b|\bfetch\s*\(|window\.location/.test(source)) {
     failures.push('Checkout step transitions must not initiate or redirect a payment')
+  }
+  if (/\b(?:navigator\s*\.\s*(?:geolocation|permissions)|geolocation|getCurrentPosition|watchPosition)\b/i.test(source)
+    || /\b(?:localStorage|sessionStorage|indexedDB|document\.cookie)\b/.test(source)
+    || /\bconsole\.(?:log|info|warn|error|debug)\s*\(/.test(source)) {
+    failures.push('Checkout location prefilling must not use GPS, persistence or logs')
   }
   if (/\b(?:isOpen|onExitComplete|notes-exiting|checkoutStep)\b/.test(source)) failures.push('Checkout wrapper must not restore the previous multi-dialog lifecycle')
   if (!/useReducedMotion\(\)\s*===\s*true/.test(source)
@@ -645,10 +737,68 @@ function validatePaymentResult(source) {
   return failures
 }
 
+function validateWorkerLocation(source) {
+  const failures = []
+  const condensed = compact(source)
+  if (!/import\{getCountryCallingCode,isSupportedCountry\}from["']libphonenumber-js["'];?/.test(condensed)) {
+    failures.push('Worker location lookup must use libphonenumber-js')
+  }
+  if ((source.match(/["']\/api\/location["']/g)?.length ?? 0) !== 1) {
+    failures.push('Worker must expose exactly one /api/location route')
+  }
+  const responseStart = source.indexOf('function locationResponse')
+  const responseEnd = source.indexOf('async function', responseStart)
+  const responseBlock = responseStart >= 0 && responseEnd > responseStart
+    ? source.slice(responseStart, responseEnd)
+    : ''
+  if (!responseBlock
+    || !/const country:\s*unknown\s*=\s*request\.cf\?\.country/.test(responseBlock)
+    || !/\^\[A-Z\]\{2\}\$/.test(responseBlock)
+    || !/!isSupportedCountry\(country\)/.test(responseBlock)
+    || !/jsonResponse\(\{\s*countryCode:\s*null,\s*callingCode:\s*null\s*\},\s*200,\s*origin\)/.test(responseBlock)
+    || !/jsonResponse\(\{\s*countryCode:\s*country,\s*callingCode:\s*`\+\$\{getCountryCallingCode\(country\)\}`\s*\},\s*200,\s*origin\)/.test(responseBlock)) {
+    failures.push('Worker must derive only a validated calling code from request.cf.country')
+  }
+  if (/headers\.get\s*\(\s*["'][^"']*(?:country|location)/i.test(responseBlock)
+    || /\b(?:city|region|postal|timezone|latitude|longitude|coordinates|geolocation|address)\b/i.test(responseBlock)
+    || /\b(?:console\.|ORDERS|LEEKPAY_SECRET_KEY|providerJson|requestJson|localStorage|sessionStorage)\b/.test(responseBlock)) {
+    failures.push('Worker location response must not trust client hints, expose detailed location, store, log or call the provider')
+  }
+  const routeStart = source.indexOf('if (url.pathname === "/api/location")')
+  const routeEnd = source.indexOf('const create =', routeStart)
+  const routeBlock = routeStart >= 0 && routeEnd > routeStart ? source.slice(routeStart, routeEnd) : ''
+  if (!routeBlock
+    || !/if \(url\.search\) throw new ApiError\(404, "not_found"\)/.test(routeBlock)
+    || !/if \(!origin\) throw new ApiError\(403, "origin_forbidden"\)/.test(routeBlock)
+    || !/Access-Control-Request-Method"\) !== "GET"/.test(routeBlock)
+    || !/request\.method !== "GET"/.test(routeBlock)
+    || !/await enforceRateLimit\(request, env, false\)/.test(routeBlock)
+    || !/return locationResponse\(request, origin\)/.test(routeBlock)
+    || /\b(?:serviceReady|providerJson|ORDERS|LEEKPAY_SECRET_KEY|requestJson)\b/.test(routeBlock)) {
+    failures.push('Worker location route must be origin-checked, GET-only, queryless, rate-limited and independent from payment state')
+  }
+  return failures
+}
+
+function validateWorkerPackage(source) {
+  const failures = []
+  let manifest
+  try {
+    manifest = JSON.parse(source)
+  } catch {
+    return ['Worker package.json must be valid JSON']
+  }
+  if (manifest?.dependencies?.['libphonenumber-js'] !== '1.13.12') {
+    failures.push('Worker must pin the reviewed libphonenumber-js dependency')
+  }
+  return failures
+}
+
 function validateWorkerSource(source) {
   const failures = []
   if ((source.split(providerCheckoutApi).length - 1) !== 1) failures.push(`Worker must declare the exact LeekPay REST endpoint once: ${providerCheckoutApi}`)
   failures.push(...validateWorkerUrls(source))
+  failures.push(...validateWorkerLocation(source))
   if (!/import\s*\{\s*normalizePaymentCustomer\s*\}\s*from\s*["']\.\.\/\.\.\/src\/lib\/payment-customer\.ts["']/.test(source)
     || !/const customer\s*=\s*normalizePaymentCustomer\(payload\.customer\)/.test(source)) failures.push('Worker must revalidate customer details with the shared canonical validator')
   if (!/env\.LEEKPAY_SECRET_KEY/.test(source) || !/Authorization:\s*`Bearer \$\{env\.LEEKPAY_SECRET_KEY\}`/.test(source)) failures.push('Worker must authenticate LeekPay calls with env.LEEKPAY_SECRET_KEY')
@@ -774,14 +924,38 @@ function selfTest() {
       const emailInvalid = !normalizeCustomerEmail(value.email); const whatsappInvalid = !normalizeWhatsAppNumber(value.whatsapp);
       const handleSubmit = (event) => { event.preventDefault(); const customer = normalizePaymentCustomer(value); if (!customer) { if (!normalizeCustomerEmail(value.email)) emailRef.current?.focus(); else whatsappRef.current?.focus(); return; } onNext(customer); };
       return <form noValidate onSubmit={handleSubmit}>
+        <label><span aria-hidden="true" className="mr-1 text-red-600">*</span>Email</label>
         <input name="email" type="email" inputMode="email" autoComplete="email" required maxLength={254} value={value.email} onChange={(event) => onChange({ ...value, email: event.target.value })} />
-        <input name="whatsapp" type="tel" inputMode="tel" autoComplete="tel" required maxLength={40} value={value.whatsapp} onChange={(event) => onChange({ ...value, whatsapp: event.target.value })} />
+        <label><span aria-hidden="true" className="mr-1 text-red-600">*</span>WhatsApp</label>
+        <input name="whatsapp" type="tel" inputMode="tel" autoComplete="tel" required maxLength={40} placeholder={language === "fr" ? "+ Indicatif et numéro" : "+ Code and number"} value={value.whatsapp} onChange={(event) => onChange({ ...value, whatsapp: event.target.value })} />
         <Button onClick={onBack} type="button">Back</Button><Button type="submit">Next</Button>
       </form>;
     }
   `
   assert.deepEqual(validateCustomerDialog(safeCustomerDialog), [])
   assert.ok(validateCustomerDialog(safeCustomerDialog.replace('</form>', '<input name="name" type="text" required maxLength={80} /></form>')).length > 0)
+  assert.ok(validateCustomerDialog(safeCustomerDialog.replace('aria-hidden="true"', 'aria-hidden="false"')).length > 0)
+
+  const safeCustomerLocation = `
+    import { LEEKPAY_API_BASE } from "./leekpay.ts";
+    export interface CustomerLocation { readonly countryCode: string; readonly callingCode: string; }
+    const MAX_RESPONSE_BYTES = 1024;
+    async function read(response, signal) { return response.body?.getReader(); }
+    export async function detectCustomerLocation(signal?: AbortSignal): Promise<CustomerLocation | null> {
+      if (signal?.aborted) return null;
+      const controller = new AbortController(); const abort = () => controller.abort();
+      signal?.addEventListener("abort", abort, { once: true }); const timeout = setTimeout(abort, 4000);
+      try {
+        const response = await fetch(\`\${LEEKPAY_API_BASE}/api/location\`, { method: "GET", headers: { Accept: "application/json" }, credentials: "omit", cache: "no-store", redirect: "error", referrerPolicy: "no-referrer", signal: controller.signal });
+        const location = await read(response, controller.signal); const keys = Object.keys(location);
+        if (keys.length !== 2 || !keys.includes("countryCode") || !keys.includes("callingCode") || !/^[A-Z]{2}$/.test(location.countryCode) || !/^\\+[1-9][0-9]{0,2}$/.test(location.callingCode)) return null;
+        return { countryCode: location.countryCode, callingCode: location.callingCode };
+      } catch { return null; } finally { clearTimeout(timeout); signal?.removeEventListener("abort", abort); }
+    }
+  `
+  assert.deepEqual(validateCustomerLocation(safeCustomerLocation), [])
+  assert.ok(validateCustomerLocation(safeCustomerLocation.replace('method: "GET"', 'method: "POST"')).length > 0)
+  assert.ok(validateCustomerLocation(`${safeCustomerLocation}\nnavigator.geolocation.getCurrentPosition(() => {});`).length > 0)
 
   const safeAdapter = `
     import { type PaymentCustomer, normalizePaymentCustomer } from "./payment-customer.ts";
@@ -830,6 +1004,7 @@ function selfTest() {
     import { CustomerDetails } from "@/components/ui/dialog-customer";
     import { UsageNotes } from "@/components/ui/dialog-notes";
     import { PaymentProviders } from "@/components/ui/dialog-providers";
+    import { detectCustomerLocation } from "@/lib/customer-location";
     interface DialogCheckoutProps { card: PaymentCardSelection; onClose: () => void; }
     type CheckoutStep = "notes" | "customer" | "providers";
     function CheckoutPanel({ children, reducedMotion }) {
@@ -841,15 +1016,26 @@ function selfTest() {
     export function DialogCheckout({ card, onClose }: DialogCheckoutProps) {
       const [step, setStep] = useState<CheckoutStep>("notes");
       const [customer, setCustomer] = useState<PaymentCustomer>({ email: "", whatsapp: "" });
+      const [locationRequested, setLocationRequested] = useState(false);
+      const whatsappEditedRef = useRef(false);
       const validCustomer = normalizePaymentCustomer(customer);
       const reducedMotion = useReducedMotion() === true;
       useEffect(() => { titleRef.current?.focus(); }, [step]);
+      useEffect(() => {
+        if (!locationRequested) return;
+        const controller = new AbortController();
+        void detectCustomerLocation(controller.signal).then((location) => {
+          if (!location || controller.signal.aborted) return;
+          setCustomer((current) => whatsappEditedRef.current || current.whatsapp ? current : { ...current, whatsapp: location.callingCode });
+        });
+        return () => controller.abort();
+      }, [locationRequested]);
       return <DialogPrimitive.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
         <DialogPrimitive.Portal><DialogPrimitive.Overlay /><DialogPrimitive.Content asChild><motion.div layout={reducedMotion ? false : "size"}>
           <DialogPrimitive.Description>Description</DialogPrimitive.Description>
           <AnimatePresence initial={false} mode="wait"><CheckoutPanel key={step} reducedMotion={reducedMotion}>
-          {step === "notes" ? <UsageNotes onAccept={() => setStep("customer")} onClose={onClose} /> : step === "customer" ?
-            <CustomerDetails value={customer} onChange={setCustomer} onNext={(details) => { setCustomer(details); setStep("providers"); }} onBack={() => setStep("notes")} /> : validCustomer ?
+          {step === "notes" ? <UsageNotes onAccept={() => { setStep("customer"); setLocationRequested(true); }} onClose={onClose} /> : step === "customer" ?
+            <CustomerDetails value={customer} onChange={(details) => { if (details.whatsapp !== customer.whatsapp) whatsappEditedRef.current = true; setCustomer(details); }} onNext={(details) => { setCustomer(details); setStep("providers"); }} onBack={() => setStep("notes")} /> : validCustomer ?
             <PaymentProviders card={card} customer={validCustomer} onBack={() => setStep("customer")} /> : null}
           </CheckoutPanel></AnimatePresence>
         </motion.div></DialogPrimitive.Content></DialogPrimitive.Portal>
@@ -859,7 +1045,34 @@ function selfTest() {
   assert.deepEqual(validateCheckoutDialog(safeCheckoutDialog), [])
   assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('useState<CheckoutStep>("notes")', 'useState<CheckoutStep>("providers")')).length > 0)
   assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('<DialogPrimitive.Overlay />', '<DialogPrimitive.Overlay /><DialogPrimitive.Overlay />')).length > 0)
-  assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('setStep("customer")', 'createLeekPayCheckout()')).length > 0)
+  assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('setLocationRequested(true)', 'createLeekPayCheckout()')).length > 0)
+  assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('whatsappEditedRef.current || current.whatsapp', 'false')).length > 0)
+
+  const safeWorkerLocation = `
+    import { getCountryCallingCode, isSupportedCountry } from "libphonenumber-js";
+    function locationResponse(request: Request, origin: string): Response {
+      const country: unknown = request.cf?.country;
+      if (typeof country !== "string" || !/^[A-Z]{2}$/.test(country) || !isSupportedCountry(country)) return jsonResponse({ countryCode: null, callingCode: null }, 200, origin);
+      return jsonResponse({ countryCode: country, callingCode: \`+\${getCountryCallingCode(country)}\` }, 200, origin);
+    }
+
+    async function next() {}
+    async function route(request, env) {
+      if (url.pathname === "/api/location") {
+        if (url.search) throw new ApiError(404, "not_found");
+        if (!origin) throw new ApiError(403, "origin_forbidden");
+        if (request.method === "OPTIONS" && request.headers.get("Access-Control-Request-Method") !== "GET") throw Error();
+        if (request.method !== "GET") throw new ApiError(405, "method_not_allowed");
+        await enforceRateLimit(request, env, false);
+        return locationResponse(request, origin);
+      }
+      const create = false;
+    }
+  `
+  assert.deepEqual(validateWorkerLocation(safeWorkerLocation), [])
+  assert.ok(validateWorkerLocation(safeWorkerLocation.replace('request.cf?.country', 'request.headers.get("CF-IPCountry")')).length > 0)
+  assert.deepEqual(validateWorkerPackage('{"dependencies":{"libphonenumber-js":"1.13.12"}}'), [])
+  assert.ok(validateWorkerPackage('{"dependencies":{"libphonenumber-js":"^1.13.12"}}').length > 0)
 
   const safeCatalogue = `
     import { DialogCheckout } from "@/components/ui/dialog-checkout";
@@ -970,6 +1183,8 @@ if (notesSource) {
 }
 const paymentCustomerSource = await readRequired(paymentCustomerPath)
 if (paymentCustomerSource) failures.push(...validatePaymentCustomer(paymentCustomerSource))
+const customerLocationSource = await readRequired(customerLocationPath)
+if (customerLocationSource) failures.push(...validateCustomerLocation(customerLocationSource))
 const customerDialogSource = await readRequired(customerDialogPath)
 if (customerDialogSource) failures.push(...validateCustomerDialog(customerDialogSource))
 const adapterSource = await readRequired(frontendAdapterPath)
@@ -986,6 +1201,8 @@ const workerSource = await readRequired(workerSourcePath)
 if (workerSource) failures.push(...validateWorkerSource(workerSource))
 const workerConfig = await readRequired(workerConfigPath)
 if (workerConfig) failures.push(...validateWorkerConfig(workerConfig))
+const workerPackage = await readRequired('worker/package.json')
+if (workerPackage) failures.push(...validateWorkerPackage(workerPackage))
 
 const layoutSource = await readRequired('src/app/layout.tsx')
 if (layoutSource) {

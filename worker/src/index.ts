@@ -1,4 +1,5 @@
 import { normalizePaymentCustomer } from "../../src/lib/payment-customer.ts";
+import { getCountryCallingCode, isSupportedCountry } from "libphonenumber-js";
 
 const SITE_ORIGIN = "https://drava.click";
 const CHECKOUT_API = "https://leekpay.fr/api/v1/checkout";
@@ -106,6 +107,15 @@ function jsonResponse(body: unknown, status: number, origin: string | null): Res
   }
   if (status === 429) headers.set("Retry-After", "60");
   return new Response(JSON.stringify(body), { status, headers });
+}
+
+function locationResponse(request: Request, origin: string): Response {
+  // Cloudflare supplies this metadata. Never infer location from client headers.
+  const country: unknown = request.cf?.country;
+  if (typeof country !== "string" || !/^[A-Z]{2}$/.test(country) || !isSupportedCountry(country)) {
+    return jsonResponse({ countryCode: null, callingCode: null }, 200, origin);
+  }
+  return jsonResponse({ countryCode: country, callingCode: `+${getCountryCallingCode(country)}` }, 200, origin);
 }
 
 async function readBoundedJson(body: ReadableStream<Uint8Array> | null, headers: Headers,
@@ -305,6 +315,27 @@ export default {
       if (url.pathname === "/health" && request.method === "GET" && !url.search) {
         const ready = serviceReady(env);
         return jsonResponse({ status: ready ? "ready" : "unavailable" }, ready ? 200 : 503, origin);
+      }
+      if (url.pathname === "/api/location") {
+        if (url.search) throw new ApiError(404, "not_found");
+        if (!origin) throw new ApiError(403, "origin_forbidden");
+        if (request.method === "OPTIONS") {
+          if (request.headers.get("Access-Control-Request-Method") !== "GET" ||
+            (request.headers.get("Access-Control-Request-Headers") ?? "").trim() !== "") {
+            throw new ApiError(403, "request_forbidden");
+          }
+          return new Response(null, { status: 204, headers: {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Methods": "GET",
+            "Access-Control-Max-Age": "600",
+            "Vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
+            "Cache-Control": "no-store",
+          } });
+        }
+        if (request.method !== "GET") throw new ApiError(405, "method_not_allowed");
+        // Country detection requires no payment secret, provider call or order storage.
+        await enforceRateLimit(request, env, false);
+        return locationResponse(request, origin);
       }
       const create = url.pathname === "/api/checkout";
       if ((!create && url.pathname !== "/api/orders/status") || url.search) {

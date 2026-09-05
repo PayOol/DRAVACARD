@@ -41,11 +41,13 @@ Le Worker doit être disponible avant de publier une interface qui active le bou
    npm run deploy
    ```
 
-6. Vérifiez les réponses CORS pour les origines prévues, les limites de requêtes et les journaux sans données sensibles. CORS n'authentifie pas l'appelant : les deux routes publiques doivent toujours valider méthode, taille et forme du corps.
+6. Vérifiez les réponses CORS pour les origines prévues, les limites de requêtes et les journaux sans données sensibles. CORS n'authentifie pas l'appelant : les deux routes de paiement doivent toujours valider méthode, taille et forme du corps.
 
 Le proxy crée un checkout à partir de `{ productId, customer: { email, whatsapp } }` ; le montant et `XOF` viennent exclusivement du catalogue Worker. Le validateur partagé `src/lib/payment-customer.ts` doit être présent à côté du dossier `worker/` lors du build. Les coordonnées obligatoires sont revalidées puis envoyées uniquement dans `customer_email` et `customer_phone` à LeekPay, sans copie dans KV ni dans les logs. Déployez ce contrat Worker avant l'interface à trois étapes.
 
 La vérification de statut relit LeekPay avec l'authentification serveur et compare l'identifiant, le montant et la devise stockés dans `ORDERS`. En raison de la cohérence éventuelle de KV, une page de retour peut devoir réessayer brièvement une commande encore introuvable. Un paiement vérifié ne doit jamais déclencher automatiquement l'émission d'une carte.
+
+L'API publique `GET /api/location`, sans paramètres, renvoie seulement `{ countryCode, callingCode }` à partir de `request.cf.country` et des métadonnées téléphoniques de `libphonenumber-js`. Elle utilise les mêmes origines autorisées et le limiteur `STATUS_LIMITER`, mais ne dépend ni de la clé LeekPay ni de KV. Un pays absent ou non pris en charge produit deux valeurs `null`. Aucun en-tête client n'est utilisé pour choisir le pays ; l'IP sert au limiteur, sans être renvoyée ni enregistrée dans les commandes ou les journaux applicatifs. Déployez cette route avant le frontend qui l'utilise. L'interface abandonne la détection après quatre secondes et laisse la saisie manuelle disponible ; l'indicatif proposé reste modifiable, car une géolocalisation IP ne garantit pas le pays réel de l'utilisateur.
 
 ## Paiement depuis le site local
 
