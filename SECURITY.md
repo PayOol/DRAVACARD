@@ -30,6 +30,8 @@ Cloudflare KV is eventually consistent. A result page can briefly receive a not-
 
 The integration deliberately uses authenticated polling rather than trusting a browser callback or an unauthenticated webhook signature.
 
+Payment destination domains are delegated to the authenticated LeekPay API response, without a hostname allowlist. The Worker and browser still require an absolute HTTPS URL without embedded credentials or a nonstandard port, with a bounded length. The browser cannot supply a destination URL when creating a checkout. The Worker never fetches this destination or sends the LeekPay secret to it. This intentionally trusts LeekPay to select its payment processor: a compromised provider response could direct the customer to any HTTPS domain. Status verification always uses the fixed authenticated LeekPay API, independently of that destination.
+
 ## Incident action required
 
 All Soleas credentials that have ever been used by this repository must be revoked and replaced in the Soleas dashboard. Removing a credential from the current source does not invalidate copies in Git history, deployment caches, or previously downloaded browser bundles.

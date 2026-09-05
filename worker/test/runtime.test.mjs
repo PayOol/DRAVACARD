@@ -25,6 +25,7 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
   let outboundCalls = 0;
   let allowMockCheckout = false;
   let simulateRedirect = false;
+  let paymentUrl = "https://app.zayono.com/checkout/test-only-session";
   let createdBody;
   const runtime = new Miniflare(convertV4MiniflareOptions({
     name: "drava-payment-runtime-test",
@@ -54,7 +55,7 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
           assert.deepEqual(createdBody.metadata, { productId: "visa-basic" });
           assert.deepEqual(Object.keys(createdBody).sort(), ["amount", "currency", "description", "return_url", "cancel_url", "metadata", "customer_name", "customer_email", "customer_phone"].sort());
           return RuntimeResponse.json({ success: true, data: {
-            id: "checkout_runtime", payment_url: "https://leekpay.me/pay_runtime", amount: 5000, currency: "XOF",
+            id: "checkout_runtime", payment_url: paymentUrl, amount: 5000, currency: "XOF",
             status: "pending", return_url: createdBody.return_url,
           } }, { status: 201 });
         }
@@ -124,7 +125,7 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
     });
     const createdPayload = await created.json();
     assert.equal(created.status, 201, JSON.stringify(createdPayload));
-    assert.equal(createdPayload.checkoutUrl, "https://leekpay.me/pay_runtime");
+    assert.equal(createdPayload.checkoutUrl, paymentUrl);
     assert.match(createdPayload.orderToken, /^[a-f0-9]{64}$/);
     assert.deepEqual(Object.keys(createdPayload).sort(), ["checkoutUrl", "orderToken"]);
     assert.ok(!JSON.stringify(createdPayload).includes("Client (client@example.com)"));
@@ -137,6 +138,7 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
     assert.equal(checked.status, 200, JSON.stringify(checkedPayload));
     assert.deepEqual(checkedPayload, { status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF" });
     assert.equal(outboundCalls, 2);
+    paymentUrl = "https://future.processor.example/checkout/test-only-session";
     for (const origin of config.vars.LOCAL_ORIGINS) {
       const localHeaders = { ...headers, Origin: origin };
       for (const path of ["/api/checkout", "/api/orders/status"]) {
@@ -153,6 +155,7 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
       assert.equal(localCreate.status, 201);
       assert.equal(localCreate.headers.get("Access-Control-Allow-Origin"), origin);
       const localCheckout = await localCreate.json();
+      assert.equal(localCheckout.checkoutUrl, paymentUrl);
       assert.equal(createdBody.amount, 5000);
       assert.equal(createdBody.currency, "XOF");
       assert.equal(createdBody.return_url, `https://drava.click/payment-success/#order=${localCheckout.orderToken}`);

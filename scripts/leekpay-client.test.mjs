@@ -169,22 +169,67 @@ test("unknown products are rejected before any network request", async () => {
   assert.equal(request.mock.callCount(), 0);
 });
 
-test("checkout redirects require the exact HTTPS provider hosts", async () => {
+test("checkout accepts any HTTPS payment domain returned by the fixed proxy", async () => {
+  const request = mock.method(globalThis, "fetch");
+  for (const hostname of [
+    "leekpay.fr",
+    "www.leekpay.fr",
+    "leekpay.me",
+    "www.leekpay.me",
+    "app.zayono.com",
+    "payments.example.com",
+    "new-provider.example.net",
+    "zayono.com",
+    "www.app.zayono.com",
+    "payments.zayono.com",
+    "app-zayono.com",
+    "leekpay.me.untrusted.invalid",
+    "app.zayono.com.untrusted.invalid",
+  ]) {
+    const hostedCheckoutUrl = `https://${hostname}/checkout/example?session=example`;
+    request.mock.mockImplementation(async () =>
+      json({ checkoutUrl: hostedCheckoutUrl, orderToken }),
+    );
+    assert.deepEqual(await createLeekPayCheckout("visa-basic", customer), {
+      checkoutUrl: hostedCheckoutUrl,
+      orderToken,
+    });
+  }
+});
+
+test("checkout redirects still require absolute HTTPS without credentials or custom ports", async () => {
   const request = mock.method(globalThis, "fetch");
   for (const unsafeUrl of [
     "http://leekpay.me/pay_example",
-    "https://leekpay.me.untrusted.invalid/pay_example",
     "https://leekpay.me@untrusted.invalid/pay_example",
     "https://user:password@leekpay.me/pay_example",
     "https://leekpay.me:8443/pay_example",
+    "http://app.zayono.com/checkout/example",
+    "https://app.zayono.com@untrusted.invalid/checkout/example",
+    "https://user:password@app.zayono.com/checkout/example",
+    "https://app.zayono.com:8443/checkout/example",
+    "http://payments.example.com/checkout/example",
+    "https://user:password@payments.example.com/checkout/example",
+    "https://payments.example.com:8443/checkout/example",
     "javascript:alert(1)",
+    "data:text/html,example",
+    "//payments.example.com/checkout/example",
     "/pay_example",
+    `https://payments.example.com/${"a".repeat(2048)}`,
   ]) {
     request.mock.mockImplementation(async () =>
       json({ checkoutUrl: unsafeUrl, orderToken }),
     );
     await assert.rejects(createLeekPayCheckout("visa-basic", customer), PaymentApiError);
   }
+});
+
+test("an unrestricted hosted domain cannot bypass order-token validation", async () => {
+  mock.method(globalThis, "fetch", async () => json({
+    checkoutUrl: "https://new-provider.example.net/checkout/example",
+    orderToken: "invalid",
+  }));
+  await assert.rejects(createLeekPayCheckout("visa-basic", customer), PaymentApiError);
 });
 
 test("invalid order tokens cannot launch a checkout or query an order", async () => {

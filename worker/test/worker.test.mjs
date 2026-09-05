@@ -359,11 +359,36 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
     assert.equal(calls.length, 0);
   });
 
+  it("accepts LeekPay-selected HTTPS payment hosts and still verifies payment through LeekPay", async (t) => {
+    let checkoutUrl;
+    const { env, puts, calls } = setup(t, async (_url, init) => Response.json({ success: true, data: {
+      id: "checkout_42", amount: 5000, currency: "XOF", status: "pending",
+      ...(init.method === "POST" ? { payment_url: checkoutUrl, return_url: JSON.parse(init.body).return_url } : {}),
+    } }));
+    for (const url of ["https://app.zayono.com/checkout/test-only-session", "https://future.processor.example/pay/test-only-session"]) {
+      checkoutUrl = url;
+      const result = await create(env);
+      assert.equal(result.checkoutUrl, checkoutUrl);
+      assert.equal(JSON.parse(puts.at(-1).value).checkoutId, "checkout_42");
+      const response = await worker.fetch(request("/api/orders/status", { orderToken: result.orderToken }), env);
+      assert.deepEqual(await response.json(), { status: "pending", verified: false, productId: "visa-basic", amount: 5000, currency: "XOF" });
+      assert.equal(calls.at(-2).url, API);
+      assert.equal(calls.at(-1).url, `${API}/checkout_42`);
+      assert.equal(calls.at(-1).init.headers.Authorization, `Bearer ${MOCK_CREDENTIAL}`);
+    }
+    assert.equal(puts.length, 2);
+  });
+
   it("rejects unsafe provider payment URLs and mismatched creation amount/currency/id", async (t) => {
     const variants = [
-      { payment_url: "https://attacker.example/pay" }, { payment_url: "https://leekpay.me.attacker.example/pay" },
       { payment_url: "http://leekpay.me/pay" }, { payment_url: "https://user:password@leekpay.me/pay" },
       { payment_url: "https://leekpay.me:444/pay" }, { amount: 1 }, { amount: "5000" }, { currency: "USD" },
+      { payment_url: "http://app.zayono.com/pay" },
+      { payment_url: "https://user:password@app.zayono.com/pay" }, { payment_url: "https://app.zayono.com:8443/pay" },
+      { payment_url: "https://app.zayono.com@attacker.example/pay" }, { payment_url: "//app.zayono.com/pay" },
+      { payment_url: "javascript:alert(1)" }, { payment_url: "data:text/html,test" },
+      { payment_url: "/pay/test" }, { payment_url: "invalid url" }, { payment_url: null },
+      { payment_url: `https://app.zayono.com/${"a".repeat(2048)}` },
       { id: "checkout_../../danger" }, { status: "paid" }, { return_url: "https://attacker.example" },
     ];
     let override;

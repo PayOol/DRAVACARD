@@ -53,12 +53,6 @@ const productIds = new Set([
   "mastercard-premium",
   "mastercard-platinum",
 ]);
-const checkoutHosts = new Set([
-  "leekpay.fr",
-  "www.leekpay.fr",
-  "leekpay.me",
-  "www.leekpay.me",
-]);
 const orderStatuses = new Set<LeekPayOrderStatus>([
   "pending",
   "processing",
@@ -87,7 +81,6 @@ function isSafeCheckoutUrl(value: unknown): value is string {
     const url = new URL(value);
     return (
       url.protocol === "https:" &&
-      checkoutHosts.has(url.hostname) &&
       !url.port &&
       !url.username &&
       !url.password

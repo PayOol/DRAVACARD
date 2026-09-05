@@ -213,8 +213,9 @@ function safeCheckoutUrl(value: unknown): string {
   if (typeof value !== "string" || value.length > 2048) throw new ApiError(502, "provider_invalid_response");
   let url: URL;
   try { url = new URL(value); } catch { throw new ApiError(502, "provider_invalid_response"); }
-  if (url.protocol !== "https:" || url.username || url.password || url.port ||
-    !["leekpay.fr", "www.leekpay.fr", "leekpay.me", "www.leekpay.me"].includes(url.hostname)) {
+  // The authenticated LeekPay response determines its payment processor host.
+  // This URL is returned for browser navigation, never fetched by the Worker.
+  if (url.protocol !== "https:" || url.username || url.password || url.port) {
     throw new ApiError(502, "provider_invalid_response");
   }
   return url.href;
