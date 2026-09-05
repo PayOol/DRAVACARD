@@ -2,9 +2,17 @@
   "name": "Drava",
   "short_name": "Drava",
   "description": "Cartes virtuelles et pièces TikTok avec Drava.",
-  "id": "./",
+  "id": "/",
   "start_url": "./",
   "scope": "./",
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "./manifest.json",
+      "id": "https://drava.click/"
+    }
+  ],
+  "prefer_related_applications": false,
   "display": "standalone",
   "lang": "fr",
   "categories": ["finance", "shopping"],

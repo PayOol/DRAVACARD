@@ -10,6 +10,7 @@ const MAX_ENTRY_BYTES = 1024 * 1024;
 const MAX_ASSETS = 128;
 const MAX_BUILD_BYTES = 8 * 1024 * 1024;
 const OFFLINE_PATH = withBasePath('/offline.html');
+const CACHE_PHASE_HEADER = 'X-Drava-Cache-Phase';
 const ASSETS = new Map((BUILD?.assets || []).map(([path, digest, size]) => [withBasePath(path), { digest, size }]));
 const BLOCKED_HEADERS = ['authorization', 'proxy-authorization', 'cookie', 'x-api-key', 'x-auth-token', 'range', 'rsc', 'next-router-state-tree', 'next-router-prefetch', 'next-url', 'x-nextjs-data'];
 const privatePolicy = (headers) => /no-store|private/i.test(headers.get('cache-control') || '') || /(?:^|,)\s*(?:\*|cookie|authorization|rsc|next-router-state-tree)\s*(?:,|$)/i.test(headers.get('vary') || '');
@@ -59,11 +60,18 @@ async function verifiedResponse(response, path) {
   return new Response(bytes, { status: 200, headers });
 }
 
-async function storePublicResponse(cache, request, response) {
+async function storePublicResponse(cache, request, response, initialPhase = 'active') {
   try {
-    const checked = await verifiedResponse(response, new URL(request.url).pathname);
+    const pathname = new URL(request.url).pathname;
+    const checked = await verifiedResponse(response, pathname);
     if (!checked) return false;
     const key = new Request(request.url, { credentials: 'omit', referrer: '', referrerPolicy: 'no-referrer' });
+    if (pathname === OFFLINE_PATH) {
+      // Only local lifecycle state can set this header. Never accept an upstream
+      // phase or reset an activated cache when its public bytes are refreshed.
+      const savedPhase = (await cache.match(key))?.headers.get(CACHE_PHASE_HEADER);
+      checked.headers.set(CACHE_PHASE_HEADER, ['waiting', 'active', 'previous'].includes(savedPhase) ? savedPhase : initialPhase);
+    }
     await cache.put(key, checked);
     // The manifest is the entry/byte bound. Remove any foreign entry in our cache.
     for (const key of await cache.keys()) if (!ASSETS.has(new URL(key.url).pathname) || new URL(key.url).search) await cache.delete(key);
@@ -82,26 +90,61 @@ self.addEventListener('install', (event) => {
         const path = pending.shift();
         const request = new Request(new URL(withBasePath(path), self.location.origin), { credentials: 'omit', cache: path.startsWith('/_next/static/') ? 'force-cache' : 'reload', redirect: 'error' });
         try {
-          if (!await storePublicResponse(cache, request, await fetch(request))) failed = true;
+          if (!await storePublicResponse(cache, request, await fetch(request), 'waiting')) failed = true;
         } catch { failed = true; }
       }
     }));
     if (failed) { await caches.delete(CACHE_NAME); throw new Error('Public PWA assets unavailable'); }
-    // An updated worker waits. Only the explicit, coordinated message can activate it.
+    // An updated worker waits until all clients acknowledge coordinated activation.
   })());
 });
 
 async function previousCache() {
   const keys = await caches.keys();
-  return keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME).at(-1);
+  let previous;
+  for (const key of keys.reverse()) {
+    if (!key.startsWith(CACHE_PREFIX) || key === CACHE_NAME) continue;
+    const phase = await cachePhase(key);
+    // Historical v5 caches have no phase. Keep treating them as activated,
+    // whereas an installed but superseded waiting version is never a fallback.
+    if (phase === 'active' || phase === null) return key;
+    if (phase === 'previous' && previous === undefined) previous = key;
+  }
+  return previous;
+}
+
+async function cachePhase(name) {
+  const offline = await (await caches.open(name)).match(OFFLINE_PATH);
+  // A cache is visible as soon as install opens it, before its first write.
+  // Such incomplete installs must never displace an actually activated version.
+  return offline ? offline.headers.get(CACHE_PHASE_HEADER) : 'waiting';
+}
+
+async function markCachePhase(name, phase) {
+  const cache = await caches.open(name);
+  const offline = await cache.match(OFFLINE_PATH);
+  if (!offline) {
+    if (name === CACHE_NAME) throw new Error('Public offline asset unavailable');
+    return;
+  }
+  const headers = new Headers(offline.headers);
+  headers.set(CACHE_PHASE_HEADER, phase);
+  const key = new Request(new URL(OFFLINE_PATH, self.location.origin), { credentials: 'omit', referrer: '', referrerPolicy: 'no-referrer' });
+  await cache.put(key, new Response(offline.body, { status: 200, headers }));
 }
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const previous = await previousCache();
-    for (const name of await caches.keys()) {
+    await markCachePhase(CACHE_NAME, 'active');
+    if (previous) await markCachePhase(previous, 'previous');
+    const names = await caches.keys();
+    for (const [index, name] of names.entries()) {
       const ownVersion = name.startsWith(CACHE_PREFIX);
       const oldFormat = /^drava-public-v[1-4]-(.*)$/.exec(name)?.[1] === (BASE_PATH || 'root');
+      // A newer installation may overlap activation. Its waiting cache is still
+      // needed; only older superseded waiting versions can be discarded here.
+      if (ownVersion && index > names.indexOf(CACHE_NAME) && await cachePhase(name) === 'waiting') continue;
       if (oldFormat || (ownVersion && name !== CACHE_NAME && name !== previous)) await caches.delete(name);
     }
     await self.clients.claim();
@@ -164,7 +207,7 @@ function scopedClient(client) {
   } catch { return false; }
 }
 
-async function prepareClient(client) {
+async function prepareClient(client, automatic) {
   // The worker cannot inspect forms or fragments; every tab must explicitly answer.
   return new Promise((resolve) => {
     const channel = new MessageChannel();
@@ -174,8 +217,8 @@ async function prepareClient(client) {
       done = true; clearTimeout(timeout); channel.port1.close(); resolve(ready);
     };
     const timeout = setTimeout(() => finish(false), 2000);
-    channel.port1.onmessage = (event) => finish(event.data?.ready === true);
-    try { client.postMessage({ type: 'DRAVA_PWA_PREPARE' }, [channel.port2]); }
+    channel.port1.onmessage = (event) => finish(event.data?.ready === true && (!automatic || event.data?.automaticReload === true));
+    try { client.postMessage({ type: 'DRAVA_PWA_PREPARE', ...(automatic ? { automatic: true } : {}) }, [channel.port2]); }
     catch { finish(false); }
   });
 }
@@ -192,7 +235,8 @@ self.addEventListener('message', (event) => {
     try {
       clients = (await self.clients.matchAll({ type: 'window', includeUncontrolled: true })).filter(scopedClient);
       if (!clients.some((client) => client.id === event.source.id)) return;
-      const ready = await Promise.all(clients.map(prepareClient));
+      const automatic = event.data.automatic === true;
+      const ready = await Promise.all(clients.map((client) => prepareClient(client, automatic)));
       // Recheck the set so a newly opened or changed tab cannot be silently skipped.
       const current = (await self.clients.matchAll({ type: 'window', includeUncontrolled: true })).filter(scopedClient);
       if (!ready.every(Boolean) || current.length !== clients.length || current.some((client) => !clients.some((old) => old.id === client.id && old.url === client.url))) return;

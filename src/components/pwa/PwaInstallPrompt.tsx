@@ -1,6 +1,7 @@
 "use client";
 
 import DravaLogo from "@/components/layout/DravaLogo";
+import { withBasePath } from "@/lib/base-path";
 import { useLanguage } from "@/lib/language-context";
 import {
   type DeferredInstallPrompt,
@@ -8,15 +9,21 @@ import {
   INSTALL_REMINDER_DURATION_MS,
   INSTALL_REMINDER_EVENT,
   INSTALL_REMINDER_KEY,
+  INSTALL_STATE_EVENT,
   type InstallPlatform,
   type InstallPromptHost,
   consumeInstallPrompt,
+  detectInstalledApp,
   detectInstallPlatform,
+  getAvailableInstallPrompt,
+  installedAppKey,
   isInstalledDisplay,
   isIntegratedBrowser,
   readInstallReminder,
+  readInstalledApp,
   waitForInstallPrompt,
   writeInstallReminder,
+  writeInstalledApp,
 } from "@/lib/pwa-install";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Download, MonitorDown, Plus, Share, Smartphone } from "lucide-react";
@@ -61,22 +68,47 @@ export function PwaInstallPrompt() {
 
   useEffect(() => {
     const host = window as InstallPromptHost;
-    const display = window.matchMedia("(display-mode: standalone)");
+    const display = window.matchMedia(
+      "(display-mode: standalone), (display-mode: minimal-ui), (display-mode: window-controls-overlay)",
+    );
     let timer: ReturnType<typeof setTimeout>;
+    let disposed = false;
+    let detectionComplete = false;
+    let detectionVersion = 0;
+    const appId = withBasePath("/");
     reminder.current = readInstallReminder(storage);
     setPlatform(detectInstallPlatform(navigator));
     setIntegrated(isIntegratedBrowser(navigator.userAgent));
-    const runningInstalled = () =>
-      installed.current ||
+    const installedDisplay = () =>
       isInstalledDisplay({
         standalone: display.matches,
         iosStandalone: (navigator as Navigator & { standalone?: boolean })
           .standalone,
-        referrer: document.referrer,
       });
+    const runningInstalled = () =>
+      installedDisplay() ||
+      installed.current ||
+      host.__dravaInstalled === true ||
+      readInstalledApp(storage, appId);
+    const rememberInstallation = () => {
+      installed.current = true;
+      host.__dravaInstalled = true;
+      host.__dravaInstallPrompt = null;
+      writeInstalledApp(storage, true, appId);
+      reminder.current = null;
+      writeInstallReminder(storage, null);
+      request.current?.abort();
+      installingRef.current = false;
+      setInstalling(false);
+      setDue(false);
+    };
     const refresh = () => {
       clearTimeout(timer);
       if (runningInstalled()) {
+        rememberInstallation();
+        return;
+      }
+      if (!detectionComplete) {
         setDue(false);
         return;
       }
@@ -90,40 +122,96 @@ export function PwaInstallPrompt() {
         setDue(true);
       }
     };
+    const nativeReady = () => {
+      if (!getAvailableInstallPrompt(host)) return;
+      ++detectionVersion;
+      detectionComplete = true;
+      if (installedDisplay()) {
+        rememberInstallation();
+        return;
+      }
+      // A new browser offer supersedes an old marker after uninstallation.
+      installed.current = false;
+      host.__dravaInstalled = false;
+      writeInstalledApp(storage, false, appId);
+      setShowHelp(false);
+      refresh();
+    };
     const capture = (event: Event) => {
-      if (runningInstalled()) return;
       event.preventDefault();
+      if (host.__dravaInstallPrompt === event) return;
       host.__dravaInstallPrompt = event as DeferredInstallPrompt;
       host.dispatchEvent(new Event(INSTALL_PROMPT_READY_EVENT));
-      setShowHelp(false);
+    };
+    const checkInstallation = async () => {
+      const version = ++detectionVersion;
+      if (runningInstalled()) {
+        detectionComplete = true;
+        refresh();
+        return;
+      }
+      if (getAvailableInstallPrompt(host)) {
+        nativeReady();
+        return;
+      }
+      detectionComplete = false;
+      refresh();
+      const found = await detectInstalledApp(
+        navigator,
+        new URL(withBasePath("/manifest.json"), window.location.href).href,
+        appId,
+      );
+      if (disposed || version !== detectionVersion) return;
+      detectionComplete = true;
+      if (found) rememberInstallation();
+      refresh();
     };
     const installedEvent = () => {
-      installed.current = true;
-      host.__dravaInstallPrompt = null;
-      reminder.current = null;
-      writeInstallReminder(storage, null);
+      ++detectionVersion;
+      detectionComplete = true;
+      rememberInstallation();
       refresh();
     };
     const storageEvent = (event: StorageEvent) => {
+      if (event.key === installedAppKey(appId) || event.key === null) {
+        installed.current = readInstalledApp(storage, appId);
+        host.__dravaInstalled = installed.current;
+        void checkInstallation();
+      }
       if (event.key !== INSTALL_REMINDER_KEY && event.key !== null) return;
       reminder.current = readInstallReminder(storage);
       refresh();
     };
-    // UpCoin shows the first invitation immediately and repeats after two hours.
-    timer = setTimeout(refresh, 0);
+    const visible = () => {
+      if (!document.hidden) void checkInstallation();
+    };
     window.addEventListener("beforeinstallprompt", capture);
     window.addEventListener("appinstalled", installedEvent);
     window.addEventListener("storage", storageEvent);
     window.addEventListener(INSTALL_REMINDER_EVENT, refresh);
-    display.addEventListener("change", refresh);
+    window.addEventListener(INSTALL_PROMPT_READY_EVENT, nativeReady);
+    window.addEventListener(INSTALL_STATE_EVENT, installedEvent);
+    window.addEventListener("focus", visible);
+    window.addEventListener("pageshow", visible);
+    document.addEventListener("visibilitychange", visible);
+    display.addEventListener("change", visible);
+    // Check before opening so an installed app never flashes its invitation.
+    void checkInstallation();
     return () => {
+      disposed = true;
+      ++detectionVersion;
       clearTimeout(timer);
       request.current?.abort();
       window.removeEventListener("beforeinstallprompt", capture);
       window.removeEventListener("appinstalled", installedEvent);
       window.removeEventListener("storage", storageEvent);
       window.removeEventListener(INSTALL_REMINDER_EVENT, refresh);
-      display.removeEventListener("change", refresh);
+      window.removeEventListener(INSTALL_PROMPT_READY_EVENT, nativeReady);
+      window.removeEventListener(INSTALL_STATE_EVENT, installedEvent);
+      window.removeEventListener("focus", visible);
+      window.removeEventListener("pageshow", visible);
+      document.removeEventListener("visibilitychange", visible);
+      display.removeEventListener("change", visible);
     };
   }, []);
 
@@ -136,7 +224,7 @@ export function PwaInstallPrompt() {
   }, []);
 
   const install = async () => {
-    if (installingRef.current || !pageAvailable) return;
+    if (installingRef.current || installed.current || !pageAvailable) return;
     installingRef.current = true;
     setInstalling(true);
     const controller = new AbortController();
@@ -152,9 +240,9 @@ export function PwaInstallPrompt() {
       const choice = await consumeInstallPrompt(host, prompt);
       if (controller.signal.aborted) return;
       if (choice?.outcome === "accepted") {
-        installed.current = true;
-        reminder.current = null;
-        writeInstallReminder(storage, null);
+        // Acceptance starts installation; appinstalled records its completion.
+        reminder.current = Date.now() + INSTALL_REMINDER_DURATION_MS;
+        writeInstallReminder(storage, reminder.current);
         setDue(false);
       } else setShowHelp(true);
     } catch {
@@ -265,14 +353,7 @@ export function PwaInstallPrompt() {
                   : "Turn on “Open as Web App” if shown, then tap “Add”."}
               </li>
             </ol>
-          ) : (
-            <p className="pwa-install-benefit">
-              <Download size={17} aria-hidden="true" />
-              {fr
-                ? "Drava s’ouvrira depuis votre écran d’accueil ou votre bureau."
-                : "Drava will open from your Home Screen or desktop."}
-            </p>
-          )}
+          ) : null}
           {(integrated || showHelp) && (
             <output className="pwa-install-help">
               {integrated

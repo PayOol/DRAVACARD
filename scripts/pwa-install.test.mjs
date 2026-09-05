@@ -7,15 +7,21 @@ import {
   INSTALL_PROMPT_WAIT_MS,
   INSTALL_REMINDER_DURATION_MS,
   INSTALL_REMINDER_KEY,
+  INSTALL_STATE_EVENT,
   consumeInstallPrompt,
+  detectInstalledApp,
   detectInstallPlatform,
   getAvailableInstallPrompt,
+  installedAppKey,
   isInstalledDisplay,
   isInstallExcludedPath,
   isIntegratedBrowser,
+  matchesInstalledApp,
+  readInstalledApp,
   readInstallReminder,
   waitForInstallPrompt,
   writeInstallReminder,
+  writeInstalledApp,
 } from "../src/lib/pwa-install.ts";
 
 function storage(initial) {
@@ -67,6 +73,28 @@ test("restricted browser storage never stops installation or dismissal", () => {
   assert.equal(readInstallReminder(blocked), null);
   assert.doesNotThrow(() => writeInstallReminder(blocked, 1234));
   assert.doesNotThrow(() => writeInstallReminder(blocked, null));
+  assert.equal(readInstalledApp(blocked), false);
+  assert.doesNotThrow(() => writeInstalledApp(blocked, true));
+  assert.doesNotThrow(() => writeInstalledApp(blocked, false));
+});
+
+test("confirmed installation survives reload and is isolated by app identity", () => {
+  const persisted = storage([["language", "en"]]);
+  writeInstalledApp(persisted, true);
+  const reloaded = storage(persisted.values);
+  assert.equal(readInstalledApp(reloaded), true);
+  assert.equal(readInstalledApp(reloaded, "/DRAVACARD/"), false);
+  writeInstalledApp(reloaded, true, "/DRAVACARD/");
+  writeInstalledApp(reloaded, false);
+  assert.equal(readInstalledApp(reloaded), false);
+  assert.equal(readInstalledApp(reloaded, "/DRAVACARD/"), true);
+  assert.deepEqual([...reloaded.values], [["language", "en"], [installedAppKey("/DRAVACARD/"), "1"]]);
+});
+
+test("an arbitrary or malformed local value never claims the app is installed", () => {
+  for (const value of [null, "", "true", "false", "0", "NaN", "12345"]) {
+    assert.equal(readInstalledApp(storage([[installedAppKey(), value]])), false);
+  }
 });
 
 test("iPhone, iPad and iPadOS desktop user agents get manual iOS instructions", () => {
@@ -86,8 +114,46 @@ test("Android, desktop and unknown platforms remain distinguishable", () => {
 test("all installed-app display signals suppress the invitation", () => {
   assert.equal(isInstalledDisplay({ standalone: true, referrer: "" }), true);
   assert.equal(isInstalledDisplay({ standalone: false, iosStandalone: true, referrer: "" }), true);
-  assert.equal(isInstalledDisplay({ standalone: false, referrer: "android-app://com.example" }), true);
+  assert.equal(isInstalledDisplay({ standalone: false, referrer: "android-app://com.example" }), false);
   assert.equal(isInstalledDisplay({ standalone: false, referrer: "https://example.test" }), false);
+});
+
+test("related-app detection matches only this web app, including nested deployments", () => {
+  for (const base of ["/", "/DRAVACARD/", "/nested/drava/"]) {
+    const manifest = `https://drava.click${base}manifest.json`;
+    const id = `https://drava.click${base}`;
+    assert.equal(matchesInstalledApp([{ platform: "webapp", url: manifest, id }], manifest, base), true);
+    assert.equal(matchesInstalledApp([{ platform: "webapp", url: "./manifest.json" }], manifest, base), true);
+    assert.equal(matchesInstalledApp([{ platform: "webapp", id }], manifest, base), true);
+    for (const apps of [
+      [], null, {}, [null],
+      [{ platform: "play", id }],
+      [{ platform: "webapp" }],
+      [{ platform: "webapp", url: "https://unrelated.test/manifest.json", id }],
+      [{ platform: "webapp", url: manifest, id: "https://drava.click/other/" }],
+      [{ platform: "webapp", id: "https://unrelated.test/" }],
+    ]) assert.equal(matchesInstalledApp(apps, manifest, base), false);
+  }
+});
+
+test("installed-related-app lookup preserves its navigator receiver", async () => {
+  const host = {
+    async getInstalledRelatedApps() {
+      assert.equal(this, host);
+      return [{ platform: "webapp", id: "https://drava.click/" }];
+    },
+  };
+  assert.equal(await detectInstalledApp(host, "https://drava.click/manifest.json", "/"), true);
+});
+
+test("unsupported, failed and stalled lookup never blocks the manual install path", async () => {
+  for (const host of [
+    {},
+    { getInstalledRelatedApps: async () => [] },
+    { getInstalledRelatedApps() { throw new Error("Unavailable"); } },
+    { getInstalledRelatedApps: async () => { throw new Error("Denied"); } },
+    { getInstalledRelatedApps: () => new Promise(() => {}) },
+  ]) assert.equal(await detectInstalledApp(host, "https://drava.click/manifest.json", "/", 1), false);
 });
 
 test("integrated browsers get an external-browser instruction", () => {
@@ -117,6 +183,40 @@ test("early native event is captured without opening or consuming its prompt", a
   assert.equal(host.__dravaInstallPrompt, native);
   assert.equal(ready, 1);
   assert.equal(native.calls(), 0);
+});
+
+test("installation before hydration invalidates the old prompt and persists completion", async () => {
+  const source = await readFile(new URL("../public/pwa-install-capture.js", import.meta.url), "utf8");
+  for (const base of ["/", "/DRAVACARD/"]) {
+    const host = new EventTarget();
+    host.localStorage = storage();
+    let changes = 0;
+    host.addEventListener(INSTALL_STATE_EVENT, () => changes++);
+    vm.runInNewContext(source, { window: host, document: { currentScript: { src: `https://drava.click${base}pwa-install-capture.js` } }, URL, Event });
+    const old = prompt();
+    host.dispatchEvent(old);
+    host.dispatchEvent(new Event("appinstalled"));
+    assert.equal(host.__dravaInstalled, true);
+    assert.equal(host.__dravaInstallPrompt, null);
+    assert.equal(readInstalledApp(host.localStorage, base), true);
+    assert.equal(changes, 1);
+    assert.equal(old.calls(), 0);
+    const fresh = prompt();
+    host.dispatchEvent(fresh);
+    assert.equal(host.__dravaInstalled, false);
+    assert.equal(readInstalledApp(host.localStorage, base), false);
+    assert.equal(host.__dravaInstallPrompt, fresh);
+  }
+});
+
+test("early installation retains its in-memory signal if storage is denied", async () => {
+  const source = await readFile(new URL("../public/pwa-install-capture.js", import.meta.url), "utf8");
+  const host = new EventTarget();
+  Object.defineProperty(host, "localStorage", { get() { throw new Error("SecurityError"); } });
+  vm.runInNewContext(source, { window: host, Event });
+  host.dispatchEvent(new Event("appinstalled"));
+  assert.equal(host.__dravaInstalled, true);
+  assert.equal(host.__dravaInstallPrompt, null);
 });
 
 test("an already-captured prompt is immediately available", async () => {

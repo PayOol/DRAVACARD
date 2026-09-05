@@ -903,11 +903,12 @@ function validateDataCollectionControls(source, relativePath) {
   if ([tiktokCatalogPath, tiktokCheckoutPath].includes(relativePath)) return validateTikTokControls(source, relativePath)
   let controlsSource = source
   if (['src/components/pwa/usePwaPageAvailable.ts', 'public/register-sw.js'].includes(relativePath)) {
-    // These exact matches() arguments only detect a focused editable element;
-    // they do not enable editing or read its value. Keep all other controls checked.
+    // These exact matches() arguments identify existing fields so PWA actions
+    // preserve focus and unfinished edits; they never create editing controls.
     const file = ts.createSourceFile(relativePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
     const spans = []
     const approved = new Set(['input, select, textarea, [contenteditable="true"]', 'input, textarea, select, [contenteditable="true"]'])
+    if (relativePath === 'public/register-sw.js') approved.add('input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, [contenteditable]')
     function visit(node) {
       if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
         && node.expression.name.text === 'matches' && node.arguments.length === 1
@@ -1334,6 +1335,11 @@ async function selfTest() {
     assert.ok(validateDataCollectionControls(`${guard}; const field = <input />`, pwaPath).length > 0)
     assert.ok(validateDataCollectionControls(guard, 'src/components/unreviewed.tsx').length > 0)
   }
+  const editedFieldGuard = `target.matches('input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, [contenteditable]')`
+  assert.deepEqual(validateDataCollectionControls(editedFieldGuard, 'public/register-sw.js'), [])
+  assert.ok(validateDataCollectionControls(`${editedFieldGuard}; target.contentEditable = true`, 'public/register-sw.js').length > 0)
+  assert.ok(validateDataCollectionControls(`${editedFieldGuard}; const field = <textarea />`, 'public/register-sw.js').length > 0)
+  assert.ok(validateDataCollectionControls(editedFieldGuard, 'src/components/unreviewed.tsx').length > 0)
   const safeOffline = `<meta http-equiv="Content-Security-Policy" content="connect-src 'none'; form-action 'none'"><meta name="robots" content="noindex"><h1>Vous êtes hors connexion / offline</h1><script src="theme-init.js"></script>`
   assert.deepEqual(validateOfflineDocument(safeOffline), [])
   for (const unsafeOffline of [
@@ -1943,9 +1949,17 @@ if (requireOutput) {
       const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
       const icons = Array.isArray(manifest.icons) ? manifest.icons : []
       if (manifest.name !== 'Drava' || manifest.short_name !== 'Drava' || manifest.display !== 'standalone') failures.push('PWA must install as Drava in standalone mode')
-      const paths = [manifest.id, manifest.start_url, manifest.scope, ...icons.map((icon) => icon.src)]
+      const paths = [manifest.start_url, manifest.scope, ...icons.map((icon) => icon.src)]
       if (icons.length === 0 || paths.some((value) => typeof value !== 'string' || value.startsWith('/'))) {
         failures.push('Web app manifest paths must remain relative')
+      }
+      const appId = `${expectedBasePath}/`
+      const appUrl = new URL(appId, process.env.NEXT_PUBLIC_SITE_URL || 'https://drava.click').href
+      const related = manifest.related_applications
+      if (manifest.id !== appId || manifest.prefer_related_applications !== false ||
+          !Array.isArray(related) || related.length !== 1 || related[0].platform !== 'webapp' ||
+          related[0].url !== './manifest.json' || related[0].id !== appUrl) {
+        failures.push('PWA installed-app detection must reference this deployment identity only')
       }
     }
 

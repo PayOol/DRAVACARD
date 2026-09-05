@@ -41,7 +41,7 @@ Les fichiers générés par `npm run dev` sont isolés dans `.next-dev/`. Les bu
 
 ### PWA Drava
 
-L’invite d’installation reprend celle d’UpCoin, avec rappel après deux heures, aide iOS et protection des commandes ouvertes. La PWA utilise un cache public borné, un écran hors connexion et des mises à jour explicites. Les paiements nécessitent le réseau. Voir [l’analyse et l’architecture PWA](docs/PWA.md).
+L’invite d’installation reprend celle d’UpCoin, avec rappel après deux heures, aide iOS et protection des commandes ouvertes. La PWA utilise un cache public borné, un écran hors connexion et des mises à jour automatiques et silencieuses. Les paiements nécessitent le réseau. Voir [l’analyse et l’architecture PWA](docs/PWA.md).
 
 ```bash
 npm run test:pwa

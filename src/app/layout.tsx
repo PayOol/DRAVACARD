@@ -6,7 +6,6 @@ import { withBasePath } from "@/lib/base-path";
 import { LanguageProvider } from "@/lib/language-context";
 import { ThemeProvider } from "@/lib/theme-context";
 import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
-import { PwaUpdateNotice } from "@/components/pwa/PwaUpdateNotice";
 import Script from "next/script";
 
 // Fonts
@@ -137,7 +136,6 @@ export default function RootLayout({
           <ThemeProvider>
             {children}
             <PwaInstallPrompt />
-            <PwaUpdateNotice />
           </ThemeProvider>
         </LanguageProvider>
         <Script

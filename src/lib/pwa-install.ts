@@ -1,4 +1,6 @@
 export const INSTALL_REMINDER_KEY = "drava-pwa-install-reminder-until";
+export const INSTALLED_APP_KEY = "drava-pwa-installed";
+export const INSTALL_STATE_EVENT = "drava:install-state-change";
 export const INSTALL_PROMPT_READY_EVENT = "drava:install-prompt-ready";
 export const INSTALL_REMINDER_EVENT = "drava:install-reminder-change";
 export const INSTALL_REMINDER_DURATION_MS = 2 * 60 * 60 * 1000;
@@ -15,7 +17,93 @@ export type DeferredInstallPrompt = Event & {
 };
 export type InstallPromptHost = EventTarget & {
   __dravaInstallPrompt?: DeferredInstallPrompt | null;
+  __dravaInstalled?: boolean;
 };
+
+export type RelatedAppsNavigator = {
+  getInstalledRelatedApps?: () => Promise<unknown>;
+};
+
+export function installedAppKey(appId = "/") {
+  return `${INSTALLED_APP_KEY}:${appId}`;
+}
+
+export function readInstalledApp(storage: Pick<Storage, "getItem">, appId = "/") {
+  try {
+    return storage.getItem(installedAppKey(appId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function writeInstalledApp(
+  storage: Pick<Storage, "setItem" | "removeItem">,
+  installed: boolean,
+  appId = "/",
+) {
+  try {
+    if (installed) storage.setItem(installedAppKey(appId), "1");
+    else storage.removeItem(installedAppKey(appId));
+  } catch {
+    // The current page also retains the state when storage is unavailable.
+  }
+}
+
+export function matchesInstalledApp(
+  apps: unknown,
+  manifestUrl: string,
+  appId: string,
+) {
+  if (!Array.isArray(apps)) return false;
+  try {
+    const manifest = new URL(manifestUrl);
+    const identity = new URL(appId, manifest.origin).href;
+    return apps.some((app: unknown) => {
+      if (!app || typeof app !== "object") return false;
+      const { platform, url, id } = app as Record<string, unknown>;
+      if (platform !== "webapp") return false;
+      const hasUrl = typeof url === "string" && url.length > 0;
+      const hasId = typeof id === "string" && id.length > 0;
+      if (!hasUrl && !hasId) return false;
+      try {
+        return (
+          (!hasUrl || new URL(url as string, manifest).href === manifest.href) &&
+          (!hasId || new URL(id as string, manifest.origin).href === identity)
+        );
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return false;
+  }
+}
+
+export async function detectInstalledApp(
+  navigator: RelatedAppsNavigator | Navigator,
+  manifestUrl: string,
+  appId: string,
+  timeoutMs = INSTALL_PROMPT_WAIT_MS,
+): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    if (
+      !("getInstalledRelatedApps" in navigator) ||
+      typeof navigator.getInstalledRelatedApps !== "function"
+    ) return false;
+    const apps = await Promise.race([
+      navigator.getInstalledRelatedApps(),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), timeoutMs);
+      }),
+    ]);
+    return matchesInstalledApp(apps, manifestUrl, appId);
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export function detectInstallPlatform({
   userAgent,
@@ -42,13 +130,8 @@ export function isIntegratedBrowser(userAgent: string) {
 export function isInstalledDisplay({
   standalone,
   iosStandalone,
-  referrer,
-}: { standalone: boolean; iosStandalone?: boolean; referrer: string }) {
-  return (
-    standalone ||
-    iosStandalone === true ||
-    referrer.startsWith("android-app://")
-  );
+}: { standalone: boolean; iosStandalone?: boolean }) {
+  return standalone || iosStandalone === true;
 }
 
 export function isInstallExcludedPath(pathname: string) {

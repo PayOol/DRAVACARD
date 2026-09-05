@@ -17,6 +17,13 @@ export function normalizeBasePath(value = '') {
   if (!/^\/[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*\/?$/.test(value) || value.split('/').some((part) => part === '.' || part === '..')) throw new Error('Invalid PWA base path');
   return value.replace(/\/$/, '');
 }
+function publicationOrigin(value) {
+  if (typeof value !== 'string' || !value || /\s|[?#]/.test(value)) throw new Error('Invalid PWA site URL');
+  let url;
+  try { url = new URL(value); } catch { throw new Error('Invalid PWA site URL'); }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || /^[a-z]+:\/\/[^/]*@/i.test(value)) throw new Error('Invalid PWA site URL');
+  return url.origin;
+}
 async function filesWithin(directory, prefix) {
   const result = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -28,12 +35,24 @@ async function filesWithin(directory, prefix) {
   return result;
 }
 
-export async function generatePwa({ outDir = path.join(ROOT, 'out'), basePath = process.env.NEXT_PUBLIC_BASE_PATH || '', source = path.join(ROOT, 'public/sw.js') } = {}) {
+export async function generatePwa({ outDir = path.join(ROOT, 'out'), basePath = process.env.NEXT_PUBLIC_BASE_PATH || '', siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://drava.click', source = path.join(ROOT, 'public/sw.js') } = {}) {
   const base = normalizeBasePath(basePath);
+  const origin = publicationOrigin(siteUrl);
   const exportRoot = path.resolve(outDir);
   const html = await readFile(path.join(exportRoot, 'index.html'), 'utf8');
   const template = await readFile(source, 'utf8');
   if (template.split('/* DRAVA_PWA_BUILD */ null').length !== 2) throw new Error('Expected one PWA manifest placeholder');
+  const manifest = JSON.parse(await readFile(path.join(exportRoot, 'manifest.json'), 'utf8'));
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) throw new Error('Invalid PWA web app manifest');
+  // Unlike start_url and scope, the manifest id resolves against the origin.
+  // Chromium's desktop related-app lookup additionally requires an absolute id.
+  const id = `${base}/`;
+  const publishedManifest = `${JSON.stringify({
+    ...manifest,
+    id,
+    related_applications: [{ platform: 'webapp', url: './manifest.json', id: new URL(id, origin).href }],
+    prefer_related_applications: false,
+  }, null, 2)}\n`;
   const candidates = new Set(PUBLIC_ASSETS);
   for (const [directory, prefix, extension] of [['_next/static', '/_next/static', /\.(?:js|css|woff2?)$/], ['images', '/images', /\.(?:svg|png|webp|jpe?g)$/]]) {
     for (const name of await filesWithin(path.join(exportRoot, directory), prefix)) if (extension.test(name)) candidates.add(name);
@@ -64,9 +83,10 @@ export async function generatePwa({ outDir = path.join(ROOT, 'out'), basePath = 
   }
   const precacheBytes = assets.filter(([name]) => precache.has(name)).reduce((sum, entry) => sum + entry[2], 0);
   if (precacheBytes > MAX_PRECACHE_BYTES) throw new Error('PWA bootstrap exceeds its precache budget');
-  const version = digest(JSON.stringify({ base, assets, precache: [...precache].sort(), template, html })).slice(0, 24);
+  const version = digest(JSON.stringify({ base, assets, precache: [...precache].sort(), template, html, manifest: publishedManifest })).slice(0, 24);
   const config = { version, assets, precache: [...precache].sort() };
   const generated = template.replace('/* DRAVA_PWA_BUILD */ null', JSON.stringify(config));
+  await writeFile(path.join(exportRoot, 'manifest.json'), publishedManifest, 'utf8');
   await writeFile(path.join(exportRoot, 'sw.js'), generated, 'utf8');
   return { version, assets: assets.length, bytes: totalBytes, precache: precache.size, precacheBytes, basePath: base };
 }

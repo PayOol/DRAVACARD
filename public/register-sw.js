@@ -29,9 +29,22 @@
   let externalCheckoutActive = false;
   let requestingUpdate = false;
   let reloading = false;
+  let controlled = navigator.serviceWorker.controller?.scriptURL === workerUrl.href;
+  let composing = false;
+  let checking = false;
+  let registering = false;
+  let loaded = document.readyState === 'complete';
   let unlockTimer;
+  let cycleTimer;
+  let checkTimer;
   let lastChecked = 0;
-  const state = { updateAvailable: false, applying: false, offline: navigator.onLine === false, blocked: false };
+  let nextAttempt = 0;
+  const QUIET_MS = 3000;
+  const RETRY_MS = 15000;
+  const CHECK_MS = 10 * 60 * 1000;
+  let quietUntil = Date.now() + QUIET_MS;
+  const edited = new Set();
+  const state = { updateAvailable: false, applying: false, offline: navigator.onLine === false, blocked: false, reloadPending: false };
   const snapshot = () => ({ ...state });
   const publish = (change = {}) => {
     Object.assign(state, change);
@@ -39,11 +52,20 @@
   };
   const busy = () => {
     const publicHome = window.location.pathname === scope || window.location.pathname === `${scope}index.html`;
-    const safeFragment = !window.location.hash || window.location.hash === '#tiktok' || /^#card:[a-z0-9-]+$/.test(window.location.hash);
+    const safeFragment = !window.location.hash || window.location.hash === '#tiktok';
     const active = document.activeElement;
-    return externalCheckoutActive || !publicHome || !!window.location.search || !safeFragment ||
+    for (const element of edited) {
+      if (!element.isConnected || !(element.isContentEditable ? element.textContent : element.value)?.trim()) edited.delete(element);
+    }
+    return composing || edited.size > 0 || externalCheckoutActive || !publicHome || !!window.location.search || !safeFragment ||
       !!document.querySelector('[data-drava-checkout-active="true"], [data-checkout-shell="shared"], [role="dialog"], dialog[open]') ||
-      !!active?.matches('input, textarea, select, [contenteditable="true"]');
+      !!active?.isContentEditable || !!active?.matches('input, textarea, select, [contenteditable="true"]');
+  };
+  const quiet = () => Date.now() >= quietUntil;
+  const schedule = (delay = 0) => {
+    clearTimeout(cycleTimer);
+    if (reloading || state.offline || (!registration?.waiting && !state.reloadPending)) return;
+    cycleTimer = setTimeout(() => { void automaticUpdate(); }, Math.max(50, delay, quietUntil - Date.now(), nextAttempt - Date.now()));
   };
   const release = () => {
     clearTimeout(unlockTimer);
@@ -58,48 +80,56 @@
       requestingUpdate = false;
       release();
       publish({ blocked: true });
+      nextAttempt = Date.now() + RETRY_MS;
+      schedule();
     }, 12000);
   };
-  // A brief coordination lock closes the race between checking an idle tab and
-  // activation. No form values, routes or order details are sent to the worker.
-  const guardInteraction = (event) => {
-    if (!state.applying) return;
-    event.preventDefault(); event.stopImmediatePropagation();
-  };
-  for (const type of ['pointerdown', 'click', 'keydown', 'submit']) document.addEventListener(type, guardInteraction, true);
+  // Coordination never consumes user input. If a form opens after readiness,
+  // controllerchange keeps the current document until it can safely refresh.
 
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.source?.scriptURL !== workerUrl.href) return;
     if (event.data?.type === 'DRAVA_PWA_PREPARE' && event.ports?.[0]) {
-      const ready = !busy();
+      const ready = !state.offline && !state.reloadPending && !busy() && quiet();
       if (ready) lock();
-      event.ports[0].postMessage({ ready });
-    } else if (event.data?.type === 'DRAVA_PWA_RELEASE') release();
+      event.ports[0].postMessage({ ready, automaticReload: true });
+    } else if (event.data?.type === 'DRAVA_PWA_RELEASE') {
+      release();
+      schedule(RETRY_MS);
+    }
   });
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    // First installation, another tab's update and ordinary controller changes
-    // never reload this page. Only this tab's explicit action can do so.
-    const reload = requestingUpdate && !reloading && !busy();
+    const nextControlled = navigator.serviceWorker.controller?.scriptURL === workerUrl.href;
+    const replaced = controlled && nextControlled;
+    controlled = nextControlled;
     requestingUpdate = false;
-    if (reload) reloading = true;
     release();
     publish({ updateAvailable: false, blocked: false });
-    if (reload) window.location.reload();
+    // First installation never reloads. Every updated tab remembers the need
+    // to refresh, including when an input or checkout became active meanwhile.
+    if (replaced && !reloading) {
+      nextAttempt = 0;
+      publish({ reloadPending: true });
+      schedule();
+    }
   });
   window.addEventListener('drava:pwa-checkout', (event) => {
     if (typeof event.detail?.active === 'boolean') externalCheckoutActive = event.detail.active;
+    schedule();
   });
 
   const checkForUpdate = async () => {
-    if (!registration || state.offline || busy()) return;
-    lastChecked = Date.now();
+    if (!registration || checking || state.offline) return;
+    checking = true;
     try {
       await registration.update();
+      lastChecked = Date.now();
       publish({ updateAvailable: !!registration.waiting });
     } catch { /* An offline update check never disrupts the current application. */ }
+    finally { checking = false; schedule(); }
   };
   const applyUpdate = async () => {
-    if (!registration?.waiting || requestingUpdate || state.applying || state.offline || busy()) {
+    if (!registration?.waiting || requestingUpdate || state.applying || state.reloadPending || state.offline || busy() || !quiet()) {
       publish({ blocked: true }); return false;
     }
     requestingUpdate = true;
@@ -114,36 +144,87 @@
       };
       const timeout = setTimeout(() => finish(false), 6000);
       channel.port1.onmessage = (event) => finish(event.data?.ok === true);
-      try { waiting.postMessage({ type: 'DRAVA_PWA_APPLY_UPDATE' }, [channel.port2]); }
+      try { waiting.postMessage({ type: 'DRAVA_PWA_APPLY_UPDATE', automatic: true }, [channel.port2]); }
       catch { finish(false); }
     });
     if (!ok && !reloading) {
       requestingUpdate = false; release(); publish({ blocked: true });
+      nextAttempt = Date.now() + RETRY_MS;
+      schedule();
     }
     return ok;
+  };
+  const automaticUpdate = async () => {
+    if (reloading || state.offline) return;
+    if (busy() || !quiet()) { schedule(RETRY_MS); return; }
+    if (state.reloadPending) {
+      reloading = true;
+      window.location.reload();
+      return;
+    }
+    if (requestingUpdate || state.applying) return;
+    if (registration?.waiting) await applyUpdate();
   };
   window.dravaPwa = Object.freeze({ getState: snapshot, applyUpdate, checkForUpdate });
   publish();
 
   const register = async () => {
+    if (registration || registering || !loaded || state.offline) return;
+    registering = true;
     try {
       registration = await navigator.serviceWorker.register(workerUrl, { scope, updateViaCache: 'none' });
       lastChecked = Date.now();
       publish({ updateAvailable: !!registration.waiting });
-      registration.addEventListener('updatefound', () => {
+      schedule();
+      const watched = new WeakSet();
+      const watchInstalling = () => {
         const installing = registration.installing;
-        installing?.addEventListener('statechange', () => {
-          if (installing.state === 'installed' && navigator.serviceWorker.controller) publish({ updateAvailable: !!registration.waiting });
-        });
-      });
+        if (!installing || watched.has(installing)) return;
+        watched.add(installing);
+        const installed = () => {
+          if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+            publish({ updateAvailable: !!registration.waiting });
+            schedule();
+          }
+        };
+        installing.addEventListener('statechange', installed);
+        installed();
+      };
+      registration.addEventListener('updatefound', watchInstalling);
+      watchInstalling();
     } catch { /* Registration failure must not block browsing or payment. */ }
+    finally { registering = false; }
   };
-  if (document.readyState === 'complete') void register();
-  else window.addEventListener('load', () => { void register(); }, { once: true });
+  if (loaded) void register();
+  else window.addEventListener('load', () => { loaded = true; void register(); }, { once: true });
   const checkIfStale = () => {
-    if (document.visibilityState === 'visible' && Date.now() - lastChecked > 10 * 60 * 1000) void checkForUpdate();
+    if (document.visibilityState === 'visible') {
+      if (!registration) void register();
+      else if (Date.now() - lastChecked >= CHECK_MS) void checkForUpdate();
+    }
+    schedule();
   };
+  const activity = () => { quietUntil = Date.now() + QUIET_MS; schedule(); };
+  for (const type of ['pointerdown', 'keydown', 'scroll', 'focusin', 'focusout']) document.addEventListener(type, activity, { capture: true, passive: true });
+  const edit = (event) => {
+    const target = event.target;
+    if (target?.matches('input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, [contenteditable]')) edited.add(target);
+    activity();
+  };
+  document.addEventListener('input', edit, true);
+  document.addEventListener('change', edit, true);
+  document.addEventListener('compositionstart', () => { composing = true; activity(); });
+  document.addEventListener('compositionend', () => { composing = false; activity(); });
+  const observer = new MutationObserver(() => schedule());
+  observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-drava-checkout-active', 'data-state', 'role', 'open'] });
   document.addEventListener('visibilitychange', checkIfStale);
+  window.addEventListener('pageshow', checkIfStale);
+  window.addEventListener('popstate', () => { activity(); });
+  window.addEventListener('hashchange', () => { activity(); });
   window.addEventListener('online', () => { publish({ offline: false }); checkIfStale(); });
-  window.addEventListener('offline', () => publish({ offline: true }));
+  window.addEventListener('offline', () => { publish({ offline: true }); clearTimeout(cycleTimer); });
+  const periodicCheck = () => { checkIfStale(); checkTimer = setTimeout(periodicCheck, CHECK_MS); };
+  checkTimer = setTimeout(periodicCheck, CHECK_MS);
+  window.addEventListener('pagehide', () => { clearTimeout(cycleTimer); clearTimeout(checkTimer); });
+  window.addEventListener('pageshow', () => { clearTimeout(checkTimer); checkTimer = setTimeout(periodicCheck, CHECK_MS); });
 })();
