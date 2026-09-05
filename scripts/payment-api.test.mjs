@@ -83,9 +83,15 @@ test("checkout and status reject currencies inconsistent with the service, while
   }
 });
 
-test("card status drops TikTok receipt identity and all contact fields", async () => {
+test("card status preserves its optional notification and drops TikTok receipt identity and contacts", async () => {
   const card={service:"cards",productId:"visa-basic",provider:"leekpay",status:"paid",verified:true,amount:5000,currency:"XOF"};
   mock.method(globalThis,"fetch",async()=>json({...card,username:"unrelated_account",...contact,password:"must-not-escape",coins:700,bonus:70,notification:"sent"}));
+  assert.deepEqual(await getPaymentOrderStatus(token),{...card,notification:"sent"});
+});
+
+test("legacy card status without notification remains accepted", async () => {
+  const card={service:"cards",productId:"visa-basic",provider:"leekpay",status:"paid",verified:true,amount:5000,currency:"XOF"};
+  mock.method(globalThis,"fetch",async()=>json(card));
   assert.deepEqual(await getPaymentOrderStatus(token),card);
 });
 

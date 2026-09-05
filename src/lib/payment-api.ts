@@ -415,6 +415,8 @@ export async function getPaymentOrderStatus(
         !positive(data.createdAt) ||
         !data.orderId ||
         !["pending", "sent"].includes(String(data.notification)))) ||
+    (data.notification !== undefined &&
+      !["pending", "sent"].includes(String(data.notification))) ||
     (data.status === "paid" &&
       ((service === "tiktok" &&
         data.username !== undefined &&
@@ -442,6 +444,9 @@ export async function getPaymentOrderStatus(
           bonus: data.bonus as number,
           notification: data.notification as "pending" | "sent",
         }
+      : {}),
+    ...(service === "cards" && data.notification !== undefined
+      ? { notification: data.notification as "pending" | "sent" }
       : {}),
     ...(service === "tiktok" &&
     data.status === "paid" &&

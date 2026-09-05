@@ -35,7 +35,17 @@ Pour rétablir les tarifs habituels après les tests : Visa Basique 5 000 FCFA d
 
 Les pages de résultat refusent une commande d’un autre service. Un jeton reçu par fragment est immédiatement retiré de l’URL et reste en mémoire. Le résultat Mobile Money intégré conserve également le jeton et l’éventuel lien de validation en mémoire ; il reprend la vérification habituelle, sans créer une deuxième commande. Les reçus et historiques respectent les listes explicites de champs autorisés.
 
+Pour les cartes comme pour TikTok, le serveur construit les retours à partir de l’origine de la requête déjà validée, que le Worker soit en production ou en développement. Une commande démarrée sur le site public y revient ; les origines locales déjà autorisées `http://localhost:3000` et `http://127.0.0.1:3000` reviennent chacune sur leur propre origine. Les chemins sont fixés côté serveur : le client ne fournit aucune URL de retour libre. Cette règle ne change ni les origines autorisées, ni le consentement, les exigences de paiement ou la vérification serveur.
+
+La correction concerne les nouvelles commandes créées après son déploiement. Les checkouts déjà créés conservent l’URL de retour enregistrée chez le prestataire ; ouvrir ensuite le site depuis une autre origine ne modifie pas ces liens.
+
 ## Compatibilité et activation
+
+Les cartes et les pièces partagent le transport EmailJS, le modèle marchand et les secrets existants. Après paiement vérifié, la notification contient les coordonnées saisies et les informations de la commande ; les champs propres au produit restent séparés. Les coordonnées nécessaires sont chiffrées dans une enveloppe distincte de l’enregistrement de paiement, puis supprimées après l’envoi ou un échec définitif du paiement. Une panne d’e-mail ne transforme jamais un paiement confirmé en échec. La page des cartes reprend silencieusement une transmission en attente pendant son cycle de vérification borné, sans nouvelle commande ni paiement. Les anciennes commandes de cartes sans coordonnées conservées ne peuvent pas être notifiées rétroactivement.
+
+L’envoi dépend d’une vérification de statut après paiement, comme pour TikTok ; aucun nouveau webhook ou traitement planifié n’est ajouté. La protection contre les répétitions séquentielles utilise le marqueur KV existant ; elle ne garantit pas l’unicité absolue lors d’appels concurrents ou d’une réponse EmailJS perdue après acceptation.
+
+Extension déployée le 5 septembre 2026 sur `drava-leekpay`, version `ae4402e7-3c69-406a-bfa5-5af8236b2963`. Le modèle EmailJS partagé a été sauvegardé puis relu : sujet dynamique, sections cartes/TikTok et confidentialité conservée. Les 78 tests Worker, les tests du retour carte avec panne d’envoi simulée, TypeScript, lint, compilation et contrôles de sécurité passent. Aucun nouvel e-mail ou paiement réel n’a été effectué pour cette extension ; validation automatisée sans appareil iOS/Android physique.
 
 L’ancien corps cartes `{ productId, customer }` reste accepté sur `/api/checkout`, avec sa réponse historique. Les routes `/api/tiktok/*` restent des alias du moteur commun. Les commandes v1 cartes et TikTok sont normalisées en mémoire ; leurs clés KV, leurs jetons et le contexte de chiffrement restent inchangés.
 

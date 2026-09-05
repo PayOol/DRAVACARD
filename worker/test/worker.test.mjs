@@ -251,8 +251,8 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
       const payload = JSON.parse(calls.at(-1).init.body);
       assert.equal(payload.amount, VISA_PRICE);
       assert.equal(payload.currency, "XOF");
-      assert.equal(payload.return_url, `${ORIGIN}/payment-success/#order=${result.orderToken}`);
-      assert.equal(payload.cancel_url, `${ORIGIN}/payment-failure/#order=${result.orderToken}`);
+      assert.equal(payload.return_url, `${origin}/payment-success/#order=${result.orderToken}`);
+      assert.equal(payload.cancel_url, `${origin}/payment-failure/#order=${result.orderToken}`);
       assert.equal(calls.at(-1).init.headers.Authorization, `Bearer ${MOCK_CREDENTIAL}`);
       const checked = await worker.fetch(request("/api/orders/status", { orderToken: result.orderToken }, { Origin: origin }), env);
       assert.equal(checked.headers.get("Access-Control-Allow-Origin"), origin);

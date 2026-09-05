@@ -184,8 +184,8 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
       assert.equal(localCheckout.checkoutUrl, paymentUrl);
       assert.equal(createdBody.amount, VISA_PRICE);
       assert.equal(createdBody.currency, "XOF");
-      assert.equal(createdBody.return_url, `https://drava.click/payment-success/#order=${localCheckout.orderToken}`);
-      assert.equal(createdBody.cancel_url, `https://drava.click/payment-failure/#order=${localCheckout.orderToken}`);
+      assert.equal(createdBody.return_url, `${origin}/payment-success/#order=${localCheckout.orderToken}`);
+      assert.equal(createdBody.cancel_url, `${origin}/payment-failure/#order=${localCheckout.orderToken}`);
       assert.ok(!JSON.stringify(localCheckout).includes("test-only-provider-credential"));
       const localStatus = await runtime.dispatchFetch("https://runtime.example/api/orders/status", {
         method: "POST", headers: localHeaders, body: JSON.stringify({ orderToken: localCheckout.orderToken }),
@@ -219,5 +219,80 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
     assert.equal(outboundCalls, 7);
   } finally {
     await runtime.dispose();
+  }
+});
+
+it("preserves approved return origins for both services in production and development in workerd", { timeout: 30_000 }, async () => {
+  const bundle = await build({ entryPoints: [fileURLToPath(new URL("../src/index.ts", import.meta.url))], bundle: true, format: "esm", platform: "browser", write: false });
+  const localOrigins = ["http://localhost:3000", "http://127.0.0.1:3000"];
+  for (const environment of ["production", "development"]) {
+    const calls = [];
+    const runtime = new Miniflare(convertV4MiniflareOptions({
+      name: `drava-return-origin-${environment}`, modules: true, script: bundle.outputFiles[0].text,
+      compatibilityDate: "2026-09-05", compatibilityFlags: ["nodejs_compat"], cf: false,
+      telemetry: { enabled: false }, logRequests: false,
+      bindings: {
+        ENVIRONMENT: environment, LOCAL_ORIGINS: localOrigins, TIKTOK_BASE_PATH: "/preview",
+        LEEKPAY_SECRET_KEY: "test-only-provider-credential", TIKTOK_DATA_KEY: "56".repeat(32),
+        EMAILJS_SERVICE_ID: "test-service", EMAILJS_TEMPLATE_ID: "test-template", EMAILJS_PUBLIC_KEY: "test-public-key",
+      },
+      kvNamespaces: ["ORDERS"],
+      ratelimits: {
+        CREATE_LIMITER: { namespace_id: "2026090521", simple: { limit: 50, period: 60 } },
+        STATUS_LIMITER: { namespace_id: "2026090522", simple: { limit: 50, period: 60 } },
+      },
+      outboundService: async (request) => {
+        assert.equal(request.url, "https://leekpay.fr/api/v1/checkout");
+        assert.equal(request.method, "POST");
+        assert.equal(request.headers.get("Authorization"), "Bearer test-only-provider-credential");
+        const payload = await request.json();
+        calls.push(payload);
+        return RuntimeResponse.json({ success: true, data: {
+          id: `checkout_origin_${calls.length}`, amount: payload.amount, currency: payload.currency,
+          status: "pending", return_url: payload.return_url, payment_url: "https://leekpay.me/test-origin",
+        } });
+      },
+    }));
+    try {
+      const input = (service) => ({
+        service, productId: service === "cards" ? "visa-basic" : "mini", provider: "leekpay", consent: true,
+        customer: service === "cards" ? TEST_CUSTOMER : { ...TEST_CUSTOMER, username: "return.creator", password: "test-password" },
+      });
+      const create = (origin, body) => runtime.dispatchFetch("https://runtime.example/api/checkout", {
+        method: "POST",
+        headers: { Origin: origin, "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.26", Referer: "https://attacker.example/", "X-Forwarded-Host": "attacker.example" },
+        body: JSON.stringify(body),
+      });
+      for (const origin of ["https://drava.click", ...localOrigins]) {
+        for (const service of ["cards", "tiktok"]) {
+          const response = await create(origin, input(service));
+          assert.equal(response.status, 201);
+          const created = await response.json();
+          const payload = calls.at(-1);
+          const success = service === "cards" ? "/payment-success/" : "/preview/tiktok-payment/";
+          const cancel = service === "cards" ? "/payment-failure/" : success;
+          assert.equal(payload.return_url, `${origin}${success}#order=${created.orderToken}`);
+          assert.equal(payload.cancel_url, `${origin}${cancel}#order=${created.orderToken}`);
+          assert.equal(new URL(payload.return_url).origin, origin);
+          assert.equal(response.headers.get("Access-Control-Allow-Origin"), origin);
+          assert.match(response.headers.get("Cache-Control"), /no-store/);
+        }
+      }
+      assert.equal(calls.length, 6);
+      for (const service of ["cards", "tiktok"]) {
+        for (const origin of ["http://localhost:4444", "http://127.0.0.1:3001", "https://drava.click.attacker.example", "null"]) {
+          const response = await create(origin, input(service));
+          assert.equal(response.status, 403);
+          assert.equal(response.headers.get("Access-Control-Allow-Origin"), null);
+        }
+        for (const field of ["returnUrl", "cancelUrl", "return_url", "cancel_url"]) {
+          const response = await create(localOrigins[0], { ...input(service), [field]: "https://attacker.example/" });
+          assert.equal(response.status, 400);
+        }
+      }
+      assert.equal(calls.length, 6, "Unknown origins and browser-supplied callback URLs never reach the provider");
+    } finally {
+      await runtime.dispose();
+    }
   }
 });

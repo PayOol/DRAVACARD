@@ -147,6 +147,7 @@ export default function PaymentResult({
     let delay = 2000;
     let pollTimer: ReturnType<typeof setTimeout> | undefined;
     let lastOrder: PaymentOrder | null = null;
+    let paidReceipt = false;
     const controller = new AbortController();
     setVerification("checking");
     setIsChecking(true);
@@ -155,7 +156,7 @@ export default function PaymentResult({
       controller.abort();
       clearTimeout(pollTimer);
       if (active) {
-        setVerification(lastOrder ? "pending" : "unconfirmed");
+        setVerification(paidReceipt ? "paid" : lastOrder ? "pending" : "unconfirmed");
         setIsChecking(false);
       }
     }, 90000);
@@ -176,32 +177,62 @@ export default function PaymentResult({
         );
         if (!active || controller.signal.aborted) return;
         if (result.service !== "cards") {
+          if (paidReceipt) {
+            setVerification("paid");
+            setIsChecking(false);
+            clearTimeout(deadlineTimer);
+            clearTimeout(pollTimer);
+            return;
+          }
           finish("unconfirmed");
           return;
         }
         lastOrder = result;
-        setOrder(result);
         if (result.status === "paid" && result.verified === true) {
-          finish("paid");
-          return;
-        }
-        if (
+          paidReceipt = true;
+          setOrder(result);
+          setVerification("paid");
+          setIsChecking(false);
+          // A verified receipt is final. Keep polling only while the optional
+          // EmailJS notification is still pending, using the same order token.
+          if (result.notification !== "pending") {
+            clearTimeout(deadlineTimer);
+            clearTimeout(pollTimer);
+            return;
+          }
+        } else if (paidReceipt) {
+          // Never regress a receipt after it has been verified.
+          setVerification("paid");
+          setIsChecking(false);
+        } else if (
           result.status === "failed" ||
           result.status === "cancelled" ||
           result.status === "expired"
         ) {
           finish("failed");
           return;
+        } else {
+          setVerification("pending");
         }
-        setVerification("pending");
       } catch (error) {
         if (!active || controller.signal.aborted) return;
-        if (error instanceof PaymentApiError && !error.retryable) {
-          finish("unconfirmed");
-          return;
+        if (paidReceipt) {
+          // Notification transport errors must never hide an already verified receipt.
+          setVerification("paid");
+          setIsChecking(false);
+          if (error instanceof PaymentApiError && !error.retryable) {
+            clearTimeout(deadlineTimer);
+            clearTimeout(pollTimer);
+            return;
+          }
+        } else {
+          if (error instanceof PaymentApiError && !error.retryable) {
+            finish("unconfirmed");
+            return;
+          }
+          setVerification("checking");
         }
         if (error instanceof PaymentApiError) retryAfterMs = error.retryAfterMs;
-        setVerification("checking");
       }
       if (active && !controller.signal.aborted) {
         pollTimer = setTimeout(poll, Math.max(delay, retryAfterMs));

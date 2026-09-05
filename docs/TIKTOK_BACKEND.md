@@ -13,7 +13,9 @@ Toutes les réponses sont `no-store`. Les origines, les adresses IP Cloudflare e
 - `GET /api/providers/sebpay/countries` → `{ countries: [{ id, code, name, prefix, currency, exchangeRate, operators: [{ id, code, name, otpRequired, ussdCode }] }] }`.
 - `POST /api/providers/sebpay/quote` → `{ service: "tiktok", productId, customCoins?, country, operator }`, réponse `{ amount, fee, total, currency, collectionAmount, otpRequired, ussdCode }`. Le Worker recalcule ce devis au paiement.
 
-Les retours LeekPay utilisent `/tiktok-payment/#order=…`. Le navigateur doit retirer immédiatement le fragment avec `replaceState` et conserver le jeton uniquement en mémoire. Le réglage Worker `TIKTOK_BASE_PATH` suit le `NEXT_PUBLIC_BASE_PATH` du site. En développement explicite, le retour utilise l’origine locale autorisée ; en production, `https://drava.click`.
+Les retours LeekPay utilisent `/tiktok-payment/#order=…`. Le navigateur doit retirer immédiatement le fragment avec `replaceState` et conserver le jeton uniquement en mémoire. Le réglage Worker `TIKTOK_BASE_PATH` suit le `NEXT_PUBLIC_BASE_PATH` du site. Comme pour les cartes, l’origine du retour est celle de la requête déjà validée par le serveur, en production comme en développement : le site public revient sur son origine et les origines locales déjà autorisées `http://localhost:3000` et `http://127.0.0.1:3000` reviennent chacune en local. Le client ne choisit aucune URL de retour libre ; les contrôles de consentement, de paiement et de confirmation serveur restent inchangés.
+
+Ce comportement s’applique aux nouvelles commandes créées après le déploiement de la correction. Un checkout déjà créé garde l’URL de retour enregistrée chez le prestataire, même si le site est ensuite ouvert depuis une autre origine.
 
 Les deux champs facultatifs du reçu restent en mémoire sur la page vérifiée ; ils ne doivent pas être ajoutés à l’historique, au stockage navigateur ou au cache du service worker. L’historique conserve sa liste explicite de champs publics. Un reçu PDF demandé par le client peut inclure le libellé du compte et la référence de transaction de cette réponse vérifiée.
 
@@ -34,30 +36,31 @@ La création TikTok exige le chiffrement et la notification de traitement, afin 
 
 Déploiement historique du 5 septembre 2026, antérieur à la configuration du compte EmailJS DRAVA : le moteur partagé a été redéployé sur le Worker existant `drava-leekpay`, version `a5ca2c5f-9594-4404-b361-7c01821dbbb9`. La clé AES-256 `TIKTOK_DATA_KEY` a été générée et enregistrée directement dans les secrets Cloudflare, sans fichier de clé local ni changement des secrets LeekPay. LeekPay reste partagé par les services. SebPay était non configuré et SoleasPay indisponible. Les identifiants d’envoi EmailJS manquaient encore lors de cette validation ; aucun paiement ni courriel réel n’y avait été créé. Ce déploiement historique ne confirme pas l’activation de la nouvelle configuration EmailJS.
 
-Référence et publication frontend déjà vérifiées : le projet UpCoin contient trois identifiants EmailJS dans `app/lib/payments/send-order-email.ts`, mais ne révèle ni le propriétaire du compte ni le destinataire du modèle distant. DRAVA utilise désormais son propre compte et le modèle décrit ci-dessous, sans reprendre les clés UpCoin. Le frontend du commit `ca86e43` a été publié avec succès via [GitHub Pages](https://github.com/PayOol/DRAVACARD/actions/runs/33979936624). `https://drava.click/tiktok-payment/` a répondu HTTP 200, avec `noindex` ; sans jeton, le navigateur affiche « Paiement non confirmé » et ne crée aucune transaction. Les retours de production pointent vers ce domaine public même quand la commande part de localhost.
+Référence et publication frontend déjà vérifiées : le projet UpCoin contient trois identifiants EmailJS dans `app/lib/payments/send-order-email.ts`, mais ne révèle ni le propriétaire du compte ni le destinataire du modèle distant. DRAVA utilise désormais son propre compte et le modèle décrit ci-dessous, sans reprendre les clés UpCoin. Le frontend du commit `ca86e43` a été publié avec succès via [GitHub Pages](https://github.com/PayOol/DRAVACARD/actions/runs/33979936624). `https://drava.click/tiktok-payment/` a répondu HTTP 200, avec `noindex` ; sans jeton, le navigateur affiche « Paiement non confirmé » et ne crée aucune transaction.
 
 ## Compte EmailJS DRAVA — configuration confirmée
 
-Le modèle [drava-order-template.html](emailjs/drava-order-template.html) conserve le HTML enregistré dans le tableau de bord EmailJS. Il s’agit d’une notification interne en français, avec le logo original DRAVA, le récapitulatif FCFA/pièces, les coordonnées et un bloc d’accès au compte réservé au traitement marchand. Il ne comporte ni lien de paiement, ni reçu de succès inventé, ni réponse automatique au client.
+Le modèle [drava-order-template.html](emailjs/drava-order-template.html) conserve le HTML du modèle partagé dans EmailJS. Il s’agit d’une notification interne en français, avec le logo original DRAVA, le montant FCFA et les coordonnées. Une section conditionnelle affiche la carte commandée ; les sections de quantité et d’accès TikTok apparaissent uniquement pour les pièces. Il ne comporte ni lien de paiement, ni réponse automatique au client.
 
 | Réglage du tableau de bord | Valeur confirmée |
 | --- | --- |
 | Service | `service_drava` |
-| Nom du modèle | `DRAVA — Commandes TikTok` |
+| Nom du modèle | `DRAVA — Commandes` |
 | Identifiant du modèle | `template_drava_tiktok` |
+| Sujet | `[DRAVA] {{service_type}} — {{order_id}}` |
 | Destinataire To | `contact.drava@gmail.com`, valeur fixe hors du HTML |
 | Reply-To | `{{client_email}}` |
 | Nom d’expéditeur From | `DRAVA` |
 | Adresse d’expéditeur | Adresse Gmail par défaut du service |
-| CC / BCC | Vides |
+| CC / BCC | CC `contact.payool@gmail.com` déjà présent lors de l’extension aux cartes et conservé ; BCC vide |
 | Option de confidentialité | `Do not save private data` cochée |
 | Clé privée | Requise par les réglages du compte ; valeur exclusivement dans les secrets serveur |
 
-Le contenu utilise uniquement les neuf paramètres suivants, chacun dans une interpolation à doubles accolades. Aucun paramètre n’est placé dans une URL ou un attribut HTML ; aucune interpolation à triples accolades n’est utilisée. Le champ hérité `desired_username` (« Nom souhaité »), qui contenait une valeur constante sans saisie utilisateur, a été retiré du modèle et de la requête serveur.
+TikTok conserve ses neuf paramètres ci-dessous. Les cartes utilisent les six paramètres communs (`service_type`, `order_id`, `client_email`, `client_whatsapp`, `price`, `date`) et `card_name`, issu du catalogue serveur, sans aucun champ TikTok. L’identifiant historique du modèle est conservé pour réutiliser les secrets existants. Les sections Mustache `card_name` et `coins_amount` adaptent le contenu. Toutes les interpolations utilisent des doubles accolades échappées ; aucun paramètre n’est placé dans une URL ou un attribut HTML. Le champ hérité `desired_username` (« Nom souhaité ») reste supprimé.
 
 | Paramètre | Information transmise par le Worker |
 | --- | --- |
-| `service_type` | Libellé du service de recharge TikTok |
+| `service_type` | Libellé du service : recharge TikTok ou carte virtuelle |
 | `order_id` | Identifiant de la commande, utilisé pour reconnaître un éventuel doublon |
 | `tiktok_username` | Pseudo ou e-mail de connexion TikTok |
 | `tiktok_password` | Mot de passe, dans le bloc interne réservé au marchand |

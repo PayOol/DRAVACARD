@@ -84,9 +84,9 @@ describe("one platform payment engine (all external calls mocked)", () => {
       assert.equal(paid.provider, provider);
       assert.equal(paid.verified, true);
       assert.equal(paid.transactionReference, stored.order.providerId);
-      assert.equal(paid.notification, service === "tiktok" ? "sent" : undefined);
+      assert.equal(paid.notification, "sent");
       assert.equal(paid.username, service === "tiktok" ? "test.creator" : undefined);
-      assert.equal(state.calls.filter((call) => call.url.includes("emailjs")).length, service === "tiktok" ? 1 : 0);
+      assert.equal(state.calls.filter((call) => call.url.includes("emailjs")).length, 1);
       const upstream = state.calls.find((call) => call.init.method === "POST" && !call.url.includes("emailjs"));
       assert.ok(!upstream.init.body.includes(CUSTOMER.password));
       assert.equal(JSON.parse(upstream.init.body).amount, order.amount);
@@ -252,21 +252,39 @@ describe("one platform payment engine (all external calls mocked)", () => {
     }
   });
 
-  it("uses an explicitly allowed local TikTok return only in development and never accepts a client return URL", async (t) => {
+  it("returns both services to the exact approved request origin in production and development, preserving only TikTok's base path", async (t) => {
     const state = setup(t);
-    const origin = "http://localhost:3000";
-    state.env.LOCAL_ORIGINS = [origin];
+    state.env.LOCAL_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"];
     state.env.TIKTOK_BASE_PATH = "/preview";
     for (const environment of ["development", "production"]) {
       state.env.ENVIRONMENT = environment;
-      const response = await worker.fetch(request("/api/checkout", selection("tiktok"), { Origin: origin }), state.env);
-      assert.equal(response.status, 201);
-      const created = await response.json();
-      const payload = JSON.parse(state.calls.at(-1).init.body);
-      assert.equal(payload.return_url, `${environment === "development" ? origin : ORIGIN}/preview/tiktok-payment/#order=${created.orderToken}`);
-      assert.equal(payload.cancel_url, payload.return_url);
+      for (const origin of [ORIGIN, ...state.env.LOCAL_ORIGINS]) {
+        for (const service of ["cards", "tiktok"]) {
+          const response = await worker.fetch(request("/api/checkout", selection(service), { Origin: origin, Referer: "https://attacker.example/", "X-Forwarded-Host": "attacker.example" }), state.env);
+          assert.equal(response.status, 201);
+          const created = await response.json();
+          const payload = JSON.parse(state.calls.at(-1).init.body);
+          const successPath = service === "cards" ? "/payment-success/" : "/preview/tiktok-payment/";
+          const cancelPath = service === "cards" ? "/payment-failure/" : successPath;
+          assert.equal(payload.return_url, `${origin}${successPath}#order=${created.orderToken}`);
+          assert.equal(payload.cancel_url, `${origin}${cancelPath}#order=${created.orderToken}`);
+          assert.equal(new URL(payload.return_url).origin, origin);
+          assert.equal(response.headers.get("Access-Control-Allow-Origin"), origin);
+        }
+      }
+      for (const service of ["cards", "tiktok"]) {
+        const before = state.calls.length;
+        for (const origin of ["http://localhost:4444", "https://drava.click.attacker.example", "null"]) {
+          const denied = await worker.fetch(request("/api/checkout", selection(service), { Origin: origin }), state.env);
+          assert.equal(denied.status, 403);
+          assert.equal(denied.headers.get("Access-Control-Allow-Origin"), null);
+        }
+        for (const field of ["returnUrl", "cancelUrl", "return_url", "cancel_url"]) {
+          const denied = await worker.fetch(request("/api/checkout", { ...selection(service), [field]: "https://attacker.example/" }), state.env);
+          assert.equal(denied.status, 400);
+        }
+        assert.equal(state.calls.length, before);
+      }
     }
-    state.env.ENVIRONMENT = "development";
-    assert.equal((await worker.fetch(request("/api/checkout", selection("tiktok"), { Origin: "http://localhost:4444" }), state.env)).status, 403);
   });
 });

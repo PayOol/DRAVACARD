@@ -41,6 +41,8 @@ async function renderResult({
   providerLink,
   onReturn,
   response = { status: "paid", verified: true, amount: 5000, currency: "XOF", productId: "visa-basic", createdAt: Date.UTC(2026, 8, 5, 12) },
+  responseSequence,
+  fakeTimers = false,
 } = {}) {
   const states = [];
   const effects = [];
@@ -53,6 +55,9 @@ async function renderResult({
   const events = new Map();
   let cursor = 0;
   let collectEffects = true;
+  let timerId = 0;
+  const timers = new Map();
+  const responses = responseSequence ?? [response];
   const imports = {
     "react/jsx-runtime": require("react/jsx-runtime"),
     react: {
@@ -74,7 +79,12 @@ async function renderResult({
     "@/lib/payment-api": {
       readOrderToken,
       PaymentApiError: class extends Error {},
-      async getPaymentOrderStatus(token) { calls.push(token); return { service: "cards", provider: "leekpay", ...response }; },
+    async getPaymentOrderStatus(token) {
+      calls.push(token);
+      const next = responses[Math.min(calls.length - 1, responses.length - 1)];
+      if (next instanceof Error) throw next;
+      return { service: "cards", provider: "leekpay", ...next };
+    },
     },
     "./payment-result-embedded.css": {},
     "lucide-react": {
@@ -106,8 +116,8 @@ async function renderResult({
     URL,
     AbortController,
     // Keep polling bounded and deterministic; tests only need its first result.
-    setTimeout: () => 1,
-    clearTimeout: () => {},
+    setTimeout: fakeTimers ? (fn, ms) => { const id = ++timerId; timers.set(id, { fn, ms }); return id; } : () => 1,
+    clearTimeout: fakeTimers ? (id) => { timers.delete(id); } : () => {},
   };
   const receiptContext = vm.createContext({ ...globals, exports: {} });
   vm.runInContext(compiledReceipt, receiptContext);
@@ -128,7 +138,7 @@ async function renderResult({
     return { ...element, props: { ...element.props, children: resolve(element.props?.children) } };
   }
   const tree = resolve(Component(props));
-  for (const cleanup of cleanups) cleanup?.();
+  if (!fakeTimers) for (const cleanup of cleanups) cleanup?.();
   function textOf(element) {
     if (element == null || typeof element === "boolean") return "";
     if (Array.isArray(element)) return element.map(textOf).join("");
@@ -143,7 +153,10 @@ async function renderResult({
     collect(element.props?.children);
   }
   collect(tree);
-  return { text: textOf(tree), states, calls, tree: JSON.stringify(tree), nodes, getPrintCalls: () => printCalls, printedUrls, location, originalUrl, finishPrint: () => events.get("afterprint")?.(), async repeatVerification() {
+  return { text: textOf(tree), states, calls, tree: JSON.stringify(tree), nodes, getPrintCalls: () => printCalls, printedUrls, location, originalUrl, finishPrint: () => events.get("afterprint")?.(), unmount() { for (const cleanup of cleanups) cleanup?.(); }, async flushPoll() {
+    const next = [...timers.entries()].find(([, value]) => value.ms !== 90000);
+    if (next) { timers.delete(next[0]); next[1].fn(); await Promise.resolve(); await new Promise((resolve) => setImmediate(resolve)); await Promise.resolve(); }
+  }, async repeatVerification() {
     const nextCleanups = effects.map((effect) => effect());
     await new Promise((resolve) => setImmediate(resolve));
     for (const cleanup of nextCleanups) cleanup?.();
@@ -323,6 +336,48 @@ test("card receipts accept server-verified orders from all shared providers and 
   const otherService = await renderResult({ hash: `#order=${"f".repeat(64)}`, response: { service: "tiktok", provider: "sebpay", status: "paid", verified: true, amount: 5000, currency: "XAF", productId: "pack-100" } });
   assert.equal(otherService.states[0], "unconfirmed");
   assert.doesNotMatch(otherService.text, /Paiement Réussi|Prochaines étapes/);
+});
+
+test("a paid card receipt stays visible while notification delivery is pending", async () => {
+  const token = "9".repeat(64);
+  const result = await renderResult({
+    environment: "production",
+    hash: `#order=${token}`,
+    response: {
+      service: "cards",
+      provider: "leekpay",
+      status: "paid",
+      verified: true,
+      amount: 5000,
+      currency: "XOF",
+      productId: "visa-basic",
+      notification: "pending",
+    },
+  });
+  assert.match(result.text, /Paiement Réussi/);
+  assert.match(result.text, /Prochaines étapes/);
+  assert.deepEqual(result.calls, [token]);
+});
+
+test("notification retry keeps the paid receipt, reuses its token and stops when sent", async () => {
+  const token = "8".repeat(64);
+  const result = await renderResult({
+    environment: "production", fakeTimers: true, hash: `#order=${token}`,
+    responseSequence: [
+      { status: "paid", verified: true, amount: 5000, currency: "XOF", productId: "visa-basic", notification: "pending" },
+      new Error("network outage"),
+      { status: "paid", verified: true, amount: 5000, currency: "XOF", productId: "visa-basic", notification: "sent" },
+    ],
+  });
+  assert.match(result.text, /Paiement Réussi/);
+  await result.flushPoll();
+  assert.match(result.text, /Paiement Réussi/);
+  await result.flushPoll();
+  assert.match(result.text, /Paiement Réussi/);
+  assert.deepEqual(result.calls, [token, token, token]);
+  await result.flushPoll();
+  assert.deepEqual(result.calls, [token, token, token]);
+  result.unmount();
 });
 
 test("verification replay and retries retain only the original in-memory token after URL cleanup", async () => {
