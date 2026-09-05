@@ -393,6 +393,7 @@ export function TikTokCheckout({
         dialogElement?.querySelector<HTMLInputElement>(field)?.focus();
         return;
       }
+      if (!validateEmail()) return;
       goTo(3);
     } else if (step === 3 && available && validateEmail()) {
       if (mobileMoney) goTo(4);
@@ -445,8 +446,8 @@ export function TikTokCheckout({
             : "Read the recharge instructions before continuing."
           : step === 2
             ? fr
-              ? "Renseignez votre compte TikTok et votre numéro WhatsApp."
-              : "Enter your TikTok account and WhatsApp number."
+              ? "Renseignez votre compte TikTok, votre adresse e-mail et votre numéro WhatsApp."
+              : "Enter your TikTok account, email address, and WhatsApp number."
             : fr
               ? "Sélectionnez le service qui traitera votre paiement."
               : "Select the service that will process your payment."
@@ -611,6 +612,23 @@ export function TikTokCheckout({
                         </button>
                       </span>
                     </label>
+                    <label>
+                      {fr ? "Adresse e-mail" : "Email address"}
+                      <input
+                        type="email"
+                        inputMode="email"
+                        value={email}
+                        maxLength={254}
+                        onChange={(event) =>
+                          setEmail(event.target.value.replace(/\s/g, ""))
+                        }
+                        placeholder={
+                          fr ? "client@exemple.com" : "customer@example.com"
+                        }
+                        autoComplete="email"
+                        required
+                      />
+                    </label>
                     <div className="tiktok-contact-row">
                       <label>
                         {fr ? "Pays" : "Country"}
@@ -673,33 +691,12 @@ export function TikTokCheckout({
                 </div>
               )}
               {step === 3 && (
-                <>
-                  <div className="tiktok-fields">
-                    <label>
-                      {fr ? "Adresse e-mail" : "Email address"}
-                      <input
-                        type="email"
-                        inputMode="email"
-                        value={email}
-                        maxLength={254}
-                        onChange={(event) =>
-                          setEmail(event.target.value.replace(/\s/g, ""))
-                        }
-                        placeholder={
-                          fr ? "client@exemple.com" : "customer@example.com"
-                        }
-                        autoComplete="email"
-                        required
-                      />
-                    </label>
-                  </div>
-                  <SharedPaymentProviders
-                    value={provider}
-                    onChange={setProvider}
-                    disabled={busy}
-                    onAvailabilityChange={setProviderState}
-                  />
-                </>
+                <SharedPaymentProviders
+                  value={provider}
+                  onChange={setProvider}
+                  disabled={busy}
+                  onAvailabilityChange={setProviderState}
+                />
               )}
               {step === 4 &&
                 (orderToken ? (
