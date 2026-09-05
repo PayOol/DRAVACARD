@@ -156,12 +156,6 @@ export function CustomerDetails({
             </p>
           )}
         </div>
-
-        <p className="rounded-lg bg-blue-50 p-3 text-xs leading-relaxed text-blue-800">
-          {language === "fr"
-            ? "Ces coordonnées seront transmises au provider sélectionné lorsque vous cliquerez sur « Payer »."
-            : "These contact details will be sent to the selected provider when you click “Pay”."}
-        </p>
       </div>
 
       <div className="flex shrink-0 gap-3 border-t border-slate-100 p-4 sm:px-6">
