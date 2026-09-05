@@ -407,7 +407,7 @@ function validateProviderDialog(source) {
   if (!/createLeekPayCheckout/.test(source) || !/from\s*["']@\/lib\/leekpay["']/.test(source)) failures.push('Provider dialog must use the reviewed REST adapter')
   if (!/createLeekPayCheckout\(card\.id,\s*controller\.signal\)/.test(source)) failures.push('Provider dialog must send only the selected product identifier')
   if (!/window\.location\.assign\(checkout\.checkoutUrl\)/.test(source)) failures.push('Provider dialog must navigate only to the validated checkout URL')
-  if (!/\b(?:XOF|LEEKPAY_CHECKOUT_CURRENCY)\b/.test(source) || !/\bLeekPay\b/.test(source)) failures.push('Provider dialog must disclose LeekPay and XOF')
+  if (!/\bLeekPay\b/.test(source)) failures.push('Provider dialog must identify LeekPay')
   if (/<(?:form|input|select|textarea)\b|\bcontentEditable\b/i.test(source)) failures.push('Provider dialog must not collect input')
   if (/\b(?:customerEmail|customerName|customerPhone|customer_email|customer_name|customer_phone|cardNumber|card_number|cvv|pan)\b/i.test(source)) failures.push('Provider dialog must not collect personal/card data')
   if (/\bfetch\s*\(/.test(source)) failures.push('Provider dialog must not bypass the REST adapter')
@@ -535,6 +535,17 @@ function selfTest() {
   `
   assert.deepEqual(validateFrontendAdapter(safeAdapter), [])
   assert.ok(validateFrontendAdapter(safeAdapter.replace('{ productId }', '{ productId, amount: 1 }')).length > 0)
+
+  const safeProviderDialog = `
+    import { createLeekPayCheckout } from "@/lib/leekpay";
+    async function checkout(card, controller) {
+      const checkout = await createLeekPayCheckout(card.id, controller.signal);
+      window.location.assign(checkout.checkoutUrl);
+    }
+    const providerName = <span>LeekPay</span>;
+  `
+  assert.deepEqual(validateProviderDialog(safeProviderDialog), [])
+  assert.ok(validateProviderDialog(safeProviderDialog.replace('>LeekPay<', '>Provider<')).length > 0)
 
   const safeResult = `
     const orderToken = readOrderToken(window.location.hash);

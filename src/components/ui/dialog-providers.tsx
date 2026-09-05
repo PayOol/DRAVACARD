@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { withBasePath } from "@/lib/base-path";
 import { useLanguage } from "@/lib/language-context";
 import {
-  LEEKPAY_CHECKOUT_CURRENCY,
   type PaymentCardSelection,
   createLeekPayCheckout,
 } from "@/lib/leekpay";
@@ -19,6 +18,7 @@ export interface DialogProvidersProps {
 }
 
 type CheckoutState = "idle" | "processing" | "error";
+type PaymentProvider = "leekpay";
 
 export function DialogProviders({
   isOpen,
@@ -27,6 +27,8 @@ export function DialogProviders({
 }: DialogProvidersProps) {
   const { language } = useLanguage();
   const [checkoutState, setCheckoutState] = useState<CheckoutState>("idle");
+  const [selectedProvider, setSelectedProvider] =
+    useState<PaymentProvider>("leekpay");
   const requestRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -48,7 +50,7 @@ export function DialogProviders({
   }, [isOpen]);
 
   const handleCheckout = async () => {
-    if (requestRef.current) return;
+    if (requestRef.current || selectedProvider !== "leekpay") return;
     const controller = new AbortController();
     requestRef.current = controller;
     setCheckoutState("processing");
@@ -128,81 +130,93 @@ export function DialogProviders({
                 : "Available providers"}
             </p>
 
-            <div className="rounded-xl border border-slate-200 p-4 shadow-sm">
-              <div className="flex items-start gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="relative h-12 w-48 shrink-0 overflow-hidden">
-                      <img
-                        src={withBasePath("/images/leekpay.webp")}
-                        alt="LeekPay"
-                        width={1536}
-                        height={1024}
-                        className="absolute left-1/2 top-1/2 h-auto w-64 max-w-none -translate-x-[53%] -translate-y-[48%]"
-                      />
-                    </h3>
-                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                      {language === "fr" ? "Disponible" : "Available"}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {language === "fr"
-                      ? `Paiement traité par LeekPay en ${LEEKPAY_CHECKOUT_CURRENCY}.`
-                      : `Payment processed by LeekPay in ${LEEKPAY_CHECKOUT_CURRENCY}.`}
-                  </p>
-                </div>
-              </div>
-
-              {isProcessing && (
-                <div
-                  aria-live="polite"
-                  className="mt-4 flex items-center gap-2 rounded-md bg-slate-50 p-3 text-sm text-slate-600"
-                >
-                  <LoaderCircle
-                    aria-hidden="true"
-                    className="h-4 w-4 animate-spin"
-                  />
-                  {language === "fr"
-                    ? "Préparation de votre paiement sécurisé…"
-                    : "Preparing your secure payment…"}
-                </div>
-              )}
-
-              {checkoutState === "error" && (
-                <div
-                  aria-live="assertive"
-                  className="mt-4 flex items-start gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700"
-                  role="alert"
-                >
-                  <AlertCircle
-                    aria-hidden="true"
-                    className="mt-0.5 h-4 w-4 flex-none"
-                  />
-                  <span>
-                    {language === "fr"
-                      ? "Le paiement n’a pas pu être lancé. Veuillez réessayer."
-                      : "The payment could not be started. Please try again."}
-                  </span>
-                </div>
-              )}
-
-              <Button
-                className="mt-4 w-full bg-emerald-600 text-white hover:bg-emerald-700"
+            <fieldset
+              aria-label={
+                language === "fr"
+                  ? "Providers disponibles"
+                  : "Available providers"
+              }
+              className="grid min-w-0 grid-cols-2 gap-3"
+            >
+              <button
+                aria-pressed={selectedProvider === "leekpay"}
+                className={`flex min-w-0 flex-col items-center gap-1 rounded-xl border px-3 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-wait ${
+                  selectedProvider === "leekpay"
+                    ? "border-blue-500 bg-blue-50/60"
+                    : "border-slate-200 bg-white hover:border-blue-300"
+                }`}
                 disabled={isProcessing}
-                onClick={handleCheckout}
+                onClick={() => setSelectedProvider("leekpay")}
                 type="button"
               >
-                {isProcessing ? (
-                  <LoaderCircle
-                    aria-hidden="true"
-                    className="h-4 w-4 animate-spin"
+                <span className="relative h-8 w-28 max-w-full overflow-hidden">
+                  <img
+                    src={withBasePath("/images/leekpay.webp")}
+                    alt="LeekPay"
+                    width={1536}
+                    height={1024}
+                    className="absolute left-1/2 top-1/2 h-auto w-[143%] max-w-none -translate-x-[53%] -translate-y-[48%]"
                   />
-                ) : (
-                  <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
-                )}
-                {language === "fr" ? "Payer avec LeekPay" : "Pay with LeekPay"}
-              </Button>
-            </div>
+                </span>
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                  {language === "fr" ? "Disponible" : "Available"}
+                </span>
+              </button>
+            </fieldset>
+          </div>
+
+          <div className="shrink-0 border-t border-slate-100 p-4 sm:px-6">
+            {isProcessing && (
+              <div
+                aria-live="polite"
+                className="mb-3 flex items-start gap-2 rounded-md bg-slate-50 p-3 text-sm text-slate-600"
+              >
+                <LoaderCircle
+                  aria-hidden="true"
+                  className="h-4 w-4 shrink-0 animate-spin"
+                />
+                {language === "fr"
+                  ? "Préparation de votre paiement sécurisé…"
+                  : "Preparing your secure payment…"}
+              </div>
+            )}
+
+            {checkoutState === "error" && (
+              <div
+                aria-live="assertive"
+                className="mb-3 flex items-start gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700"
+                role="alert"
+              >
+                <AlertCircle
+                  aria-hidden="true"
+                  className="mt-0.5 h-4 w-4 flex-none"
+                />
+                <span>
+                  {language === "fr"
+                    ? "Le paiement n’a pas pu être lancé. Veuillez réessayer."
+                    : "The payment could not be started. Please try again."}
+                </span>
+              </div>
+            )}
+
+            <Button
+              className="h-11 w-full gap-2 bg-emerald-600 text-sm text-white hover:bg-emerald-700"
+              disabled={isProcessing}
+              onClick={handleCheckout}
+              type="button"
+            >
+              {isProcessing ? (
+                <LoaderCircle
+                  aria-hidden="true"
+                  className="h-4 w-4 shrink-0 animate-spin"
+                />
+              ) : (
+                <CheckCircle2 aria-hidden="true" className="h-4 w-4 shrink-0" />
+              )}
+              <span className="min-w-0">
+                {language === "fr" ? "Payer" : "Pay"}
+              </span>
+            </Button>
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
