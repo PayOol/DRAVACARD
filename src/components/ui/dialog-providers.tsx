@@ -136,11 +136,11 @@ export function DialogProviders({
                   ? "Providers disponibles"
                   : "Available providers"
               }
-              className="grid min-w-0 grid-cols-2 gap-3"
+              className="grid min-w-0 grid-cols-2 gap-3 pt-2"
             >
               <button
                 aria-pressed={selectedProvider === "leekpay"}
-                className={`flex min-w-0 flex-col items-center gap-1 rounded-xl border px-3 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-wait ${
+                className={`relative flex min-w-0 items-center justify-center gap-2 rounded-xl border px-2 py-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-wait sm:px-3 ${
                   selectedProvider === "leekpay"
                     ? "border-blue-500 bg-blue-50/60"
                     : "border-slate-200 bg-white hover:border-blue-300"
@@ -149,17 +149,20 @@ export function DialogProviders({
                 onClick={() => setSelectedProvider("leekpay")}
                 type="button"
               >
-                <span className="relative h-8 w-28 max-w-full overflow-hidden">
+                <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-white ring-1 ring-slate-200">
                   <img
                     src={withBasePath("/images/leekpay.webp")}
-                    alt="LeekPay"
+                    alt=""
                     width={1536}
                     height={1024}
-                    className="absolute left-1/2 top-1/2 h-auto w-[143%] max-w-none -translate-x-[53%] -translate-y-[48%]"
+                    className="absolute -left-7 -top-[35px] h-auto w-40 max-w-none"
                   />
                 </span>
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                  {language === "fr" ? "Disponible" : "Available"}
+                <span className="whitespace-nowrap text-xs font-semibold text-slate-900 sm:text-sm">
+                  LeekPay
+                </span>
+                <span className="absolute -top-2 right-2 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold leading-4 text-white shadow-sm">
+                  {language === "fr" ? "Recommandé" : "Recommended"}
                 </span>
               </button>
             </fieldset>

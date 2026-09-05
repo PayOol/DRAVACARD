@@ -18,7 +18,7 @@ function blockAround(marker, opening, closing) {
   return source.slice(start, end + closing.length);
 }
 
-test("LeekPay is a selectable two-row tile in a two-column provider grid", () => {
+test("LeekPay is a selectable horizontal recommended tile", () => {
   assert.match(source, /type PaymentProvider = "leekpay";/);
   assert.match(
     source,
@@ -35,10 +35,19 @@ test("LeekPay is a selectable two-row tile in a two-column provider grid", () =>
   assert.match(tile, /type="button"/);
   assert.match(tile, /onClick=\{\(\) => setSelectedProvider\("leekpay"\)\}/);
   assert.match(tile, /disabled=\{isProcessing\}/);
-  assert.match(tile, /flex-col/);
-  assert.match(tile, /alt="LeekPay"/);
-  assert.match(tile, /"Disponible"/);
-  assert.match(tile, /"Available"/);
+  assert.match(tile, /\bitems-center\b/);
+  assert.doesNotMatch(tile, /\bflex-col\b/);
+  assert.match(tile, /\bh-8\b[^"\n]*\bw-8\b[^"\n]*\brounded-lg\b/);
+  assert.match(tile, /alt=""/);
+  assert.match(tile, />\s*LeekPay\s*</);
+  assert.ok(
+    tile.indexOf('alt=""') < tile.indexOf("LeekPay"),
+    "The decorative logo thumbnail must precede the visible provider name",
+  );
+  assert.match(tile, /"Recommandé"/);
+  assert.match(tile, /"Recommended"/);
+  assert.match(tile, /\babsolute\s+-top-2\s+right-2\b/);
+  assert.doesNotMatch(tile, /"Disponible"|"Available"/);
   assert.doesNotMatch(tile, /handleCheckout|createLeekPayCheckout/);
 });
 
