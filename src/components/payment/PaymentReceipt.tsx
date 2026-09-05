@@ -167,28 +167,14 @@ export default function PaymentReceipt({
                 <div className="min-w-0 text-sm leading-6 text-slate-600 dark:text-[#b3c1d5] sm:text-base">
                   <p>
                     {isFrench
-                      ? "Une fois votre compte créé et vérifié, envoyez-nous l’adresse e-mail associée par Telegram en priorité, ou par WhatsApp. Nous procéderons alors à l’ajout de la carte dans votre compte."
-                      : "Once your account has been created and verified, send us its email address via Telegram as a priority, or via WhatsApp. We will then add the card to your account."}
+                      ? "Une fois votre compte créé et vérifié, envoyez-nous l’adresse e-mail associée par WhatsApp. Nous procéderons alors à l’ajout de la carte dans votre compte."
+                      : "Once your account has been created and verified, send us its email address via WhatsApp. We will then add the card to your account."}
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2 print:hidden">
                     <Button
                       asChild
-                      className="h-auto min-h-10 whitespace-normal bg-blue-600 px-4 py-2 text-center text-white hover:bg-blue-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
-                    >
-                      <a
-                        href="https://t.me/PayOolTM"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        {isFrench
-                          ? "Telegram • prioritaire"
-                          : "Telegram • priority"}
-                      </a>
-                    </Button>
-                    <Button
-                      asChild
                       variant="outline"
-                      className="h-auto min-h-10 border-emerald-200 px-4 py-2 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-[#28664b] dark:bg-[#111c2e] dark:text-[#86efac] dark:hover:bg-[#133629] dark:hover:text-green-100"
+                      className="h-auto min-h-14 w-full whitespace-normal border-emerald-200 px-6 py-4 text-lg font-semibold text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-[#28664b] dark:bg-[#111c2e] dark:text-[#86efac] dark:hover:bg-[#133629] dark:hover:text-green-100"
                     >
                       <a
                         href={DRAVA_CONTACT.whatsappHref}
@@ -200,7 +186,6 @@ export default function PaymentReceipt({
                     </Button>
                   </div>
                   <div className="hidden break-all text-xs print:block">
-                    <p>Telegram : https://t.me/PayOolTM</p>
                     <p>
                       WhatsApp : {DRAVA_CONTACT.displayPhone} — {DRAVA_CONTACT.whatsappHref}
                     </p>

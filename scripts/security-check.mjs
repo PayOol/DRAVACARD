@@ -1180,7 +1180,7 @@ function validatePaymentResult(source, receiptSource) {
   if (!/amount=\{isPaid&&order\?order\.amount:5000\}/.test(compact(source))
     || !/createdAt=\{isPaid&&order\?order\.createdAt:Date\.UTC\(2026,8,5,12\)\}/.test(compact(source))) failures.push('Real receipts must use the verified order amount and stored creation date')
   if (!/Une fois votre compte créé et vérifié/.test(receiptSource)
-    || !/envoyez-nous l’adresse e-mail associée par Telegram en priorité, ou par WhatsApp/.test(receiptSource)
+    || !/envoyez-nous l’adresse e-mail associée par WhatsApp/.test(receiptSource)
     || !/Nous procéderons alors à l’ajout de la carte dans votre compte/.test(receiptSource)) failures.push('Receipt must explain the separate manual card fulfillment steps')
   if (/\b(?:autoFulfill|fulfillOrder|issueCard|issueVirtualCard|provisionCard|deliverCard|revealCard|generateCard|activateCard)\s*\(/i.test(source)) failures.push('Payment result must never auto-fulfill cards')
   return failures
@@ -1744,7 +1744,7 @@ async function selfTest() {
       return (<PaymentReceipt amount={isPaid && order ? order.amount : 5000} createdAt={isPaid && order ? order.createdAt : Date.UTC(2026, 8, 5, 12)} />);
     }
   `
-  const safeReceipt = "Une fois votre compte créé et vérifié, envoyez-nous l’adresse e-mail associée par Telegram en priorité, ou par WhatsApp. Nous procéderons alors à l’ajout de la carte dans votre compte."
+  const safeReceipt = "Une fois votre compte créé et vérifié, envoyez-nous l’adresse e-mail associée par WhatsApp. Nous procéderons alors à l’ajout de la carte dans votre compte."
   assert.deepEqual(validatePaymentResult(safeResult, safeReceipt), [])
   assert.ok(validatePaymentResult(safeResult.replace('result.verified === true', 'true'), safeReceipt).length > 0)
   assert.ok(validatePaymentResult(`${safeResult}\nconst query = new URLSearchParams(window.location.search);`, safeReceipt).length > 0)
@@ -1861,7 +1861,7 @@ const catalogueSource = await readRequired('src/app/page.tsx')
 if (catalogueSource) failures.push(...validateCatalogueFlow(catalogueSource))
 const paymentResultSource = await readRequired(paymentResultPath)
 const receiptSource = await readRequired(paymentReceiptPath)
-if (!/Une fois votre compte créé et vérifié/.test(receiptSource) || !/envoyez-nous l’adresse e-mail associée par Telegram en priorité, ou par WhatsApp/.test(receiptSource) || !/Nous procéderons alors à l’ajout de la carte dans votre compte/.test(receiptSource)) failures.push('Receipt must explain the separate manual card fulfillment steps')
+if (!/Une fois votre compte créé et vérifié/.test(receiptSource) || !/envoyez-nous l’adresse e-mail associée par WhatsApp/.test(receiptSource) || !/Nous procéderons alors à l’ajout de la carte dans votre compte/.test(receiptSource)) failures.push('Receipt must explain the separate manual card fulfillment steps')
 const workerSource = await readRequired(workerSourcePath)
 // The Worker is reviewed across router, engine, services, providers and fulfillment modules.
 const commonSources = Object.fromEntries(await Promise.all(commonPaymentPaths.map(async relativePath => [relativePath, await readRequired(relativePath)])))

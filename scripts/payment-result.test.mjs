@@ -243,18 +243,17 @@ test("the local preview is translated into English", async () => {
 test("receipt contains the requested manual fulfillment instructions and exact safe links", async () => {
   const result = await renderResult();
   assert.match(result.text, /Veuillez cliquer sur le lien suivant afin d’ouvrir votre compte/);
-  assert.match(result.text, /Une fois votre compte créé et vérifié, envoyez-nous l’adresse e-mail associée par Telegram en priorité, ou par WhatsApp/);
+  assert.match(result.text, /Une fois votre compte créé et vérifié, envoyez-nous l’adresse e-mail associée par WhatsApp/);
   assert.match(result.text, /Nous procéderons alors à l’ajout de la carte dans votre compte/);
-  assert.match(result.text, /Telegram • prioritaire/);
+  assert.doesNotMatch(result.text, /Telegram|t\.me\/PayOolTM/);
   assert.match(result.text, /Merci de votre confiance ! 🎉/);
   const links = result.nodes.filter((node) => node.type === "a");
   assert.deepEqual(links.map((node) => node.props.href), [
     "https://prismcard.net/r/VPBUL1EF",
-    "https://t.me/PayOolTM",
     "https://wa.me/237692426620",
     "/",
   ]);
-  for (const link of links.slice(0, 3)) {
+  for (const link of links.slice(0, 2)) {
     assert.equal(link.props.rel, "noopener noreferrer");
     assert.equal(link.props.target, "_blank");
     assert.doesNotMatch(link.props.href, /[?#]/);
