@@ -324,6 +324,11 @@ function validateFrontendUrls(source, relativePath, productionBundle = false) {
   return failures
 }
 
+function allowReviewedOutputPaymentCurrency(source, relativePath) {
+  return /^out\/_next\/static\/chunks\/(?:[^/]+\/)*[^/]+\.js$/.test(relativePath)
+    && allowReviewedPaymentCurrency(source)
+}
+
 function allowReviewedTikTokRule(source, relativePath, label) {
   if (label === 'legacy XAF currency') return relativePath === 'src/lib/payment-api.ts' && allowReviewedPaymentCurrency(source)
   if (label === 'Soleas integration') return [tiktokPaymentPath, tiktokHistoryPath, 'src/lib/payment-providers.ts'].includes(relativePath)
@@ -1374,6 +1379,15 @@ async function selfTest() {
   assert.ok(providerCredentialPattern.test(providerSecret))
   assert.ok(publicCredentialReferencePattern.test('NEXT_PUBLIC_PAYMENT_API_KEY'))
   assert.ok(matchingRules('currency: "XAF"', forbiddenFrontendPatterns).some((rule) => rule.label === 'legacy XAF currency'))
+  const currencyFixture = 'data.currency !== ("cards" === service ? "XOF" : "XAF")'
+  for (const chunkPath of ['out/_next/static/chunks/payment.js', 'out/_next/static/chunks/app/payment-success/page.js', 'out/_next/static/chunks/app/payment-failure/page.js']) {
+    assert.equal(allowReviewedOutputPaymentCurrency(currencyFixture, chunkPath), true)
+    assert.equal(allowReviewedOutputPaymentCurrency(`${currencyFixture}; const currency = "XAF"`, chunkPath), false)
+    assert.equal(allowReviewedOutputPaymentCurrency(currencyFixture.replace('"XOF"', '"XAF"'), chunkPath), false)
+  }
+  for (const otherPath of ['src/lib/payment-api.ts', 'out/index.html', 'out/payment.js', 'out/_next/static/chunks/app/page.js.map']) {
+    assert.equal(allowReviewedOutputPaymentCurrency(currencyFixture, otherPath), false)
+  }
   assert.ok(matchingRules('window.LeekPay.checkout({})', forbiddenFrontendPatterns).some((rule) => rule.label === 'legacy LeekPay browser SDK'))
   assert.ok(matchingRules('node.innerHTML = untrusted', forbiddenFrontendPatterns).some((rule) => rule.label === 'HTML injection sink'))
   assert.equal(matchingRules('node.innerHTML = frameworkHtml', forbiddenOutputPatterns).some((rule) => rule.label === 'HTML injection sink'), false)
@@ -1922,7 +1936,7 @@ if (requireOutput) {
       }
       for (const rule of forbiddenOutputPatterns) {
         if (rule.label === 'payment iframe' && isReviewedPdfIframeRuntime(source, relativePath)) continue
-        if (rule.label === 'legacy XAF currency' && /^out\/_next\/static\/chunks\/[^/]+\.js$/.test(relativePath) && allowReviewedPaymentCurrency(source)) continue
+        if (rule.label === 'legacy XAF currency' && allowReviewedOutputPaymentCurrency(source, relativePath)) continue
         if (rule.pattern.test(source)) failures.push(`${rule.label}: ${relativePath}`)
       }
       failures.push(...validateFrontendUrls(source, relativePath, true))
