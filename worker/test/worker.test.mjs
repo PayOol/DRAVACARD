@@ -73,6 +73,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
         amount, currency: "XOF", description: JSON.parse(init.body).description,
         return_url: `${ORIGIN}/payment-success/#order=${result.orderToken}`,
         cancel_url: `${ORIGIN}/payment-failure/#order=${result.orderToken}`,
+        customer_name: `Client (${TEST_CUSTOMER.email})`,
         customer_email: TEST_CUSTOMER.email,
         customer_phone: TEST_CUSTOMER.whatsapp,
         metadata: { productId },
@@ -84,6 +85,8 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
       assert.ok(!record.value.includes(MOCK_CREDENTIAL));
       assert.ok(!record.value.includes(TEST_CUSTOMER.email));
       assert.ok(!record.value.includes(TEST_CUSTOMER.whatsapp));
+      assert.ok(!record.value.includes("customer_name"));
+      assert.ok(!JSON.stringify(result).includes(`Client (${TEST_CUSTOMER.email})`));
       assert.equal(record.options.expirationTtl, 604800);
       assert.equal(JSON.parse(record.value).amount, amount);
     }
@@ -125,6 +128,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
       undefined, null, [], "client@example.com", {},
       { email: TEST_CUSTOMER.email }, { whatsapp: TEST_CUSTOMER.whatsapp },
       { ...TEST_CUSTOMER, name: "Unexpected" }, { ...TEST_CUSTOMER, phone: TEST_CUSTOMER.whatsapp },
+      { ...TEST_CUSTOMER, customer_name: "Browser-supplied name" },
       { ...TEST_CUSTOMER, email: "" }, { ...TEST_CUSTOMER, email: "  " },
       { ...TEST_CUSTOMER, email: "invalid" }, { ...TEST_CUSTOMER, email: "a@localhost" },
       { ...TEST_CUSTOMER, email: "a b@example.com" }, { ...TEST_CUSTOMER, email: "a\r\nBcc:other@example.com" },
@@ -158,10 +162,11 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
     assert.equal(response.status, 201);
     const result = await response.json();
     const payload = JSON.parse(calls[0].init.body);
+    assert.equal(payload.customer_name, "Client (Client+test@Example.COM)");
     assert.equal(payload.customer_email, "Client+test@Example.COM");
     assert.equal(payload.customer_phone, "+237699000000");
     assert.deepEqual(payload.metadata, { productId: "visa-basic" });
-    assert.deepEqual(Object.keys(payload).sort(), ["amount", "currency", "description", "return_url", "cancel_url", "metadata", "customer_email", "customer_phone"].sort());
+    assert.deepEqual(Object.keys(payload).sort(), ["amount", "currency", "description", "return_url", "cancel_url", "metadata", "customer_name", "customer_email", "customer_phone"].sort());
     assert.equal(payload.amount, 5000);
     assert.equal(payload.currency, "XOF");
     assert.equal(payload.return_url, `${ORIGIN}/payment-success/#order=${result.orderToken}`);
@@ -171,9 +176,12 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
     assert.equal(checkedPayload.verified, true);
     for (const exposed of [JSON.stringify(result), JSON.stringify(checkedPayload), ...values.values(), JSON.stringify(log.mock.calls)]) {
       assert.ok(!exposed.includes("Client+test@Example.COM"));
+      assert.ok(!exposed.includes("Client (Client+test@Example.COM)"));
+      assert.ok(!exposed.includes("customer_name"));
       assert.ok(!exposed.includes("237699000000"));
     }
     assert.equal(calls[1].init.body, undefined);
+    assert.equal(calls[1].init.headers.customer_name, undefined);
     assert.equal(calls[1].init.headers.customer_email, undefined);
     assert.equal(calls[1].init.headers.customer_phone, undefined);
   });
@@ -181,10 +189,11 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
   it("never reflects provider customer data or errors into API responses, KV or logs", async (t) => {
     let failProvider = false;
     const { env, values } = setup(t, async (_url, init) => {
-      if (failProvider) throw new Error(`Provider rejected ${TEST_CUSTOMER.email} ${TEST_CUSTOMER.whatsapp}`);
+      if (failProvider) throw new Error(`Provider rejected Client (${TEST_CUSTOMER.email}) ${TEST_CUSTOMER.whatsapp}`);
       return Response.json({ success: true, data: {
         id: "checkout_42", amount: 5000, currency: "XOF", status: init.method === "POST" ? "pending" : "paid",
         payment_url: "https://leekpay.me/pay_test", customer: TEST_CUSTOMER,
+        customer_name: `Client (${TEST_CUSTOMER.email})`,
         customer_email: TEST_CUSTOMER.email, customer_phone: TEST_CUSTOMER.whatsapp,
         ...(init.method === "POST" ? { return_url: JSON.parse(init.body).return_url } : {}),
       } });
@@ -200,6 +209,8 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
     for (const exposed of [JSON.stringify(result), checkedBody, failedBody, ...values.values(), JSON.stringify(log.mock.calls)]) {
       assert.ok(!exposed.includes(TEST_CUSTOMER.email));
       assert.ok(!exposed.includes(TEST_CUSTOMER.whatsapp));
+      assert.ok(!exposed.includes(`Client (${TEST_CUSTOMER.email})`));
+      assert.ok(!exposed.includes("customer_name"));
     }
   });
 

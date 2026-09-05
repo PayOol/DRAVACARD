@@ -48,10 +48,11 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
         if (request.method === "POST") {
           assert.equal(request.url, "https://leekpay.fr/api/v1/checkout");
           createdBody = await request.json();
+          assert.equal(createdBody.customer_name, "Client (client@example.com)");
           assert.equal(createdBody.customer_email, "client@example.com");
           assert.equal(createdBody.customer_phone, "+237699000000");
           assert.deepEqual(createdBody.metadata, { productId: "visa-basic" });
-          assert.deepEqual(Object.keys(createdBody).sort(), ["amount", "currency", "description", "return_url", "cancel_url", "metadata", "customer_email", "customer_phone"].sort());
+          assert.deepEqual(Object.keys(createdBody).sort(), ["amount", "currency", "description", "return_url", "cancel_url", "metadata", "customer_name", "customer_email", "customer_phone"].sort());
           return RuntimeResponse.json({ success: true, data: {
             id: "checkout_runtime", payment_url: "https://leekpay.me/pay_runtime", amount: 5000, currency: "XOF",
             status: "pending", return_url: createdBody.return_url,
@@ -89,6 +90,16 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
     });
     assert.equal(malformedCustomer.status, 400);
     assert.deepEqual(await malformedCustomer.json(), { error: { code: "invalid_customer" } });
+    for (const [body, code] of [
+      [{ productId: "visa-basic", customer: TEST_CUSTOMER, customer_name: "Browser-supplied name" }, "invalid_product"],
+      [{ productId: "visa-basic", customer: { ...TEST_CUSTOMER, customer_name: "Browser-supplied name" } }, "invalid_customer"],
+    ]) {
+      const suppliedName = await runtime.dispatchFetch("https://runtime.example/api/checkout", {
+        method: "POST", headers, body: JSON.stringify(body),
+      });
+      assert.equal(suppliedName.status, 400);
+      assert.deepEqual(await suppliedName.json(), { error: { code } });
+    }
     const unknown = await runtime.dispatchFetch("https://runtime.example/api/orders/status", {
       method: "POST", headers, body: JSON.stringify({ orderToken: "a".repeat(64) }),
     });
@@ -116,6 +127,7 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
     assert.equal(createdPayload.checkoutUrl, "https://leekpay.me/pay_runtime");
     assert.match(createdPayload.orderToken, /^[a-f0-9]{64}$/);
     assert.deepEqual(Object.keys(createdPayload).sort(), ["checkoutUrl", "orderToken"]);
+    assert.ok(!JSON.stringify(createdPayload).includes("Client (client@example.com)"));
     assert.equal(createdBody.amount, 5000);
     assert.equal(createdBody.currency, "XOF");
     const checked = await runtime.dispatchFetch("https://runtime.example/api/orders/status", {
@@ -160,6 +172,7 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
     for (const key of orderKeys.keys) {
       const record = await orders.get(key.name);
       assert.ok(!record.includes("client@example.com"));
+      assert.ok(!record.includes("Client (client@example.com)"));
       assert.ok(!record.includes("237699000000"));
       assert.ok(!record.includes("customer"));
     }

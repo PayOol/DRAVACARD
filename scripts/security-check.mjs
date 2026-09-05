@@ -794,6 +794,22 @@ function validateWorkerPackage(source) {
   return failures
 }
 
+function validateWorkerCustomerForwarding(source) {
+  const failures = []
+  if ((source.match(/\bcustomer_email\b/g)?.length ?? 0) !== 1
+    || (source.match(/\bcustomer_phone\b/g)?.length ?? 0) !== 1
+    || (source.match(/\bcustomer_name\b/g)?.length ?? 0) !== 1
+    || !/customer_email:\s*customer\.email/.test(source)
+    || !/customer_phone:\s*customer\.whatsapp/.test(source)
+    || !/customer_name:\s*`Client \(\$\{customer\.email\}\)`/.test(source)) {
+    failures.push('Worker may forward customer details only as exact LeekPay email/phone and derived Client (email) name fields')
+  }
+  if (/\b(?:customer|payload\.customer)\.name\b|\bcustomerName\b/.test(source)) {
+    failures.push('Worker must not accept or derive a separate customer name')
+  }
+  return failures
+}
+
 function validateWorkerSource(source) {
   const failures = []
   if ((source.split(providerCheckoutApi).length - 1) !== 1) failures.push(`Worker must declare the exact LeekPay REST endpoint once: ${providerCheckoutApi}`)
@@ -821,10 +837,7 @@ function validateWorkerSource(source) {
     || !/Object\.hasOwn\(payload,\s*["']productId["']\)/.test(source)
     || !/Object\.hasOwn\(payload,\s*["']customer["']\)/.test(source)
     || !/isProductId\(payload\.productId\)/.test(source)) failures.push('Worker checkout must accept only one known productId and one customer object')
-  if ((source.match(/\bcustomer_email\b/g)?.length ?? 0) !== 1
-    || (source.match(/\bcustomer_phone\b/g)?.length ?? 0) !== 1
-    || !/customer_email:\s*customer\.email/.test(source)
-    || !/customer_phone:\s*customer\.whatsapp/.test(source)) failures.push('Worker may forward customer details only through LeekPay customer_email/customer_phone')
+  failures.push(...validateWorkerCustomerForwarding(source))
   if (!/\^\[a-f0-9\]\{64\}\$/.test(source) || !/crypto\.getRandomValues\(new Uint8Array\(32\)\)/.test(source)) failures.push('Worker order tokens must be random 32-byte lowercase hex values')
   if (!/payment-success\/#order=\$\{orderToken\}/.test(source) || !/payment-failure\/#order=\$\{orderToken\}/.test(source)) failures.push('Worker must generate static success/cancel fragment URLs')
   if (!/env\.ORDERS\.put/.test(source) || !/expirationTtl:\s*ORDER_TTL_SECONDS/.test(source)
@@ -849,7 +862,7 @@ function validateWorkerSource(source) {
   if (/\bconsole\.(?:log|info|warn|error|debug)\s*\([\s\S]{0,400}?(?:customer|email|whatsapp|phone)/i.test(source)) failures.push('Worker must not log customer PII')
   if (/(?:return_url|cancel_url|returnUrl)\s*[:=][^,}\n]*(?:customer|email|whatsapp|phone)/i.test(source)
     || /(?:URLSearchParams|url\.searchParams)[\s\S]{0,160}(?:customer|email|whatsapp|phone)/i.test(source)) failures.push('Worker must not place customer PII in callback URLs')
-  if (/\b(?:customer_name|customer_address|card_number|cardNumber|cvv|otp|pan)\b/i.test(source)) failures.push('Worker must not collect or transmit additional personal/card data')
+  if (/\b(?:customer_address|card_number|cardNumber|cvv|otp|pan)\b/i.test(source)) failures.push('Worker must not collect or transmit additional personal/card data')
   if (/\b(?:autoFulfill|fulfillOrder|issueCard|issueVirtualCard|provisionCard|deliverCard|revealCard|generateCard|activateCard)\s*\(/i.test(source)) failures.push('Worker must never auto-fulfill cards')
   return failures
 }
@@ -1073,6 +1086,15 @@ function selfTest() {
   assert.ok(validateWorkerLocation(safeWorkerLocation.replace('request.cf?.country', 'request.headers.get("CF-IPCountry")')).length > 0)
   assert.deepEqual(validateWorkerPackage('{"dependencies":{"libphonenumber-js":"1.13.12"}}'), [])
   assert.ok(validateWorkerPackage('{"dependencies":{"libphonenumber-js":"^1.13.12"}}').length > 0)
+
+  const safeWorkerCustomer = `
+    customer_email: customer.email,
+    customer_phone: customer.whatsapp,
+    customer_name: \`Client (\${customer.email})\`,
+  `
+  assert.deepEqual(validateWorkerCustomerForwarding(safeWorkerCustomer), [])
+  assert.ok(validateWorkerCustomerForwarding(safeWorkerCustomer.replace('Client (\${customer.email})', '\${customer.email}')).length > 0)
+  assert.ok(validateWorkerCustomerForwarding(`${safeWorkerCustomer}\nconst suppliedName = payload.customer.name;`).length > 0)
 
   const safeCatalogue = `
     import { DialogCheckout } from "@/components/ui/dialog-checkout";

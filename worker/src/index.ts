@@ -263,6 +263,7 @@ async function createCheckout(request: Request, env: Env, origin: string): Promi
     return_url: returnUrl,
     cancel_url: `${SITE_ORIGIN}/payment-failure/#order=${orderToken}`,
     customer_email: customer.email,
+    customer_name: `Client (${customer.email})`,
     customer_phone: customer.whatsapp,
     metadata: { productId },
   });
