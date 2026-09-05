@@ -5,6 +5,7 @@ Catalogue de cartes virtuelles DRAVA. L'interface reste un export statique Next.
 ## Architecture
 
 - GitHub Pages sert le catalogue et les pages techniques `/payment-success/` et `/payment-failure/`.
+- Les onglets « Cartes virtuelles » et « Pièces TikTok » sont disponibles sur mobile et desktop. La nouvelle vue `/#tiktok` présente une page « Bientôt disponible », sans offre ni paiement TikTok pour le moment. L’onglet des cartes conserve tout le catalogue et son parcours de commande.
 - Une seule modale enchaîne les notes d'utilisation, les coordonnées (e-mail et WhatsApp), puis le choix du provider, avec transitions animées et respect de la réduction des animations.
 - À l'ouverture de l'étape coordonnées, `GET /api/location` préremplit l'indicatif WhatsApp à partir du pays IP fourni par Cloudflare. La correspondance pays/indicatif utilise `libphonenumber-js` côté Worker uniquement. Cette estimation n'est pas garantie (VPN, proxy, réseau mobile) : le champ reste modifiable, une saisie déjà commencée n'est jamais remplacée et une indisponibilité n'empêche pas la saisie manuelle. Aucun appel GPS ni enregistrement du pays ou de l'IP dans les commandes ou les journaux applicatifs n'est ajouté.
 - Au clic sur « Payer », le navigateur envoie `{ productId, customer: { email, whatsapp } }` au proxy `https://drava-leekpay.sebpay-proxy.workers.dev`. Les coordonnées restent uniquement en mémoire pendant le parcours et peuvent être corrigées avec « Précédent ».

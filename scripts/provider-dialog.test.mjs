@@ -98,6 +98,18 @@ test("LeekPay is a selectable horizontal recommended tile", () => {
   assert.doesNotMatch(tile, /handleCheckout|createLeekPayCheckout/);
 });
 
+test("both catalogues use the shared top-right floating recommendation badge like LeekPay", async () => {
+  const badge = await readFile(new URL("../src/components/catalog/RecommendedBadge.tsx", import.meta.url), "utf8");
+  assert.match(badge, /pointer-events-none\s+absolute\s+-top-2\s+right-2\s+z-10/);
+  assert.match(providerSource, /absolute\s+-top-2\s+right-2/);
+  assert.match(badge, /language === "fr" \? "Recommandé" : "Recommended"/);
+  for (const layout of ["DesktopCatalog", "MobileCatalog"]) {
+    const source = await readFile(new URL(`../src/components/catalog/${layout}.tsx`, import.meta.url), "utf8");
+    assert.match(source, /card\.recommended && <RecommendedBadge \/>/);
+    assert.match(source, /from "@\/components\/catalog\/RecommendedBadge"/);
+  }
+});
+
 test("only the separate global Pay button starts checkout", () => {
   assert.equal(
     providerSource.match(/onClick=\{handleCheckout\}/g)?.length,

@@ -17,12 +17,16 @@ export function MobileScreenTransition({
   detail,
   reducedMotion,
   onEnter,
+  panelId,
+  labelledBy,
 }: {
   children: ReactNode;
   direction: number;
   detail: boolean;
   reducedMotion: boolean;
   onEnter: (element: HTMLDivElement) => void;
+  panelId?: string;
+  labelledBy?: string;
 }) {
   const isPresent = useIsPresent();
   const elementRef = useRef<HTMLDivElement>(null);
@@ -41,6 +45,10 @@ export function MobileScreenTransition({
     <motion.div
       ref={elementRef}
       className={`app-screen ${detail ? "app-screen--detail" : ""}`}
+      id={panelId}
+      role={panelId ? "tabpanel" : undefined}
+      aria-labelledby={labelledBy}
+      tabIndex={panelId ? 0 : undefined}
       aria-hidden={!isPresent || undefined}
       custom={direction}
       initial="enter"

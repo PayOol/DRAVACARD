@@ -10,9 +10,11 @@ DRAVA propose une présentation mobile dédiée sous 768 px et conserve sa prés
 | `src/components/catalog/DesktopCatalog.tsx` | Présentation desktop du catalogue. |
 | `src/components/catalog/MobileCatalog.tsx` | Présentation et navigation propres au mobile. |
 | `src/components/catalog/MobileTransitions.tsx` | Transitions des écrans et commandes mobiles ; animation partagée des cartes dans les deux catalogues. |
-| `src/app/page.tsx` | État partagé de la carte sélectionnée ; ouverture d’un unique `DialogCheckout`. |
+| `src/app/page.tsx` | États partagés de l’onglet et de la carte sélectionnée ; ouverture d’un unique `DialogCheckout`. |
+| `src/lib/catalog-section.ts` | Sections publiques `cards` / `tiktok` et correspondance avec le fragment `#tiktok`. |
+| `src/components/catalog/CatalogTabs.tsx` | Onglets partagés, libellés bilingues et navigation clavier. |
 | `src/components/layout/MainLayout.tsx` | Enveloppe des pages et emplacement `mobileContent` ; affichage des branches par CSS au seuil de 768 px, avec l’exception paysage tactile. |
-| `src/lib/responsive-layout.ts` | `MOBILE_LAYOUT_QUERY`, requête partagée des comportements JavaScript ; maintenir son équivalent dans les trois feuilles CSS mobiles. |
+| `src/lib/responsive-layout.ts` | `MOBILE_LAYOUT_QUERY`, requête partagée des comportements JavaScript ; maintenir son équivalent dans toutes les feuilles CSS des composants, dont `catalog-sections.css`. |
 | `src/components/ui/dialog-checkout.tsx` | Parcours de commande commun, état temporaire des coordonnées et transitions entre étapes. |
 | `src/components/payment/PaymentResult.tsx` | Vérification et états de paiement communs ; présentation mobile dans `payment-result-mobile.css`. |
 
@@ -21,6 +23,8 @@ Les layouts consomment les mêmes données et callbacks. Une modification d’un
 Le mobile s’ouvre directement sur les cartes. Les écrans Découvrir et Aide ainsi que la navigation basse ont été supprimés à la demande de l’utilisateur. Toute la surface d’une carte permet de la choisir et d’ouvrir sa fiche, avec la même action accessible au clavier que le bouton « Choisir ».
 
 Les deux layouts affichent toutes les cartes. Le filtre « Toutes / Visa / Mastercard » a été supprimé sur mobile et desktop à la demande de l’utilisateur.
+
+Les onglets « Cartes virtuelles » et « Pièces TikTok » sont placés en haut des deux catalogues. Ils changent de section, sans filtrer les réseaux de cartes. La section TikTok (`/#tiktok`) affiche pour l’instant « Bientôt disponible », sans produit ni paiement. L’accueil sans fragment reste le catalogue de cartes. La sélection d’onglet est partagée lors d’un changement de layout et respecte l’historique ; les fragments de fiches mobiles `#card:…` sont conservés. Les onglets utilisent des identifiants ARIA distincts par layout, les flèches et Home/End ; le focus clavier reste sur l’onglet actif lors des transitions. Les panneaux sortants sont inertes.
 
 La carte recommandée est définie par `recommended` dans le catalogue partagé. Les deux layouts la mettent en avant et utilisent `RecommendedBadge` pour afficher « Recommandé » / « Recommended » dans un badge flottant en haut à droite. Préserver sa lisibilité et la sélection de toute la carte sur mobile.
 
@@ -60,3 +64,9 @@ node --test scripts/pwa.test.mjs
 ```
 
 Si le changement touche les règles de paiement, la sécurité, le déploiement ou le worker, exécuter également les contrôles correspondants du dépôt. Vérifier les liens et ressources avec un `NEXT_PUBLIC_BASE_PATH` non vide lorsque les chemins changent. Une validation sur navigateur émulé doit être complétée sur iOS/Android pour confirmer les comportements propres au système ; préciser les appareils réellement testés.
+
+### Validation des onglets — 5 septembre 2026
+
+- Navigateur local, français et anglais : deux sections, quatre cartes conservées, aucune barre de défilement horizontale aux largeurs CSS mesurées de 320, 390, 766, 768 et 1440 px, ainsi qu’en 844 × 390 px avec une souris.
+- Vérifiés : lien direct `#tiktok` après rechargement, flèches clavier et focus, retour fiche → cartes → TikTok, commande notes → coordonnées fictives → prestataires sans paiement, redimensionnement avec commande ouverte, retour système vers les coordonnées et fermeture avec restauration du focus.
+- Limites : le zoom du navigateur de contrôle ne permet pas de mesurer exactement 767 px (766 et 768 encadrent le seuil). Aucun appareil iOS/Android réel, clavier logiciel, mode tactile `pointer: coarse` ni réglage système de réduction des animations n’a été émulé ; ces vérifications restent à effectuer. Les comportements de réduction des animations et d’inertie sont conservés dans le code.

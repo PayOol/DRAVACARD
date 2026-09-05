@@ -6,9 +6,12 @@ import {
   MobileScreenTransition,
 } from "@/components/catalog/MobileTransitions";
 import RecommendedBadge from "@/components/catalog/RecommendedBadge";
+import CatalogTabs from "@/components/catalog/CatalogTabs";
+import TikTokPanel from "@/components/catalog/TikTokPanel";
 import DravaLogo from "@/components/layout/DravaLogo";
 import { withBasePath } from "@/lib/base-path";
 import { type CatalogCard, cards } from "@/lib/catalog";
+import type { CatalogSection } from "@/lib/catalog-section";
 import { useLanguage } from "@/lib/language-context";
 import { MOBILE_LAYOUT_QUERY } from "@/lib/responsive-layout";
 import { AnimatePresence, useReducedMotion } from "framer-motion";
@@ -24,10 +27,11 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type Screen = "cards" | `card:${string}`;
+type Screen = CatalogSection | `card:${string}`;
 
 function readScreen(): Screen {
   const hash = window.location.hash.slice(1);
+  if (hash === "tiktok") return "tiktok";
   if (
     hash.startsWith("card:") &&
     cards.some((card) => `card:${card.id}` === hash)
@@ -80,8 +84,12 @@ function CardPrice({ card }: { card: CatalogCard }) {
 
 export default function MobileCatalog({
   onSelect,
+  section,
+  onSectionChange,
 }: {
   onSelect: (card: CatalogCard) => void;
+  section: CatalogSection;
+  onSectionChange: (section: CatalogSection) => void;
 }) {
   const { language, setLanguage } = useLanguage();
   const fr = language === "fr";
@@ -116,15 +124,20 @@ export default function MobileCatalog({
   }, []);
 
   useEffect(() => {
+    // Also resync after a shared tab click: pushState itself emits no event.
+    void section;
     const sync = () => {
       const next = readScreen();
       if (next === currentScreen.current) return;
-      positions.current[currentScreen.current] = window.scrollY;
-      prepareScreenExit();
+      const visible = window.matchMedia(MOBILE_LAYOUT_QUERY).matches;
+      if (visible) {
+        positions.current[currentScreen.current] = window.scrollY;
+        prepareScreenExit();
+      }
       currentScreen.current = next;
-      navigationRef.current = true;
+      navigationRef.current = visible;
       setDirection(next === "cards" ? -1 : 1);
-      setIsNavigating(true);
+      setIsNavigating(visible);
       setScreen(next);
     };
     const connection = () => setOffline(!navigator.onLine);
@@ -140,7 +153,7 @@ export default function MobileCatalog({
       window.removeEventListener("online", connection);
       window.removeEventListener("offline", connection);
     };
-  }, [prepareScreenExit]);
+  }, [prepareScreenExit, section]);
 
   // Restore each screen ourselves while the outgoing screen stays fixed.
   // Native history restoration would otherwise move it before we capture it.
@@ -174,7 +187,11 @@ export default function MobileCatalog({
         top: positions.current[next] ?? 0,
         behavior: "instant",
       });
-      element.querySelector<HTMLElement>("h1")?.focus({ preventScroll: true });
+      if (document.activeElement?.getAttribute("role") !== "tab") {
+        element
+          .querySelector<HTMLElement>("h1")
+          ?.focus({ preventScroll: true });
+      }
     },
     [],
   );
@@ -256,6 +273,14 @@ export default function MobileCatalog({
         </div>
       )}
 
+      {!detail && (
+        <CatalogTabs
+          section={section}
+          onSectionChange={onSectionChange}
+          idPrefix="mobile"
+        />
+      )}
+
       <div className="app-screen-stack" ref={screenStackRef}>
         <AnimatePresence initial={false} mode="sync" custom={direction}>
           <MobileScreenTransition
@@ -263,8 +288,11 @@ export default function MobileCatalog({
             direction={direction}
             detail={Boolean(detail)}
             reducedMotion={reducedMotion}
+            panelId={!detail ? `mobile-section-${screen}` : undefined}
+            labelledBy={!detail ? `mobile-tab-${screen}` : undefined}
             onEnter={(element) => handleScreenEnter(screen, element)}
           >
+            {screen === "tiktok" && <TikTokPanel />}
             {screen === "cards" && (
               <>
                 <div className="app-intro app-intro--compact">
