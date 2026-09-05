@@ -12,6 +12,7 @@ import { withBasePath } from "@/lib/base-path";
 import { type CatalogCard, cards } from "@/lib/catalog";
 import type { CatalogSection } from "@/lib/catalog-section";
 import { useLanguage } from "@/lib/language-context";
+import { useSwipeTabs } from "@/lib/use-swipe-tabs";
 import { AnimatePresence, useReducedMotion } from "framer-motion";
 import { Check, Clock, CreditCard, Shield, X, Zap } from "lucide-react";
 
@@ -28,6 +29,10 @@ export default function DesktopCatalog({
 }) {
   const { language } = useLanguage();
   const reducedMotion = useReducedMotion() === true;
+  const swipeHandlers = useSwipeTabs({
+    section,
+    onSectionChange,
+  });
   const handleBuyClick = onSelect;
   const getCardGradient = (color: string) => {
     switch (color) {
@@ -147,7 +152,10 @@ export default function DesktopCatalog({
   );
 
   return (
-    <section className="bg-gradient-to-b from-slate-50 to-white pb-12 pt-4 md:pb-20 md:pt-6 dark:from-[#0b1220] dark:to-[#0b1220]">
+    <section
+      className="bg-gradient-to-b from-slate-50 to-white pb-12 pt-4 md:pb-20 md:pt-6 dark:from-[#0b1220] dark:to-[#0b1220]"
+      {...swipeHandlers}
+    >
       <div className="container mx-auto px-4">
         <CatalogTabs
           section={section}

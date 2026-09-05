@@ -17,6 +17,7 @@ import { type CatalogCard, cards } from "@/lib/catalog";
 import type { CatalogSection } from "@/lib/catalog-section";
 import { useLanguage } from "@/lib/language-context";
 import { MOBILE_LAYOUT_QUERY } from "@/lib/responsive-layout";
+import { useSwipeTabs } from "@/lib/use-swipe-tabs";
 import { AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   ArrowLeft,
@@ -232,8 +233,17 @@ export default function MobileCatalog({
     else navigate("cards");
   };
 
+  const swipeHandlers = useSwipeTabs({
+    section,
+    onSectionChange,
+    disabled: Boolean(detail),
+  });
+
   return (
-    <div className={`mobile-app ${detail ? "mobile-app--detail" : ""}`}>
+    <div
+      className={`mobile-app ${detail ? "mobile-app--detail" : ""}`}
+      {...(!detail ? swipeHandlers : {})}
+    >
       <header className="app-home-header">
         <AnimatePresence initial={false} mode="wait">
           <MobileChromeTransition

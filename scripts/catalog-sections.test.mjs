@@ -10,6 +10,10 @@ import {
   catalogSectionHash,
   readCatalogSection,
 } from "../src/lib/catalog-section.ts";
+import {
+  getNextSectionOnSwipe,
+  resolveSwipeDirection,
+} from "../src/lib/use-swipe-tabs.ts";
 
 const require = createRequire(import.meta.url);
 const [homeSource, tabsSource, tiktokSource, desktopSource] = await Promise.all([
@@ -432,6 +436,7 @@ test("desktop intro keeps the original description on the left and important not
       "@/lib/base-path": { withBasePath: (path) => path },
       "@/lib/catalog": { cards },
       "@/lib/language-context": { useLanguage: () => ({ language }) },
+      "@/lib/use-swipe-tabs": { useSwipeTabs: () => ({}) },
       "framer-motion": { AnimatePresence: "animate-presence", useReducedMotion: () => false },
       "lucide-react": Object.fromEntries(["Check", "Clock", "CreditCard", "Shield", "X", "Zap"].map((name) => [name, `${name}-icon`])),
     });
@@ -460,4 +465,38 @@ test("desktop intro keeps the original description on the left and important not
       assert.ok(children[1].props.className.split(/\s+/).includes(className), `The important note styling must remain unchanged: ${className}`);
     }
   }
+});
+
+test("horizontal swipe resolves direction cleanly and rejects vertical scrolling and slow drags", () => {
+  assert.equal(
+    resolveSwipeDirection({ startX: 200, startY: 100, endX: 120, endY: 105 }),
+    "left",
+  );
+  assert.equal(
+    resolveSwipeDirection({ startX: 100, startY: 100, endX: 180, endY: 95 }),
+    "right",
+  );
+  assert.equal(
+    resolveSwipeDirection({ startX: 100, startY: 100, endX: 140, endY: 100 }),
+    null,
+  );
+  assert.equal(
+    resolveSwipeDirection({ startX: 100, startY: 100, endX: 160, endY: 170 }),
+    null,
+  );
+  assert.equal(
+    resolveSwipeDirection({ startX: 100, startY: 100, endX: 160, endY: 155 }),
+    null,
+  );
+  assert.equal(
+    resolveSwipeDirection({ startX: 100, startY: 100, endX: 180, endY: 100, elapsed: 1200 }),
+    null,
+  );
+});
+
+test("swipe section transition advances across tabs within bounds", () => {
+  assert.equal(getNextSectionOnSwipe("cards", "left"), "tiktok");
+  assert.equal(getNextSectionOnSwipe("cards", "right"), null);
+  assert.equal(getNextSectionOnSwipe("tiktok", "right"), "cards");
+  assert.equal(getNextSectionOnSwipe("tiktok", "left"), null);
 });
