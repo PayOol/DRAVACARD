@@ -261,7 +261,7 @@ export default function MobileCatalog({
                 <ArrowLeft size={22} aria-hidden="true" />
               </button>
             ) : (
-              <DravaLogo />
+              <DravaLogo variant="wordmark" />
             )}
             {detail && (
               <span className="app-header-title">

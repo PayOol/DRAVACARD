@@ -154,8 +154,29 @@
     object-fit: contain;
   }
 
+  .drava-wordmark {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 28px;
+    width: auto;
+    aspect-ratio: 607 / 127;
+    flex-shrink: 0;
+  }
+
+  .drava-wordmark-image {
+    display: block;
+    height: 100%;
+    width: auto;
+    object-fit: contain;
+  }
+
   .app-page-header .drava-logo {
     width: 44px;
+  }
+
+  .app-page-header .drava-wordmark {
+    height: 24px;
   }
 
   .app-header-title {
@@ -828,6 +849,14 @@
   .app-page-header {
     padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
     gap: 8px;
+  }
+
+  .drava-wordmark {
+    height: 24px;
+  }
+
+  .app-page-header .drava-wordmark {
+    height: 20px;
   }
 
   .app-purchase-bar {

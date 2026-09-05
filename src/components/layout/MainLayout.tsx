@@ -36,7 +36,7 @@ export default function MainLayout({
           >
             <ArrowLeft aria-hidden="true" size={22} />
           </Link>
-          <DravaLogo />
+          <DravaLogo variant="wordmark" />
           <div className="app-header-actions flex shrink-0 items-center gap-2">
             <ThemeToggle />
             <button
