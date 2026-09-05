@@ -556,60 +556,62 @@ export function TikTokCheckout({
               )}
               {step === 2 && (
                 <div className="tiktok-fields">
-                  <label>
-                    {fr ? "Identifiant TikTok" : "TikTok username"}
-                    <span className="tiktok-field">
-                      <span aria-hidden="true">@</span>
-                      <input
-                        data-tiktok-field="username"
-                        value={username}
-                        maxLength={254}
-                        onChange={(event) =>
-                          setUsername(event.target.value.replace(/^@/, ""))
-                        }
-                        autoComplete="off"
-                        placeholder={
-                          fr ? "pseudo ou email" : "username or email"
-                        }
-                        required
-                      />
-                    </span>
-                  </label>
-                  <label>
-                    {fr ? "Mot de passe" : "Password"}
-                    <span className="tiktok-field">
-                      <input
-                        data-tiktok-field="password"
-                        type={showPassword ? "text" : "password"}
-                        value={password}
-                        maxLength={256}
-                        onChange={(event) => setPassword(event.target.value)}
-                        autoComplete="off"
-                        placeholder="••••••••"
-                        required
-                      />
-                      <button
-                        className="tiktok-icon-button"
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        aria-label={
-                          showPassword
-                            ? fr
-                              ? "Masquer le mot de passe"
-                              : "Hide password"
-                            : fr
-                              ? "Afficher le mot de passe"
-                              : "Show password"
-                        }
-                      >
-                        {showPassword ? (
-                          <EyeOff size={18} aria-hidden="true" />
-                        ) : (
-                          <Eye size={18} aria-hidden="true" />
-                        )}
-                      </button>
-                    </span>
-                  </label>
+                  <div className="tiktok-account-fields">
+                    <label>
+                      {fr ? "Nom d'utilisateur TikTok" : "TikTok username"}
+                      <span className="tiktok-field">
+                        <span aria-hidden="true">@</span>
+                        <input
+                          data-tiktok-field="username"
+                          value={username}
+                          maxLength={254}
+                          onChange={(event) =>
+                            setUsername(event.target.value.replace(/^@/, ""))
+                          }
+                          autoComplete="off"
+                          placeholder={
+                            fr ? "pseudo ou email" : "username or email"
+                          }
+                          required
+                        />
+                      </span>
+                    </label>
+                    <label>
+                      {fr ? "Mot de passe TikTok" : "TikTok password"}
+                      <span className="tiktok-field">
+                        <input
+                          data-tiktok-field="password"
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          maxLength={256}
+                          onChange={(event) => setPassword(event.target.value)}
+                          autoComplete="off"
+                          placeholder="••••••••"
+                          required
+                        />
+                        <button
+                          className="tiktok-icon-button"
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          aria-label={
+                            showPassword
+                              ? fr
+                                ? "Masquer le mot de passe"
+                                : "Hide password"
+                              : fr
+                                ? "Afficher le mot de passe"
+                                : "Show password"
+                          }
+                        >
+                          {showPassword ? (
+                            <EyeOff size={18} aria-hidden="true" />
+                          ) : (
+                            <Eye size={18} aria-hidden="true" />
+                          )}
+                        </button>
+                      </span>
+                    </label>
+                  </div>
                   <div className="tiktok-contact-row">
                     <label>
                       {fr ? "Pays" : "Country"}
