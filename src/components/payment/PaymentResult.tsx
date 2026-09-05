@@ -1,6 +1,7 @@
 "use client";
 
 import MainLayout from "@/components/layout/MainLayout";
+import PaymentReceipt from "@/components/payment/PaymentReceipt";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/lib/language-context";
 import {
@@ -9,7 +10,7 @@ import {
   getLeekPayOrderStatus,
   readOrderToken,
 } from "@/lib/leekpay";
-import { AlertTriangle, CheckCircle2, LoaderCircle } from "lucide-react";
+import { AlertTriangle, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -23,7 +24,8 @@ type VerificationState =
   | "paid"
   | "failed"
   | "unconfirmed"
-  | "missing";
+  | "missing"
+  | "simulation";
 
 const content = {
   checking: {
@@ -46,17 +48,6 @@ const content = {
     notice: {
       fr: "Ne payez pas une seconde fois pendant la vérification. Vous pouvez vérifier à nouveau le statut si nécessaire.",
       en: "Do not pay again while verification is in progress. You can check the status again if needed.",
-    },
-  },
-  paid: {
-    title: { fr: "Paiement confirmé", en: "Payment confirmed" },
-    description: {
-      fr: "Votre paiement a été confirmé auprès de LeekPay par notre serveur sécurisé.",
-      en: "Your payment has been confirmed with LeekPay by our secure server.",
-    },
-    notice: {
-      fr: "La confirmation du paiement est distincte de l’émission et de la livraison de votre carte.",
-      en: "Payment confirmation is separate from the issue and delivery of your card.",
     },
   },
   failed: {
@@ -105,6 +96,20 @@ export default function PaymentResult({ status }: PaymentResultProps) {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: an explicit retry restarts this bounded verification cycle.
   useEffect(() => {
+    // Local visual preview only; never fabricate a verified provider order.
+    if (
+      process.env.NODE_ENV === "development" &&
+      status === "success" &&
+      ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname) &&
+      window.location.hash === "#simulation"
+    ) {
+      setVerification("simulation");
+      setOrder(null);
+      setCanRetry(false);
+      setIsChecking(false);
+      return;
+    }
+
     // Neither the return pathname nor a query parameter is payment evidence.
     const orderToken = readOrderToken(window.location.hash);
     setCanRetry(Boolean(orderToken));
@@ -184,28 +189,39 @@ export default function PaymentResult({ status }: PaymentResultProps) {
       clearTimeout(pollTimer);
       clearTimeout(deadlineTimer);
     };
-  }, [attempt]);
+  }, [attempt, status]);
 
   const isPaid = verification === "paid" && order?.verified === true;
-  const copy = content[verification];
-  const Icon = isChecking
-    ? LoaderCircle
-    : isPaid
-      ? CheckCircle2
-      : AlertTriangle;
+  const isSimulation =
+    process.env.NODE_ENV === "development" && verification === "simulation";
+  if ((isPaid && order) || isSimulation) {
+    return (
+      <MainLayout>
+        <PaymentReceipt
+          amount={isPaid && order ? order.amount : 5000}
+          createdAt={
+            isPaid && order ? order.createdAt : Date.UTC(2026, 8, 5, 12)
+          }
+          simulation={isSimulation}
+        />
+      </MainLayout>
+    );
+  }
+
+  const copy =
+    content[
+      verification === "paid" || verification === "simulation"
+        ? "unconfirmed"
+        : verification
+    ];
+  const Icon = isChecking ? LoaderCircle : AlertTriangle;
 
   return (
     <MainLayout>
-      <section className="flex min-h-[65vh] items-center bg-gradient-to-b from-slate-50 to-white px-4 py-12 md:py-20">
-        <div className="mx-auto w-full max-w-2xl">
-          <div className="rounded-2xl border border-gray-100 bg-white p-6 text-center shadow-lg md:p-10">
-            <div
-              className={`mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full ${
-                isPaid
-                  ? "bg-emerald-100 text-emerald-600"
-                  : "bg-amber-100 text-amber-700"
-              }`}
-            >
+      <section className="payment-result-screen flex min-h-[65vh] items-center bg-gradient-to-b from-slate-50 to-white px-4 py-12 md:py-20">
+        <div className="payment-result-container mx-auto w-full max-w-2xl">
+          <div className="payment-result-card rounded-2xl border border-gray-100 bg-white p-6 text-center shadow-lg md:p-10">
+            <div className="payment-result-icon mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-amber-700">
               <Icon
                 aria-hidden="true"
                 className={`h-9 w-9 ${isChecking ? "animate-spin" : ""}`}
@@ -213,38 +229,23 @@ export default function PaymentResult({ status }: PaymentResultProps) {
             </div>
 
             <div aria-live="polite" aria-atomic="true">
-              <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">
+              <h1 className="payment-result-title text-2xl font-bold text-slate-900 md:text-3xl">
                 {verification === "missing" && status === "failure"
                   ? language === "fr"
                     ? "Paiement non finalisé"
                     : "Payment not completed"
                   : copy.title[language]}
               </h1>
-              <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-gray-600 md:text-lg">
+              <p className="payment-result-description mx-auto mt-4 max-w-xl text-base leading-7 text-gray-600 md:text-lg">
                 {copy.description[language]}
               </p>
 
-              {isPaid && order && (
-                <p className="mt-4 font-semibold text-emerald-700">
-                  {order.amount.toLocaleString(
-                    language === "fr" ? "fr-FR" : "en-US",
-                  )}{" "}
-                  Fcfa
-                </p>
-              )}
-
-              <div
-                className={`mx-auto mt-6 max-w-xl rounded-xl border p-4 text-left text-sm leading-6 ${
-                  isPaid
-                    ? "border-blue-200 bg-blue-50 text-blue-900"
-                    : "border-amber-200 bg-amber-50 text-amber-900"
-                }`}
-              >
+              <div className="payment-result-notice mx-auto mt-6 max-w-xl rounded-xl border border-amber-200 bg-amber-50 p-4 text-left text-sm leading-6 text-amber-900">
                 {copy.notice[language]}
               </div>
             </div>
 
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <div className="payment-result-actions mt-8 flex flex-wrap justify-center gap-3">
               {canRetry &&
                 !isChecking &&
                 !isPaid &&

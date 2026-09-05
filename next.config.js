@@ -1,4 +1,5 @@
-/** @type {import('next').NextConfig} */
+const { PHASE_DEVELOPMENT_SERVER } = require('next/constants');
+
 const configuredBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
 if (
   configuredBasePath &&
@@ -11,6 +12,7 @@ const basePath = configuredBasePath === '' || configuredBasePath === '/'
   ? ''
   : `/${configuredBasePath.replace(/^\/+|\/+$/g, '')}`;
 
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'export',
   basePath,
@@ -22,4 +24,8 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = (phase) => ({
+  ...nextConfig,
+  // A production build cleans its distDir; keep the running dev server isolated.
+  distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next',
+});

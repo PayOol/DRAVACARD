@@ -231,7 +231,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
   });
 
   it("allows exactly configured loopback origins in production for preflight, checkout and status", async (t) => {
-    const { env, calls, limits } = setup(t);
+    const { env, calls, limits, puts } = setup(t);
     env.LOCAL_ORIGINS = ["http://127.0.0.1:3000", "http://localhost:3000"];
     for (const origin of env.LOCAL_ORIGINS) {
       for (const path of ["/api/checkout", "/api/orders/status"]) {
@@ -255,7 +255,10 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
       assert.equal(calls.at(-1).init.headers.Authorization, `Bearer ${MOCK_CREDENTIAL}`);
       const checked = await worker.fetch(request("/api/orders/status", { orderToken: result.orderToken }, { Origin: origin }), env);
       assert.equal(checked.headers.get("Access-Control-Allow-Origin"), origin);
-      assert.deepEqual(await checked.json(), { status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF" });
+      assert.deepEqual(await checked.json(), {
+        status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF",
+        createdAt: JSON.parse(puts.at(-1).value).createdAt,
+      });
       assert.equal(calls.at(-1).init.method, "GET");
       assert.equal(calls.at(-1).init.headers.Authorization, `Bearer ${MOCK_CREDENTIAL}`);
       assert.deepEqual(limits.slice(-2), [
@@ -371,7 +374,10 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
       assert.equal(result.checkoutUrl, checkoutUrl);
       assert.equal(JSON.parse(puts.at(-1).value).checkoutId, "checkout_42");
       const response = await worker.fetch(request("/api/orders/status", { orderToken: result.orderToken }), env);
-      assert.deepEqual(await response.json(), { status: "pending", verified: false, productId: "visa-basic", amount: 5000, currency: "XOF" });
+      assert.deepEqual(await response.json(), {
+        status: "pending", verified: false, productId: "visa-basic", amount: 5000, currency: "XOF",
+        createdAt: JSON.parse(puts.at(-1).value).createdAt,
+      });
       assert.equal(calls.at(-2).url, API);
       assert.equal(calls.at(-1).url, `${API}/checkout_42`);
       assert.equal(calls.at(-1).init.headers.Authorization, `Bearer ${MOCK_CREDENTIAL}`);
@@ -404,14 +410,51 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
   });
 
   it("returns paid verified only after authenticated GET and exact amount/currency/id checks", async (t) => {
-    const { env, calls } = setup(t);
+    const { env, calls, puts } = setup(t);
     const { orderToken } = await create(env);
     const response = await worker.fetch(request("/api/orders/status", { orderToken }), env);
-    assert.deepEqual(await response.json(), { status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF" });
+    assert.deepEqual(await response.json(), {
+      status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF",
+      createdAt: JSON.parse(puts[0].value).createdAt,
+    });
     assert.equal(calls.at(-1).url, `${API}/checkout_42`);
     assert.equal(calls.at(-1).init.method, "GET");
     assert.equal(calls.at(-1).init.headers.Authorization, `Bearer ${MOCK_CREDENTIAL}`);
     assert.equal(response.headers.get("Cache-Control"), "no-store, max-age=0");
+  });
+
+  it("returns the immutable server creation date rather than provider dates or the status-request time", async (t) => {
+    const createdAt = Date.UTC(2026, 8, 5, 12);
+    const clock = t.mock.method(Date, "now", () => createdAt);
+    const { env, puts } = setup(t, async (_url, init) => Response.json({ success: true, data: {
+      id: "checkout_42", amount: 5000, currency: "XOF",
+      status: init.method === "POST" ? "pending" : "paid",
+      created_at: "2000-01-01T00:00:00Z", createdAt: 123,
+      ...(init.method === "POST" ? { payment_url: "https://leekpay.me/pay_test", return_url: JSON.parse(init.body).return_url } : {}),
+    } }));
+    const { orderToken } = await create(env);
+    assert.equal(JSON.parse(puts[0].value).createdAt, createdAt);
+    clock.mock.mockImplementation(() => createdAt + 86_400_000);
+    const response = await worker.fetch(request("/api/orders/status", { orderToken }), env);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF", createdAt,
+    });
+  });
+
+  it("rejects malformed stored creation dates before calling the provider", async (t) => {
+    const { env, values, calls } = setup(t);
+    const { orderToken } = await create(env);
+    const [key, stored] = [...values.entries()][0];
+    const order = JSON.parse(stored);
+    for (const createdAt of [
+      null, true, {}, [], "2026-09-05T12:00:00Z", undefined,
+      0, -1, 1.5, NaN, Infinity, 8_640_000_000_000_001,
+    ]) {
+      values.set(key, JSON.stringify({ ...order, createdAt, expiresAt: createdAt + 604800000 }));
+      await errorCode(await worker.fetch(request("/api/orders/status", { orderToken }), env), 503, "service_unavailable");
+    }
+    assert.equal(calls.length, 1);
   });
 
   it("does not verify pending/processing/failed/cancelled/expired and refuses status mismatches", async (t) => {
@@ -482,7 +525,10 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
     const [key, stored] = [...values.entries()][0];
     values.set(key, JSON.stringify({ ...JSON.parse(stored), amount: 5500 }));
     const response = await worker.fetch(request("/api/orders/status", { orderToken }), env);
-    assert.deepEqual(await response.json(), { status: "paid", verified: true, productId: "visa-basic", amount: 5500, currency: "XOF" });
+    assert.deepEqual(await response.json(), {
+      status: "paid", verified: true, productId: "visa-basic", amount: 5500, currency: "XOF",
+      createdAt: JSON.parse(stored).createdAt,
+    });
   });
 
   it("does not return a payable URL when KV persistence fails and logs no details", async (t) => {

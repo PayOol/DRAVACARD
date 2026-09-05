@@ -7,6 +7,14 @@ import { Miniflare, convertV4MiniflareOptions, Response as RuntimeResponse } fro
 
 const TEST_CUSTOMER = { email: " client@example.com ", whatsapp: "+237 (699) 000-000" };
 
+async function storedCreationDate(runtime, orderToken) {
+  const hash = Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(orderToken))).toString("hex");
+  const orders = await runtime.getKVNamespace("ORDERS");
+  const order = await orders.get(`order:${hash}`, "json");
+  assert.ok(Number.isSafeInteger(order.createdAt) && order.createdAt > 0);
+  return order.createdAt;
+}
+
 // Miniflare/workerd ships with our exact pinned Wrangler version. Every outbound
 // fetch is intercepted locally; these tests never contact a payment provider.
 it("runs the Worker in workerd with actual KV/rate bindings and blocked external network", { timeout: 30_000 }, async () => {
@@ -61,7 +69,10 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
         }
         assert.equal(request.method, "GET");
         assert.equal(request.url, "https://leekpay.fr/api/v1/checkout/checkout_runtime");
-        return RuntimeResponse.json({ success: true, data: { id: "checkout_runtime", amount: 5000, currency: "XOF", status: "paid" } });
+        return RuntimeResponse.json({ success: true, data: {
+          id: "checkout_runtime", amount: 5000, currency: "XOF", status: "paid",
+          created_at: "2000-01-01T00:00:00Z", createdAt: 123,
+        } });
       }
       return RuntimeResponse.json({ error: "outbound-network-blocked-in-test" }, { status: 503 });
     },
@@ -136,7 +147,10 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
     });
     const checkedPayload = await checked.json();
     assert.equal(checked.status, 200, JSON.stringify(checkedPayload));
-    assert.deepEqual(checkedPayload, { status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF" });
+    assert.deepEqual(checkedPayload, {
+      status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF",
+      createdAt: await storedCreationDate(runtime, createdPayload.orderToken),
+    });
     assert.equal(outboundCalls, 2);
     paymentUrl = "https://future.processor.example/checkout/test-only-session";
     for (const origin of config.vars.LOCAL_ORIGINS) {
@@ -166,7 +180,10 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
       });
       assert.equal(localStatus.status, 200);
       assert.equal(localStatus.headers.get("Access-Control-Allow-Origin"), origin);
-      assert.deepEqual(await localStatus.json(), { status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF" });
+      assert.deepEqual(await localStatus.json(), {
+        status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF",
+        createdAt: await storedCreationDate(runtime, localCheckout.orderToken),
+      });
     }
     assert.equal(outboundCalls, 6);
     const orders = await runtime.getKVNamespace("ORDERS");

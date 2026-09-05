@@ -21,19 +21,31 @@ const LanguageContext = createContext<LanguageContextType | undefined>(
 
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   const [language, setLanguage] = useState<Language>("fr");
+  const [preferenceLoaded, setPreferenceLoaded] = useState(false);
 
   // Load language preference from localStorage if available
   useEffect(() => {
-    const savedLanguage = localStorage.getItem("language") as Language;
-    if (savedLanguage && (savedLanguage === "fr" || savedLanguage === "en")) {
-      setLanguage(savedLanguage);
+    try {
+      const savedLanguage = localStorage.getItem("language");
+      if (savedLanguage === "fr" || savedLanguage === "en") {
+        setLanguage(savedLanguage);
+      }
+    } catch {
+      // The interface still works when browser storage is unavailable.
     }
+    setPreferenceLoaded(true);
   }, []);
 
   // Save language preference to localStorage whenever it changes
   useEffect(() => {
-    localStorage.setItem("language", language);
-  }, [language]);
+    document.documentElement.lang = language;
+    if (!preferenceLoaded) return;
+    try {
+      localStorage.setItem("language", language);
+    } catch {
+      // Keep the in-memory preference in restricted browsing modes.
+    }
+  }, [language, preferenceLoaded]);
 
   return (
     <LanguageContext.Provider value={{ language, setLanguage }}>

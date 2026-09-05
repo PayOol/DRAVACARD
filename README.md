@@ -35,6 +35,18 @@ npm run dev
 
 Le serveur de développement écoute uniquement en local. Le fichier `.env.example` documente les réglages publics de l'export ; il ne doit contenir aucune clé de paiement.
 
+Les fichiers générés par `npm run dev` sont isolés dans `.next-dev/`. Les builds de production utilisent `.next/` et produisent l'export dans `out/`. On peut donc lancer `npm run build` pendant que le serveur local tourne sans effacer ses fichiers et provoquer une erreur 500. Ne supprimez pas `.next-dev/` tant que le serveur de développement est actif.
+
+### Simulation locale d’une commande validée
+
+Avec `npm run dev`, ouvrez [la simulation de paiement réussi](http://127.0.0.1:3000/payment-success/#simulation). Elle affiche une commande fictive VISA BASIQUE de 5 000 Fcfa, clairement marquée « Simulation locale », sans contacter LeekPay ni le proxy et sans créer de commande ou de paiement.
+
+Ce mode est limité au développement sur `localhost`, `127.0.0.1` ou `[::1]`. Il est désactivé dans l’export de production, même servi en local. Sans `#simulation`, la page conserve sa vérification habituelle du paiement auprès du serveur.
+
+La page succès affiche le reçu et les étapes d’ouverture du compte Prismcard, puis de contact par Telegram (prioritaire) ou WhatsApp. Ces liens ne contiennent aucune donnée client et n’envoient aucun message automatiquement. Le bouton « Imprimer le reçu » ouvre l’impression du navigateur, avec une mise en page dédiée ; la mention de simulation reste présente à l’impression.
+
+Le prix vient de la commande vérifiée. Sa date provient du champ `createdAt` déjà enregistré dans le Worker, affiché dans le fuseau `Africa/Douala`, et non de la date d’ouverture du reçu. Si un ancien déploiement du proxy ne transmet pas encore ce champ, la date est indiquée « Non disponible ». La simulation utilise une commande fictive de 5 000 FCFA datée du 05 septembre 2026.
+
 ## Développement du proxy
 
 ```bash

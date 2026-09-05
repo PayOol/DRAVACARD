@@ -67,3 +67,26 @@
     @apply bg-background text-foreground;
   }
 }
+
+@media print {
+  body:has(.payment-receipt) header,
+  body:has(.payment-receipt) footer,
+  body:has(.payment-receipt) nextjs-portal {
+    display: none !important;
+  }
+
+  body:has(.payment-receipt) main {
+    padding-top: 0 !important;
+  }
+
+  .payment-receipt {
+    padding: 0;
+    background: white;
+    color: black;
+  }
+
+  .payment-receipt section,
+  .payment-receipt li {
+    break-inside: avoid;
+  }
+}

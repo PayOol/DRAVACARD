@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/lib/language-context";
+import { MOBILE_LAYOUT_QUERY } from "@/lib/responsive-layout";
 import {
   type PaymentCustomer,
   normalizeCustomerEmail,
@@ -53,7 +54,7 @@ export function CustomerDetails({
       noValidate
       onSubmit={handleSubmit}
     >
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
+      <div className="checkout-scroll checkout-customer-fields min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
         <div>
           <label
             className="mb-2 block text-sm font-medium text-slate-800"
@@ -77,6 +78,16 @@ export function CustomerDetails({
               inputMode="email"
               autoComplete="email"
               autoCapitalize="none"
+              enterKeyHint="next"
+              onKeyDown={(event) => {
+                if (
+                  event.key === "Enter" &&
+                  window.matchMedia(MOBILE_LAYOUT_QUERY).matches
+                ) {
+                  event.preventDefault();
+                  whatsappRef.current?.focus();
+                }
+              }}
               spellCheck={false}
               required
               maxLength={254}
@@ -130,10 +141,13 @@ export function CustomerDetails({
               type="tel"
               inputMode="tel"
               autoComplete="tel"
+              enterKeyHint="done"
               required
               maxLength={40}
               placeholder={
-                language === "fr" ? "+ Indicatif et numéro" : "+ Code and number"
+                language === "fr"
+                  ? "+ Indicatif et numéro"
+                  : "+ Code and number"
               }
               value={value.whatsapp}
               onChange={(event) =>
@@ -163,9 +177,9 @@ export function CustomerDetails({
         </div>
       </div>
 
-      <div className="flex shrink-0 gap-3 border-t border-slate-100 p-4 sm:px-6">
+      <div className="checkout-actions flex shrink-0 gap-3 border-t border-slate-100 p-4 sm:px-6">
         <Button
-          className="h-11 gap-2"
+          className="checkout-back-action h-11 gap-2"
           onClick={onBack}
           type="button"
           variant="outline"

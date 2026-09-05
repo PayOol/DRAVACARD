@@ -14,7 +14,8 @@ import {
   CheckCircle2,
   LoaderCircle,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useIsPresent } from "framer-motion";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 interface PaymentProvidersProps {
   card: PaymentCardSelection;
@@ -35,6 +36,16 @@ export function PaymentProviders({
   const [selectedProvider, setSelectedProvider] =
     useState<PaymentProvider>("leekpay");
   const requestRef = useRef<AbortController | null>(null);
+  const isPresent = useIsPresent();
+
+  // Back can interrupt payment from the mobile header or browser navigation.
+  // Abort as soon as the panel exits, before its exit animation completes.
+  useLayoutEffect(() => {
+    if (!isPresent) {
+      requestRef.current?.abort();
+      requestRef.current = null;
+    }
+  }, [isPresent]);
 
   useEffect(() => {
     const handlePageShow = (event: PageTransitionEvent) => {
@@ -82,8 +93,8 @@ export function PaymentProviders({
 
   return (
     <>
-      <div className="min-h-0 overflow-y-auto p-4 sm:p-6">
-        <div className="mb-5 rounded-lg border border-blue-100 bg-blue-50 p-4">
+      <div className="checkout-scroll min-h-0 overflow-y-auto p-4 sm:p-6">
+        <div className="checkout-provider-summary mb-5 rounded-lg border border-blue-100 bg-blue-50 p-4">
           <p className="text-sm text-blue-700">
             {language === "fr" ? "Carte sélectionnée" : "Selected card"}
           </p>
@@ -101,7 +112,7 @@ export function PaymentProviders({
           aria-label={
             language === "fr" ? "Providers disponibles" : "Available providers"
           }
-          className="grid min-w-0 grid-cols-2 gap-3 pt-2"
+          className="checkout-provider-options grid min-w-0 grid-cols-2 gap-3 pt-2"
         >
           <button
             aria-pressed={selectedProvider === "leekpay"}
@@ -133,7 +144,7 @@ export function PaymentProviders({
         </fieldset>
       </div>
 
-      <div className="shrink-0 border-t border-slate-100 p-4 sm:px-6">
+      <div className="checkout-actions shrink-0 border-t border-slate-100 p-4 sm:px-6">
         {isProcessing && (
           <div
             aria-live="polite"
@@ -169,7 +180,7 @@ export function PaymentProviders({
 
         <div className="flex gap-3">
           <Button
-            className="h-11 gap-2"
+            className="checkout-back-action h-11 gap-2"
             disabled={isProcessing}
             onClick={onBack}
             type="button"
@@ -179,7 +190,7 @@ export function PaymentProviders({
             {language === "fr" ? "Précédent" : "Back"}
           </Button>
           <Button
-            className="h-11 flex-1 gap-2 bg-emerald-600 text-sm text-white hover:bg-emerald-700"
+            className="checkout-pay-action h-11 flex-1 gap-2 bg-emerald-600 text-sm text-white hover:bg-emerald-700"
             disabled={isProcessing}
             onClick={handleCheckout}
             type="button"
@@ -194,6 +205,7 @@ export function PaymentProviders({
             )}
             <span className="min-w-0">
               {language === "fr" ? "Payer" : "Pay"}
+              <span className="checkout-pay-amount"> {formattedAmount}</span>
             </span>
           </Button>
         </div>

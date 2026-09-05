@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Righteous } from "next/font/google";
 import "./globals.css";
+import "@/components/payment/payment-result-mobile.css";
 import { withBasePath } from "@/lib/base-path";
 import { LanguageProvider } from "@/lib/language-context";
 import Script from "next/script";
@@ -42,6 +43,14 @@ export const metadata: Metadata = {
   description: "Découvrez le catalogue de cartes virtuelles DRAVA.",
   referrer: "strict-origin-when-cross-origin",
   manifest: withBasePath("/manifest.json"),
+  applicationName: "DRAVA",
+  appleWebApp: {
+    capable: true,
+    title: "DRAVA",
+    statusBarStyle: "default",
+  },
+  other: { "apple-mobile-web-app-capable": "yes" },
+  formatDetection: { telephone: false },
   icons: {
     icon: [
       {
@@ -62,8 +71,8 @@ export const metadata: Metadata = {
     ],
     apple: [
       {
-        url: withBasePath("/apple-touch-icon.svg"),
-        type: "image/svg+xml",
+        url: withBasePath("/apple-touch-icon.png"),
+        type: "image/png",
         sizes: "180x180",
       },
     ],
@@ -91,6 +100,14 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#ffffff",
+  colorScheme: "light",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -103,7 +120,6 @@ export default function RootLayout({
           httpEquiv="Content-Security-Policy"
           content={contentSecurityPolicy}
         />
-        <meta name="theme-color" content="#3b82f6" />
       </head>
       <body
         className={`${inter.variable} ${righteous.variable} font-sans min-h-screen antialiased bg-white`}

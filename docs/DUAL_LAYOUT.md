@@ -1,0 +1,62 @@
+# Deux layouts, un fonctionnement partagé
+
+DRAVA propose une présentation mobile dédiée sous 768 px et conserve sa présentation desktop à partir de 768 px. Exception : un écran tactile en paysage reste mobile jusqu’à 1023 px de largeur et 500 px de hauteur (`pointer: coarse`). Le parcours visuel peut différer ; les fonctionnalités, conditions et règles de validation doivent rester équivalentes. Toute nouvelle fonctionnalité concerne les deux interfaces.
+
+## Répartition des responsabilités
+
+| Élément | Responsabilité |
+| --- | --- |
+| `src/lib/catalog.ts` | Source partagée : `CatalogCard` et `cards`. |
+| `src/components/catalog/DesktopCatalog.tsx` | Présentation desktop du catalogue. |
+| `src/components/catalog/MobileCatalog.tsx` | Présentation et navigation propres au mobile. |
+| `src/components/catalog/MobileTransitions.tsx` | Transitions des écrans et commandes mobiles ; animation partagée des cartes dans les deux catalogues. |
+| `src/app/page.tsx` | État partagé de la carte sélectionnée ; ouverture d’un unique `DialogCheckout`. |
+| `src/components/layout/MainLayout.tsx` | Enveloppe des pages et emplacement `mobileContent` ; affichage des branches par CSS au seuil de 768 px, avec l’exception paysage tactile. |
+| `src/lib/responsive-layout.ts` | `MOBILE_LAYOUT_QUERY`, requête partagée des comportements JavaScript ; maintenir son équivalent dans les trois feuilles CSS mobiles. |
+| `src/components/ui/dialog-checkout.tsx` | Parcours de commande commun, état temporaire des coordonnées et transitions entre étapes. |
+| `src/components/payment/PaymentResult.tsx` | Vérification et états de paiement communs ; présentation mobile dans `payment-result-mobile.css`. |
+
+Les layouts consomment les mêmes données et callbacks. Une modification d’un produit se fait dans le module partagé. Ne pas créer un deuxième catalogue, dupliquer les montants dans les composants ou créer un client de paiement propre au mobile. Le serveur conserve l’autorité sur le produit, le montant et le statut du paiement.
+
+Le mobile s’ouvre directement sur les cartes. Les écrans Découvrir et Aide ainsi que la navigation basse ont été supprimés à la demande de l’utilisateur. Toute la surface d’une carte permet de la choisir et d’ouvrir sa fiche, avec la même action accessible au clavier que le bouton « Choisir ».
+
+Les deux layouts affichent toutes les cartes. Le filtre « Toutes / Visa / Mastercard » a été supprimé sur mobile et desktop à la demande de l’utilisateur.
+
+La carte recommandée est définie par `recommended` dans le catalogue partagé. Les deux layouts la mettent en avant et utilisent `RecommendedBadge` pour afficher « Recommandé » / « Recommended » dans un badge flottant en haut à droite. Préserver sa lisibilité et la sélection de toute la carte sur mobile.
+
+Les styles mobiles restent dans les feuilles dédiées aux composants. Leur requête est `(max-width: 767px), (max-width: 1023px) and (max-height: 500px) and (pointer: coarse)`, identique à `MOBILE_LAYOUT_QUERY`. Ne pas choisir un layout à partir d’un appareil supposé ou de l’agent utilisateur. La branche masquée ne doit ni prendre le focus ni déclencher des effets réservés à l’écran visible. Un changement de largeur ou une rotation ne doit pas réinitialiser la sélection ou la commande ouverte.
+
+## Parcours de commande à préserver
+
+1. Afficher les notes d’utilisation et recueillir leur acceptation explicite.
+2. Recueillir et valider les coordonnées. Détecter la localisation après acceptation uniquement ; un résultat tardif ne doit jamais écraser le numéro saisi ou effacé par l’utilisateur.
+3. Afficher les prestataires disponibles et leurs états de chargement, d’indisponibilité et d’erreur ; empêcher les doubles soumissions.
+4. Vérifier le paiement auprès du serveur au retour. Un chemin de retour, un fragment arbitraire ou une simulation ne valide pas une transaction. Préserver la distinction entre paiement confirmé et émission/livraison de carte.
+
+Un seul dialogue orchestre ces étapes pour les deux layouts. Ne pas contourner la validation des coordonnées, le consentement ou la vérification serveur pour raccourcir le parcours mobile. Les coordonnées et jetons restent hors de l’historique et du cache PWA.
+
+## Comportement mobile
+
+- Respecter les zones sûres avec `env(safe-area-inset-*)` et la hauteur réellement visible lorsque le clavier apparaît. Le champ actif et l’action suivante doivent rester accessibles par défilement.
+- Maintenir un retour cohérent entre étapes, la fermeture du dialogue et le retour système du navigateur. Ne pas laisser d’entrées d’historique inutiles après fermeture.
+- Animer chaque changement du parcours, dès le passage catalogue/fiche, puis l’ouverture, les étapes et la fermeture de la commande. Capturer la position de l’écran sortant avant la navigation et le garder fixe pendant la restauration du défilement de l’écran entrant ; les fondus se croisent sans écran vide. Préserver les retours/avances rapides et supprimer les mouvements lorsque `prefers-reduced-motion` est actif.
+- Placer le focus dans le panneau actif, rendre les panneaux sortants inertes, puis restaurer le focus à la fermeture. La version masquée du catalogue ne doit pas recevoir cette restauration.
+- Prévoir des cibles tactiles d’au moins 44 px, des libellés accessibles, le zoom et `prefers-reduced-motion`. Garder les textes et erreurs disponibles en français et en anglais.
+- Conserver les chemins PWA relatifs au déploiement et les ressources compatibles avec `NEXT_PUBLIC_BASE_PATH`. Le service worker ne cache que les ressources publiques autorisées ; les transactions nécessitent le réseau.
+
+## Validation avant livraison
+
+Vérifier en français et en anglais les largeurs **320, 390, 767, 768 et 1440 px**, ainsi que **844 × 390 px en tactile** (layout mobile) et **844 × 390 px avec une souris** (layout desktop). Contrôler le catalogue, les détails de carte, toutes les étapes de commande et les états de résultat. Il ne doit y avoir ni débordement horizontal, ni action masquée, ni changement visuel desktop involontaire.
+
+Tester aussi le changement de largeur avec une commande ouverte, les textes longs, le zoom, la navigation clavier, la réduction des animations et le retour système. Sur mobile, contrôler le clavier ouvert, le défilement, les zones sûres, la fermeture et la restauration du focus. Vérifier les états réseau lents ou indisponibles avec des mocks, sans effectuer de paiement réel.
+
+Exécuter :
+
+```sh
+npm run lint
+npm run build
+npm run test:payments
+node --test scripts/pwa.test.mjs
+```
+
+Si le changement touche les règles de paiement, la sécurité, le déploiement ou le worker, exécuter également les contrôles correspondants du dépôt. Vérifier les liens et ressources avec un `NEXT_PUBLIC_BASE_PATH` non vide lorsque les chemins changent. Une validation sur navigateur émulé doit être complétée sur iOS/Android pour confirmer les comportements propres au système ; préciser les appareils réellement testés.

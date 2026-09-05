@@ -269,6 +269,30 @@ test("order verification sends only the token in an uncached POST body", async (
   assert.deepEqual(await getLeekPayOrderStatus(orderToken), order);
 });
 
+test("order verification accepts a valid server creation date and preserves missing-date compatibility", async () => {
+  const request = mock.method(globalThis, "fetch", async () => json(order));
+  const withoutDate = await getLeekPayOrderStatus(orderToken);
+  assert.deepEqual(withoutDate, order);
+  assert.equal(Object.hasOwn(withoutDate, "createdAt"), false);
+  for (const createdAt of [1, Date.UTC(2026, 8, 5, 12), 8_640_000_000_000_000]) {
+    request.mock.mockImplementation(async () => json({ ...order, createdAt }));
+    assert.deepEqual(await getLeekPayOrderStatus(orderToken), { ...order, createdAt });
+  }
+});
+
+test("order verification rejects malformed supplied creation dates", async () => {
+  const request = mock.method(globalThis, "fetch");
+  for (const createdAt of [
+    null, true, {}, [], "2026-09-05T12:00:00Z", "1788609600000",
+    0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER, 8_640_000_000_000_001,
+  ]) {
+    request.mock.mockImplementation(async () => json({ ...order, createdAt }));
+    await assert.rejects(getLeekPayOrderStatus(orderToken), (error) =>
+      error instanceof PaymentApiError && !error.retryable,
+    );
+  }
+});
+
 test("paid requires verified true, a known product and valid amount/currency", async () => {
   const request = mock.method(globalThis, "fetch");
   for (const invalid of [

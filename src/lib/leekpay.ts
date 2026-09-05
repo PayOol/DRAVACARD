@@ -33,6 +33,7 @@ export interface LeekPayOrder {
   readonly productId: string;
   readonly amount: number;
   readonly currency: typeof LEEKPAY_CHECKOUT_CURRENCY;
+  readonly createdAt?: number;
 }
 
 export class PaymentApiError extends Error {
@@ -191,7 +192,12 @@ export async function getLeekPayOrderStatus(
     typeof data.amount !== "number" ||
     !Number.isSafeInteger(data.amount) ||
     data.amount <= 0 ||
-    data.currency !== LEEKPAY_CHECKOUT_CURRENCY
+    data.currency !== LEEKPAY_CHECKOUT_CURRENCY ||
+    (data.createdAt !== undefined &&
+      (typeof data.createdAt !== "number" ||
+        !Number.isSafeInteger(data.createdAt) ||
+        data.createdAt <= 0 ||
+        data.createdAt > 8_640_000_000_000_000))
   ) {
     throw new PaymentApiError(false);
   }
@@ -201,5 +207,6 @@ export async function getLeekPayOrderStatus(
     productId: data.productId,
     amount: data.amount,
     currency: data.currency,
+    ...(data.createdAt === undefined ? {} : { createdAt: data.createdAt }),
   };
 }

@@ -23,6 +23,7 @@ const usageNotesDialogPath = 'src/components/ui/dialog-notes.tsx'
 const paymentCustomerPath = 'src/lib/payment-customer.ts'
 const customerLocationPath = 'src/lib/customer-location.ts'
 const paymentResultPath = 'src/components/payment/PaymentResult.tsx'
+const paymentReceiptPath = 'src/components/payment/PaymentReceipt.tsx'
 const workerSourcePath = 'worker/src/index.ts'
 const workerConfigPath = 'worker/wrangler.jsonc'
 
@@ -56,6 +57,7 @@ const requiredPaths = [
   usageNotesDialogPath,
   providerDialogPath,
   paymentResultPath,
+  paymentReceiptPath,
   frontendAdapterPath,
   paymentCustomerPath,
   customerLocationPath,
@@ -81,6 +83,7 @@ const forbiddenPaths = [
 const ignoredDirectories = new Set([
   '.git',
   '.next',
+  '.next-dev',
   '.next-review-root-build',
   '.wrangler',
   'coverage',
@@ -585,7 +588,7 @@ function validateCustomerDialog(source) {
   if (!/onClick=\{onBack\}/.test(source) || !/type=["']submit["']/.test(source)) failures.push('Customer form must retain Back and explicit submit controls')
   const labels = source.match(/<label\b[\s\S]*?<\/label>/g) ?? []
   if (labels.length !== 2 || labels.some((label) =>
-    !/<span\s+aria-hidden=["']true["']\s+className=["'][^"']*\bmr-1\b[^"']*\btext-red-600\b[^"']*["']\s*>\s*\*\s*<\/span>/.test(label))
+    !/<label\b[^>]*>\s*<span\s+aria-hidden=["']true["']\s+className=["'][^"']*\bmr-1\b[^"']*\btext-red-600\b[^"']*["']\s*>\s*\*\s*<\/span>/.test(label))
     || (source.match(/aria-hidden=["']true["'][^>]*\btext-red-600\b/g)?.length ?? 0) !== 2) {
     failures.push('Both required customer labels must start with one red aria-hidden asterisk')
   }
@@ -639,8 +642,8 @@ function validateProviderDialog(source) {
 function validateCheckoutDialog(source) {
   const failures = []
   const condensed = compact(source)
-  if (!/exportfunctionDialogCheckout\(\{card,onClose\}:DialogCheckoutProps\)/.test(condensed)
-    && !/exportfunctionDialogCheckout\(\{onClose,card\}:DialogCheckoutProps\)/.test(condensed)) {
+  const signature = condensed.match(/exportfunctionDialogCheckout\(\{(?:card,onClose(?::([A-Za-z_$][\w$]*))?|onClose(?::([A-Za-z_$][\w$]*))?,card),?\}:DialogCheckoutProps\)/)
+  if (!signature) {
     failures.push('Checkout dialog must export the card/onClose wrapper')
   }
   if (!hasExactInterfaceProperties(source, 'DialogCheckoutProps', ['card', 'onClose'])) failures.push('Checkout dialog props must contain only card and onClose')
@@ -653,7 +656,7 @@ function validateCheckoutDialog(source) {
     if (count !== 1) failures.push(`Checkout dialog must contain exactly one Radix ${primitive} (found ${count})`)
   }
   if (countOpeningTags(source, 'DialogPrimitive.Description') !== 1) failures.push('Checkout dialog must own one persistent accessible description')
-  if (!/<DialogPrimitive\.Root\b[^>]*\bopen\b/.test(source)) failures.push('Checkout dialog must keep its single Radix root open while mounted')
+  if (!/<DialogPrimitive\.Rootopen(?:=\{isOpen\})?onOpenChange=/.test(condensed)) failures.push('Checkout dialog must open its single Radix root, optionally controlled by its local close animation')
   if (!/onOpenChange=\{\(open\)=>\{if\(!open\)onClose\(\);?\}\}/.test(condensed)) failures.push('Checkout dialog dismiss must call onClose')
   if (!/<UsageNotesonAccept=\{\(\)=>\{setStep\(["']customer["']\);setLocationRequested\(true\);?\}\}onClose=\{onClose\}\/>/.test(condensed)) {
     failures.push('Usage-notes acceptance must advance to customer details and enable one location lookup')
@@ -694,7 +697,37 @@ function validateCheckoutDialog(source) {
     || /\bconsole\.(?:log|info|warn|error|debug)\s*\(/.test(source)) {
     failures.push('Checkout location prefilling must not use GPS, persistence or logs')
   }
-  if (/\b(?:isOpen|onExitComplete|notes-exiting|checkoutStep)\b/.test(source)) failures.push('Checkout wrapper must not restore the previous multi-dialog lifecycle')
+  if (/\b(?:onExitComplete|notes-exiting|checkoutStep|DialogNotes|DialogProviders)\b/.test(source)) failures.push('Checkout wrapper must not restore the previous multi-dialog lifecycle')
+  // Local presence state is permitted only for the unified, guarded close path.
+  // In particular, removing the live panel must begin immediately so its
+  // useIsPresent effects can abort payment before the dialog fade completes.
+  const closeAlias = signature?.[1] ?? signature?.[2]
+  if (/\bisOpen\b/.test(source) || closeAlias) {
+    if (!closeAlias
+      || !/const\[isOpen,setIsOpen\]=useState\(true\)/.test(condensed)
+      || !/<DialogPrimitive\.Rootopen=\{isOpen\}onOpenChange=/.test(condensed)
+      || !/<AnimatePresenceinitial=\{false\}mode=["']wait["']>\{isOpen&&\(?<CheckoutPanel/.test(condensed)
+      || !/useLayoutEffect\(\(\)=>\{if\(dialogElement\)dialogElement\.inert=!isOpen;?\},\[dialogElement,isOpen\]\)/.test(condensed)) {
+      failures.push('Animated checkout must control one root and immediately remove/inert its live panel when closing')
+    }
+    if (!/constcloseRequestedRef=useRef\(false\)/.test(condensed)
+      || !/constcloseFinishedRef=useRef\(false\)/.test(condensed)
+      || !condensed.includes(`constonClosedRef=useRef(${closeAlias})`)
+      || !condensed.includes(`onClosedRef.current=${closeAlias};`)
+      || !/constfinishClose=useCallback\(\(\)=>\{if\(!closeRequestedRef\.current\|\|closeFinishedRef\.current\)return;closeFinishedRef\.current=true;onClosedRef\.current\(\);?\},\[\]\)/.test(condensed)
+      || !/constonClose=useCallback\(\(\)=>\{if\(closeRequestedRef\.current\)return;closeRequestedRef\.current=true;setIsOpen\(false\);if\(reducedMotion\)finishClose\(\);?\},\[finishClose,reducedMotion\]\)/.test(condensed)
+      || (source.match(/\bsetIsOpen\s*\(/g)?.length ?? 0) !== 1
+      || (source.match(/onClosedRef\.current\s*\(/g)?.length ?? 0) !== 1) {
+      failures.push('Animated checkout must request and finish closure once, with immediate reduced-motion dismissal')
+    }
+    const timeout = condensed.match(/consttimeout=window\.setTimeout\(finishClose,reducedMotion\?0:(\d+)\)/)
+    if (!timeout || Number(timeout[1]) < 1 || Number(timeout[1]) > 300
+      || !/useEffect\(\(\)=>\{if\(isOpen\)return;/.test(condensed)
+      || !/return\(\)=>window\.clearTimeout\(timeout\);?\},\[finishClose,isOpen,reducedMotion\]\)/.test(condensed)
+      || !/onAnimationEnd=\{\(event\)=>\{if\(event\.target===event\.currentTarget&&!isOpen&&/.test(condensed)) {
+      failures.push('Animated checkout must finish on its own exit event with a cleaned-up, bounded fallback')
+    }
+  }
   if (!/useReducedMotion\(\)\s*===\s*true/.test(source)
     || !/<DialogPrimitive\.Content\b[\s\S]*?\basChild\b/.test(source)
     || !/layout=\{reducedMotion\?false:["']size["']\}/.test(condensed)
@@ -722,7 +755,7 @@ function validateCatalogueFlow(source) {
   return failures
 }
 
-function validatePaymentResult(source) {
+function validatePaymentResult(source, receiptSource) {
   const failures = []
   for (const symbol of ['getLeekPayOrderStatus', 'readOrderToken']) {
     if (!source.includes(symbol)) failures.push(`Payment result must use ${symbol}`)
@@ -732,7 +765,13 @@ function validatePaymentResult(source) {
   if (!/result\.status\s*===\s*["']paid["']\s*&&\s*result\.verified\s*===\s*true/.test(source)) failures.push('Payment result may show paid only for verified:true paid status')
   if (!/verification\s*===\s*["']paid["']\s*&&\s*order\?\.verified\s*===\s*true/.test(source)) failures.push('Paid rendering must remain gated by verified order state')
   if (!/setTimeout\(poll/.test(source) || !/Math\.min\(delay\s*\*\s*2/.test(source)) failures.push('Payment result must retain bounded retry/backoff for eventual KV visibility')
-  if (!/confirmation du paiement est distincte de l’émission et de la livraison/i.test(source)) failures.push('Payment result must separate payment confirmation from fulfillment')
+  if (!/if\(\(isPaid&&order\)\|\|isSimulation\)\{return\(/.test(compact(source))
+    || !/<PaymentReceipt\b/.test(source)) failures.push('Only a verified payment or local simulation may render the receipt')
+  if (!/amount=\{isPaid&&order\?order\.amount:5000\}/.test(compact(source))
+    || !/createdAt=\{isPaid&&order\?order\.createdAt:Date\.UTC\(2026,8,5,12\)\}/.test(compact(source))) failures.push('Real receipts must use the verified order amount and stored creation date')
+  if (!/Une fois votre compte créé et vérifié/.test(receiptSource)
+    || !/envoyez-nous l’adresse e-mail associée par Telegram en priorité, ou par WhatsApp/.test(receiptSource)
+    || !/Nous procéderons alors à l’ajout de la carte dans votre compte/.test(receiptSource)) failures.push('Receipt must explain the separate manual card fulfillment steps')
   if (/\b(?:autoFulfill|fulfillOrder|issueCard|issueVirtualCard|provisionCard|deliverCard|revealCard|generateCard|activateCard)\s*\(/i.test(source)) failures.push('Payment result must never auto-fulfill cards')
   return failures
 }
@@ -1061,6 +1100,64 @@ function selfTest() {
   assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('setLocationRequested(true)', 'createLeekPayCheckout()')).length > 0)
   assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('whatsappEditedRef.current || current.whatsapp', 'false')).length > 0)
 
+  const animatedCloseLifecycle = `
+    const [isOpen, setIsOpen] = useState(true);
+    const closeRequestedRef = useRef(false);
+    const closeFinishedRef = useRef(false);
+    const onClosedRef = useRef(onClosed);
+    onClosedRef.current = onClosed;
+    const finishClose = useCallback(() => {
+      if (!closeRequestedRef.current || closeFinishedRef.current) return;
+      closeFinishedRef.current = true;
+      onClosedRef.current();
+    }, []);
+    const onClose = useCallback(() => {
+      if (closeRequestedRef.current) return;
+      closeRequestedRef.current = true;
+      setIsOpen(false);
+      if (reducedMotion) finishClose();
+    }, [finishClose, reducedMotion]);
+    useEffect(() => {
+      if (isOpen) return;
+      const timeout = window.setTimeout(finishClose, reducedMotion ? 0 : 260);
+      return () => window.clearTimeout(timeout);
+    }, [finishClose, isOpen, reducedMotion]);
+    useLayoutEffect(() => { if (dialogElement) dialogElement.inert = !isOpen; }, [dialogElement, isOpen]);
+  `
+  const safeAnimatedCheckoutDialog = safeCheckoutDialog
+    .replace('{ card, onClose }: DialogCheckoutProps', '{ card, onClose: onClosed, }: DialogCheckoutProps')
+    .replace('const reducedMotion = useReducedMotion() === true;', `const reducedMotion = useReducedMotion() === true;\n${animatedCloseLifecycle}`)
+    .replace('<DialogPrimitive.Root open ', '<DialogPrimitive.Root open={isOpen} ')
+    .replace('<motion.div layout=', '<motion.div onAnimationEnd={(event) => { if (event.target === event.currentTarget && !isOpen && event.animationName === "checkout-mobile-exit") finishClose(); }} layout=')
+    .replace('mode="wait"><CheckoutPanel', 'mode="wait">{isOpen && (<CheckoutPanel')
+    .replace('</CheckoutPanel></AnimatePresence>', '</CheckoutPanel>)}</AnimatePresence>')
+  assert.deepEqual(validateCheckoutDialog(safeCheckoutDialog.replace('{ card, onClose }', '{ onClose, card, }')), [])
+  assert.deepEqual(validateCheckoutDialog(safeAnimatedCheckoutDialog), [])
+  assert.deepEqual(validateCheckoutDialog(safeAnimatedCheckoutDialog
+    .replace('{ card, onClose: onClosed, }', '{ onClose: afterClose, card }')
+    .replace(/\bonClosed\b/g, 'afterClose')), [])
+  for (const [before, after] of [
+    ['useState(true)', 'useState(false)'],
+    ['open={isOpen}', 'open={false}'],
+    ['{isOpen && (<CheckoutPanel', '{true && (<CheckoutPanel'],
+    ['dialogElement.inert = !isOpen', 'dialogElement.inert = false'],
+    ['panelRef.current.inert = !isPresent', 'panelRef.current.inert = false'],
+    ['if (closeRequestedRef.current) return;', ''],
+    ['if (!closeRequestedRef.current || closeFinishedRef.current) return;', ''],
+    ['if (reducedMotion) finishClose();', ''],
+    ['reducedMotion ? 0 : 260', 'reducedMotion ? 0 : 10000'],
+    ['window.clearTimeout(timeout)', 'void timeout'],
+    ['event.currentTarget && !isOpen', 'event.currentTarget && isOpen'],
+    ['<DialogPrimitive.Overlay />', '<DialogPrimitive.Overlay /><DialogPrimitive.Root />'],
+    ['onClose: onClosed, }', 'onClose: onClosed, isOpen }'],
+  ]) {
+    assert.ok(safeAnimatedCheckoutDialog.includes(before), `Animated fixture mutation must match: ${before}`)
+    assert.ok(validateCheckoutDialog(safeAnimatedCheckoutDialog.replace(before, after)).length > 0, `Animated checkout must reject: ${before} -> ${after}`)
+  }
+  for (const legacyLifecycle of ['onExitComplete', 'notes-exiting', 'checkoutStep', 'DialogNotes', 'DialogProviders']) {
+    assert.ok(validateCheckoutDialog(`${safeAnimatedCheckoutDialog}\nconst legacy = "${legacyLifecycle}";`).length > 0)
+  }
+
   const safeWorkerLocation = `
     import { getCountryCallingCode, isSupportedCountry } from "libphonenumber-js";
     function locationResponse(request: Request, origin: string): Response {
@@ -1110,11 +1207,17 @@ function selfTest() {
     if (result.status === "paid" && result.verified === true) finish("paid");
     pollTimer = setTimeout(poll, delay); delay = Math.min(delay * 2, 10000);
     const isPaid = verification === "paid" && order?.verified === true;
-    const copy = "La confirmation du paiement est distincte de l’émission et de la livraison";
+    if ((isPaid && order) || isSimulation) {
+      return (<PaymentReceipt amount={isPaid && order ? order.amount : 5000} createdAt={isPaid && order ? order.createdAt : Date.UTC(2026, 8, 5, 12)} />);
+    }
   `
-  assert.deepEqual(validatePaymentResult(safeResult), [])
-  assert.ok(validatePaymentResult(safeResult.replace('result.verified === true', 'true')).length > 0)
-  assert.ok(validatePaymentResult(`${safeResult}\nconst query = new URLSearchParams(window.location.search);`).length > 0)
+  const safeReceipt = "Une fois votre compte créé et vérifié, envoyez-nous l’adresse e-mail associée par Telegram en priorité, ou par WhatsApp. Nous procéderons alors à l’ajout de la carte dans votre compte."
+  assert.deepEqual(validatePaymentResult(safeResult, safeReceipt), [])
+  assert.ok(validatePaymentResult(safeResult.replace('result.verified === true', 'true'), safeReceipt).length > 0)
+  assert.ok(validatePaymentResult(`${safeResult}\nconst query = new URLSearchParams(window.location.search);`, safeReceipt).length > 0)
+  assert.ok(validatePaymentResult(safeResult.replace('isPaid && order', 'true'), safeReceipt).length > 0)
+  assert.ok(validatePaymentResult(safeResult.replace('order.createdAt', 'Date.now()'), safeReceipt).length > 0)
+  assert.ok(validatePaymentResult(safeResult, 'Votre carte a déjà été ajoutée automatiquement.').length > 0)
   console.log('Security scanner self-test passed.')
 }
 
@@ -1218,7 +1321,7 @@ if (checkoutDialogSource) failures.push(...validateCheckoutDialog(checkoutDialog
 const catalogueSource = await readRequired('src/app/page.tsx')
 if (catalogueSource) failures.push(...validateCatalogueFlow(catalogueSource))
 const paymentResultSource = await readRequired(paymentResultPath)
-if (paymentResultSource) failures.push(...validatePaymentResult(paymentResultSource))
+if (paymentResultSource) failures.push(...validatePaymentResult(paymentResultSource, await readRequired(paymentReceiptPath) ?? ''))
 const workerSource = await readRequired(workerSourcePath)
 if (workerSource) failures.push(...validateWorkerSource(workerSource))
 const workerConfig = await readRequired(workerConfigPath)

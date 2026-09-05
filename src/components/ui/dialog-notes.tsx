@@ -14,8 +14,8 @@ export function UsageNotes({ onClose, onAccept }: UsageNotesProps) {
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-        <div className="mb-6 rounded-lg bg-blue-50 p-4">
+      <div className="checkout-scroll min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="checkout-notes-summary mb-6 rounded-lg bg-blue-50 p-4">
           <h3 className="mb-2 font-bold text-blue-800">
             {language === "fr" ? "CARTES VIRTUELLES" : "VIRTUAL CARDS"}
           </h3>
@@ -26,7 +26,7 @@ export function UsageNotes({ onClose, onAccept }: UsageNotesProps) {
           </p>
         </div>
 
-        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
+        <div className="checkout-limits mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
           <div>
             <h4 className="mb-1 text-sm text-gray-500">
               {language === "fr" ? "Période de validité" : "Validity Period"}
@@ -61,7 +61,7 @@ export function UsageNotes({ onClose, onAccept }: UsageNotesProps) {
           </div>
         </div>
 
-        <div className="mb-6 space-y-3">
+        <div className="checkout-notes-warnings mb-6 space-y-3">
           <div className="flex items-start space-x-2 text-red-600">
             <X className="mt-0.5 h-5 w-5 flex-shrink-0" />
             <p className="text-sm">
@@ -81,10 +81,10 @@ export function UsageNotes({ onClose, onAccept }: UsageNotesProps) {
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-col space-y-2 border-t bg-white p-3 sm:flex-row sm:space-x-4 sm:space-y-0 sm:p-4">
+      <div className="checkout-actions checkout-notes-actions flex shrink-0 flex-col space-y-2 border-t bg-white p-3 sm:flex-row sm:space-x-4 sm:space-y-0 sm:p-4">
         <div className="flex-1">
           <Button
-            className="w-full bg-blue-600 text-white hover:bg-blue-700"
+            className="checkout-primary-action w-full bg-blue-600 text-white hover:bg-blue-700"
             onClick={onAccept}
             type="button"
           >
@@ -95,7 +95,7 @@ export function UsageNotes({ onClose, onAccept }: UsageNotesProps) {
         </div>
         <div className="flex-1">
           <Button
-            className="w-full"
+            className="checkout-decline-action w-full"
             onClick={onClose}
             type="button"
             variant="outline"

@@ -62,6 +62,7 @@ function isOrder(value: unknown): value is Order {
     typeof value.amount === "number" && Number.isSafeInteger(value.amount) && value.amount >= 100 &&
     value.currency === CURRENCY && isCheckoutId(value.checkoutId) &&
     typeof value.createdAt === "number" && Number.isSafeInteger(value.createdAt) &&
+    value.createdAt > 0 && value.createdAt <= 8_640_000_000_000_000 &&
     typeof value.expiresAt === "number" && Number.isSafeInteger(value.expiresAt) &&
     value.expiresAt === value.createdAt + ORDER_TTL_SECONDS * 1000;
 }
@@ -306,6 +307,7 @@ async function orderStatus(request: Request, env: Env, origin: string): Promise<
     productId: stored.productId,
     amount: stored.amount,
     currency: stored.currency,
+    createdAt: stored.createdAt,
   }, 200, origin);
 }
 
