@@ -2,8 +2,7 @@
 
 import MainLayout from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
-import { DialogNotes } from "@/components/ui/dialog-notes";
-import { DialogProviders } from "@/components/ui/dialog-providers";
+import { DialogCheckout } from "@/components/ui/dialog-checkout";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { withBasePath } from "@/lib/base-path";
 import { useLanguage } from "@/lib/language-context";
@@ -44,12 +43,9 @@ interface Card {
   };
 }
 
-type CheckoutStep = "closed" | "notes" | "notes-exiting" | "providers";
-
 export default function Home() {
   const { language } = useLanguage();
 
-  const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>("closed");
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [activeTab, setActiveTab] = useState("all");
   const [isMobile, setIsMobile] = useState(false);
@@ -216,7 +212,6 @@ export default function Home() {
 
   const handleBuyClick = (card: Card) => {
     setSelectedCard(card);
-    setCheckoutStep("notes");
   };
 
   const getCardGradient = (color: string) => {
@@ -542,28 +537,14 @@ export default function Home() {
       </section>
 
       {selectedCard && (
-        <DialogNotes
-          isOpen={checkoutStep === "notes"}
-          onAccept={() => setCheckoutStep("notes-exiting")}
-          onClose={() => setCheckoutStep("closed")}
-          onExitComplete={() =>
-            setCheckoutStep((currentStep) =>
-              currentStep === "notes-exiting" ? "providers" : currentStep,
-            )
-          }
-        />
-      )}
-
-      {selectedCard && checkoutStep === "providers" && (
-        <DialogProviders
+        <DialogCheckout
           card={{
             id: selectedCard.id,
             name: selectedCard.name[language],
             amount: Number.parseInt(selectedCard.price, 10),
             displayCurrency: selectedCard.currency,
           }}
-          isOpen
-          onClose={() => setCheckoutStep("closed")}
+          onClose={() => setSelectedCard(null)}
         />
       )}
     </MainLayout>

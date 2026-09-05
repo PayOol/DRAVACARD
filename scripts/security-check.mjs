@@ -16,6 +16,7 @@ const expectedBasePath = configuredBasePath === '' || configuredBasePath === '/'
 const proxyOrigin = 'https://drava-leekpay.sebpay-proxy.workers.dev'
 const providerCheckoutApi = 'https://leekpay.fr/api/v1/checkout'
 const frontendAdapterPath = 'src/lib/leekpay.ts'
+const checkoutDialogPath = 'src/components/ui/dialog-checkout.tsx'
 const providerDialogPath = 'src/components/ui/dialog-providers.tsx'
 const usageNotesDialogPath = 'src/components/ui/dialog-notes.tsx'
 const paymentResultPath = 'src/components/payment/PaymentResult.tsx'
@@ -47,6 +48,7 @@ const requiredPaths = [
   'src/app/payment-success/page.tsx',
   'src/app/payment-failure/page.tsx',
   'src/app/layout.tsx',
+  checkoutDialogPath,
   usageNotesDialogPath,
   providerDialogPath,
   paymentResultPath,
@@ -402,23 +404,95 @@ function validateFrontendAdapter(source) {
   return failures
 }
 
+function countOpeningTags(source, tagName) {
+  return source.match(new RegExp(`<${tagName.replace('.', '\\.')}\\b`, 'g'))?.length ?? 0
+}
+
+function hasExactInterfaceProperties(source, interfaceName, expectedNames) {
+  const sourceFile = ts.createSourceFile(interfaceName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const declaration = sourceFile.statements.find((statement) =>
+    ts.isInterfaceDeclaration(statement) && statement.name.text === interfaceName)
+  if (!declaration || declaration.members.length !== expectedNames.length) return false
+  const actualNames = declaration.members.map((member) =>
+    ts.isPropertySignature(member) && member.name && ts.isIdentifier(member.name) ? member.name.text : null)
+  return actualNames.every((name) => name !== null) && expectedNames.every((name) => actualNames.includes(name))
+}
+
+function validateUsageNotesStructure(source) {
+  const failures = []
+  const condensed = compact(source)
+  if (!/exportfunctionUsageNotes\(\{onClose,onAccept\}:UsageNotesProps\)/.test(condensed)
+    && !/exportfunctionUsageNotes\(\{onAccept,onClose\}:UsageNotesProps\)/.test(condensed)) {
+    failures.push('Usage notes must export the onAccept/onClose content fragment')
+  }
+  if (!hasExactInterfaceProperties(source, 'UsageNotesProps', ['onAccept', 'onClose'])) failures.push('Usage notes props must contain only onAccept and onClose')
+  if (!/<DialogPrimitive\.Description\b/.test(source)) failures.push('Usage notes must retain the accessible dialog description')
+  if (/DialogPrimitive\.(?:Root|Portal|Overlay|Content)\b/.test(source)) failures.push('Usage notes must not create a nested Radix dialog')
+  if (/\b(?:isOpen|onExitComplete)\b/.test(source)) failures.push('Usage notes must not receive dialog lifecycle props')
+  if (/\b(?:createLeekPayCheckout|requestPaymentApi|handleCheckout)\b|\bfetch\s*\(|window\.location/.test(source)) {
+    failures.push('Accepting usage notes must not initiate or redirect a payment')
+  }
+  return failures
+}
+
 function validateProviderDialog(source) {
   const failures = []
+  const condensed = compact(source)
+  if (!/exportfunctionPaymentProviders\(\{card\}:PaymentProvidersProps\)/.test(condensed)) failures.push('Providers must export the card-only content fragment')
+  if (!hasExactInterfaceProperties(source, 'PaymentProvidersProps', ['card'])) failures.push('Provider props must contain only card')
+  if (/DialogPrimitive\.(?:Root|Portal|Overlay|Content)\b/.test(source)) failures.push('Providers must not create a nested Radix dialog')
+  if (/\b(?:isOpen|onClose|onAccept|onOpenChange|handleClose)\b/.test(source)) failures.push('Providers must not receive or manage dialog lifecycle props')
   if (!/createLeekPayCheckout/.test(source) || !/from\s*["']@\/lib\/leekpay["']/.test(source)) failures.push('Provider dialog must use the reviewed REST adapter')
   if (!/createLeekPayCheckout\(card\.id,\s*controller\.signal\)/.test(source)) failures.push('Provider dialog must send only the selected product identifier')
   if (!/window\.location\.assign\(checkout\.checkoutUrl\)/.test(source)) failures.push('Provider dialog must navigate only to the validated checkout URL')
   if (!/\bLeekPay\b/.test(source)) failures.push('Provider dialog must identify LeekPay')
+  if (!/window\.addEventListener\(["']pageshow["']/.test(source)
+    || !/window\.removeEventListener\(["']pageshow["']/.test(source)
+    || !/requestRef\.current\?\.abort\(\)/.test(source)
+    || !/\},\s*\[\]\s*\);/.test(source)) failures.push('Providers must clean up checkout requests and pageshow handling on unmount')
   if (/<(?:form|input|select|textarea)\b|\bcontentEditable\b/i.test(source)) failures.push('Provider dialog must not collect input')
   if (/\b(?:customerEmail|customerName|customerPhone|customer_email|customer_name|customer_phone|cardNumber|card_number|cvv|pan)\b/i.test(source)) failures.push('Provider dialog must not collect personal/card data')
   if (/\bfetch\s*\(/.test(source)) failures.push('Provider dialog must not bypass the REST adapter')
   return failures
 }
 
+function validateCheckoutDialog(source) {
+  const failures = []
+  const condensed = compact(source)
+  if (!/exportfunctionDialogCheckout\(\{card,onClose\}:DialogCheckoutProps\)/.test(condensed)
+    && !/exportfunctionDialogCheckout\(\{onClose,card\}:DialogCheckoutProps\)/.test(condensed)) {
+    failures.push('Checkout dialog must export the card/onClose wrapper')
+  }
+  if (!hasExactInterfaceProperties(source, 'DialogCheckoutProps', ['card', 'onClose'])) failures.push('Checkout dialog props must contain only card and onClose')
+  if (!/typeCheckoutStep=["']notes["']\|["']providers["'];?/.test(condensed)
+    || !/useState<CheckoutStep>\(["']notes["']\)/.test(condensed)) failures.push('Checkout dialog must start at usage notes')
+  for (const primitive of ['Root', 'Portal', 'Overlay', 'Content']) {
+    const count = countOpeningTags(source, `DialogPrimitive.${primitive}`)
+    if (count !== 1) failures.push(`Checkout dialog must contain exactly one Radix ${primitive} (found ${count})`)
+  }
+  if (!/<DialogPrimitive\.Root\b[^>]*\bopen\b/.test(source)) failures.push('Checkout dialog must keep its single Radix root open while mounted')
+  if (!/onOpenChange=\{\(open\)=>\{if\(!open\)onClose\(\);?\}\}/.test(condensed)) failures.push('Checkout dialog dismiss must call onClose')
+  if (!/<UsageNotesonAccept=\{\(\)=>setStep\(["']providers["']\)\}onClose=\{onClose\}\/>/.test(condensed)) {
+    failures.push('Usage-notes acceptance must only advance to providers')
+  }
+  if (!/<PaymentProviderscard=\{card\}\/>/.test(condensed)) failures.push('Checkout dialog must pass only the selected card to providers')
+  if (!/step===["']notes["']\?\(?<UsageNotes/.test(condensed)) failures.push('Provider selection must remain gated behind the notes step')
+  if (/\b(?:createLeekPayCheckout|requestPaymentApi|handleCheckout)\b|\bfetch\s*\(|window\.location/.test(source)) {
+    failures.push('Checkout step transitions must not initiate or redirect a payment')
+  }
+  if (/\b(?:isOpen|onExitComplete|notes-exiting|checkoutStep)\b/.test(source)) failures.push('Checkout wrapper must not restore the previous multi-dialog lifecycle')
+  return failures
+}
+
 function validateCatalogueFlow(source) {
   const failures = []
-  if (!/\bDialogNotes\b/.test(source) || !/\bDialogProviders\b/.test(source)) failures.push('Catalogue must render notes then providers')
-  if (!/<DialogNotes\b[\s\S]*?onAccept\s*=/.test(source)) failures.push('Catalogue must open providers through notes onAccept')
-  if (!/onClose=\{\(\)\s*=>\s*setCheckoutStep\(["']closed["']\)\}/.test(compact(source))) failures.push('Catalogue dialogs must retain an explicit close path')
+  const condensed = compact(source)
+  if (!/from["']@\/components\/ui\/dialog-checkout["']/.test(condensed) || !/<DialogCheckout\b/.test(source)) failures.push('Catalogue must use the unified checkout dialog')
+  if (!/selectedCard&&\(<DialogCheckout[\s\S]*?onClose=\{\(\)=>setSelectedCard\(null\)\}/.test(condensed)) failures.push('Catalogue must mount checkout for the selected card with an explicit close path')
+  if (/\b(?:checkoutStep|setCheckoutStep|notes-exiting|DialogNotes|DialogProviders|UsageNotes|PaymentProviders)\b/.test(source)) {
+    failures.push('Catalogue must not manage checkout dialog steps or fragments')
+  }
+  if (/\b(?:createLeekPayCheckout|requestPaymentApi|handleCheckout)\b|\bfetch\s*\(/.test(source)) failures.push('Selecting a catalogue card must not initiate payment')
   return failures
 }
 
@@ -513,12 +587,16 @@ function selfTest() {
   assert.deepEqual(validateFrontendUrls(`const url = '${proxyOrigin}'`, frontendAdapterPath), [])
 
   const safeNotes = `
-    export function DialogNotes({ onAccept, onClose }) {
-      return <><Button type="button" onClick={onAccept}>Accept</Button><Button type="button" onClick={onClose}>Refuser / Decline</Button></>
+    import * as DialogPrimitive from "@radix-ui/react-dialog";
+    interface UsageNotesProps { onClose: () => void; onAccept: () => void; }
+    export function UsageNotes({ onClose, onAccept }: UsageNotesProps) {
+      return <><DialogPrimitive.Description>Notes</DialogPrimitive.Description><Button type="button" onClick={onAccept}>Accept</Button><Button type="button" onClick={onClose}>Refuser / Decline</Button></>
     }
   `
   assert.deepEqual(validateUsageNotesButtons(safeNotes, 'notes.tsx'), [])
+  assert.deepEqual(validateUsageNotesStructure(safeNotes), [])
   assert.ok(validateUsageNotesButtons(safeNotes.replace('onClick={onClose}', 'disabled'), 'notes.tsx').length > 0)
+  assert.ok(validateUsageNotesStructure(safeNotes.replace('<>', '<DialogPrimitive.Root>')).length > 0)
 
   const safeAdapter = `
     export const LEEKPAY_API_BASE = "${proxyOrigin}";
@@ -538,7 +616,17 @@ function selfTest() {
 
   const safeProviderDialog = `
     import { createLeekPayCheckout } from "@/lib/leekpay";
-    async function checkout(card, controller) {
+    interface PaymentProvidersProps { card: PaymentCardSelection; }
+    export function PaymentProviders({ card }: PaymentProvidersProps) {
+      useEffect(() => {
+        window.addEventListener("pageshow", handlePageShow);
+        return () => {
+          window.removeEventListener("pageshow", handlePageShow);
+          requestRef.current?.abort();
+        };
+      }, []);
+    }
+    async function handleCheckout(card, controller) {
       const checkout = await createLeekPayCheckout(card.id, controller.signal);
       window.location.assign(checkout.checkoutUrl);
     }
@@ -546,6 +634,34 @@ function selfTest() {
   `
   assert.deepEqual(validateProviderDialog(safeProviderDialog), [])
   assert.ok(validateProviderDialog(safeProviderDialog.replace('>LeekPay<', '>Provider<')).length > 0)
+  assert.ok(validateProviderDialog(`${safeProviderDialog}\n<DialogPrimitive.Root />`).length > 0)
+
+  const safeCheckoutDialog = `
+    import { UsageNotes } from "@/components/ui/dialog-notes";
+    import { PaymentProviders } from "@/components/ui/dialog-providers";
+    interface DialogCheckoutProps { card: PaymentCardSelection; onClose: () => void; }
+    type CheckoutStep = "notes" | "providers";
+    export function DialogCheckout({ card, onClose }: DialogCheckoutProps) {
+      const [step, setStep] = useState<CheckoutStep>("notes");
+      return <DialogPrimitive.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
+        <DialogPrimitive.Portal><DialogPrimitive.Overlay /><DialogPrimitive.Content>
+          {step === "notes" ? <UsageNotes onAccept={() => setStep("providers")} onClose={onClose} /> : <PaymentProviders card={card} />}
+        </DialogPrimitive.Content></DialogPrimitive.Portal>
+      </DialogPrimitive.Root>;
+    }
+  `
+  assert.deepEqual(validateCheckoutDialog(safeCheckoutDialog), [])
+  assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('useState<CheckoutStep>("notes")', 'useState<CheckoutStep>("providers")')).length > 0)
+  assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('<DialogPrimitive.Overlay />', '<DialogPrimitive.Overlay /><DialogPrimitive.Overlay />')).length > 0)
+  assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('setStep("providers")', 'createLeekPayCheckout()')).length > 0)
+
+  const safeCatalogue = `
+    import { DialogCheckout } from "@/components/ui/dialog-checkout";
+    const selectedCard = card;
+    const view = selectedCard && (<DialogCheckout card={selectedCard} onClose={() => setSelectedCard(null)} />);
+  `
+  assert.deepEqual(validateCatalogueFlow(safeCatalogue), [])
+  assert.ok(validateCatalogueFlow(`${safeCatalogue}\nconst [checkoutStep, setCheckoutStep] = useState("notes");`).length > 0)
 
   const safeResult = `
     const orderToken = readOrderToken(window.location.hash);
@@ -638,11 +754,16 @@ async function readRequired(relativePath) {
 }
 
 const notesSource = await readRequired(usageNotesDialogPath)
-if (notesSource) failures.push(...validateUsageNotesButtons(notesSource, usageNotesDialogPath))
+if (notesSource) {
+  failures.push(...validateUsageNotesButtons(notesSource, usageNotesDialogPath))
+  failures.push(...validateUsageNotesStructure(notesSource))
+}
 const adapterSource = await readRequired(frontendAdapterPath)
 if (adapterSource) failures.push(...validateFrontendAdapter(adapterSource))
 const providerDialogSource = await readRequired(providerDialogPath)
 if (providerDialogSource) failures.push(...validateProviderDialog(providerDialogSource))
+const checkoutDialogSource = await readRequired(checkoutDialogPath)
+if (checkoutDialogSource) failures.push(...validateCheckoutDialog(checkoutDialogSource))
 const catalogueSource = await readRequired('src/app/page.tsx')
 if (catalogueSource) failures.push(...validateCatalogueFlow(catalogueSource))
 const paymentResultSource = await readRequired(paymentResultPath)

@@ -2,13 +2,27 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const dialogPath = new URL(
+const providerPath = new URL(
   "../src/components/ui/dialog-providers.tsx",
   import.meta.url,
 );
-const source = await readFile(dialogPath, "utf8");
+const checkoutPath = new URL(
+  "../src/components/ui/dialog-checkout.tsx",
+  import.meta.url,
+);
+const notesPath = new URL(
+  "../src/components/ui/dialog-notes.tsx",
+  import.meta.url,
+);
+const pagePath = new URL("../src/app/page.tsx", import.meta.url);
+const [providerSource, checkoutSource, notesSource, pageSource] =
+  await Promise.all(
+    [providerPath, checkoutPath, notesPath, pagePath].map((file) =>
+      readFile(file, "utf8"),
+    ),
+  );
 
-function blockAround(marker, opening, closing) {
+function blockAround(source, marker, opening, closing) {
   const markerIndex = source.indexOf(marker);
   assert.notEqual(markerIndex, -1, `Missing marker: ${marker}`);
   const start = source.lastIndexOf(opening, markerIndex);
@@ -19,15 +33,16 @@ function blockAround(marker, opening, closing) {
 }
 
 test("LeekPay is a selectable horizontal recommended tile", () => {
-  assert.match(source, /type PaymentProvider = "leekpay";/);
+  assert.match(providerSource, /type PaymentProvider = "leekpay";/);
   assert.match(
-    source,
+    providerSource,
     /useState<PaymentProvider>\("leekpay"\)/,
     "The only available provider should be selected initially",
   );
-  assert.match(source, /<fieldset[\s\S]*?grid-cols-2[\s\S]*?>/);
+  assert.match(providerSource, /<fieldset[\s\S]*?grid-cols-2[\s\S]*?>/);
 
   const tile = blockAround(
+    providerSource,
     'aria-pressed={selectedProvider === "leekpay"}',
     "<button",
     "</button>",
@@ -53,18 +68,19 @@ test("LeekPay is a selectable horizontal recommended tile", () => {
 
 test("only the separate global Pay button starts checkout", () => {
   assert.equal(
-    source.match(/onClick=\{handleCheckout\}/g)?.length,
+    providerSource.match(/onClick=\{handleCheckout\}/g)?.length,
     1,
     "There must be exactly one checkout action",
   );
-  const fieldsetEnd = source.indexOf("</fieldset>");
-  const checkoutAction = source.indexOf("onClick={handleCheckout}");
+  const fieldsetEnd = providerSource.indexOf("</fieldset>");
+  const checkoutAction = providerSource.indexOf("onClick={handleCheckout}");
   assert.ok(
     checkoutAction > fieldsetEnd,
     "The checkout action must remain outside and below the provider grid",
   );
 
   const payButton = blockAround(
+    providerSource,
     "onClick={handleCheckout}",
     "<Button",
     "</Button>",
@@ -73,9 +89,9 @@ test("only the separate global Pay button starts checkout", () => {
   assert.match(payButton, /disabled=\{isProcessing\}/);
   assert.match(payButton, /language === "fr" \? "Payer" : "Pay"/);
 
-  const checkoutHandler = source.slice(
-    source.indexOf("const handleCheckout"),
-    source.indexOf("const handleClose"),
+  const checkoutHandler = providerSource.slice(
+    providerSource.indexOf("const handleCheckout"),
+    providerSource.indexOf("const formattedAmount"),
   );
   assert.match(
     checkoutHandler,
@@ -96,8 +112,61 @@ test("only the separate global Pay button starts checkout", () => {
 });
 
 test("the provider modal cannot bypass the reviewed payment adapter", () => {
-  assert.doesNotMatch(source, /\bfetch\s*\(/);
-  assert.doesNotMatch(source, /leekpay\.fr\/js\/leekpay\.js|window\.LeekPay/);
-  assert.doesNotMatch(source, /\b(?:pk|sk)_(?:live|test)_/i);
-  assert.doesNotMatch(source, /<(?:form|input|select|textarea)\b/i);
+  assert.doesNotMatch(providerSource, /\bfetch\s*\(/);
+  assert.doesNotMatch(
+    providerSource,
+    /leekpay\.fr\/js\/leekpay\.js|window\.LeekPay/,
+  );
+  assert.doesNotMatch(providerSource, /\b(?:pk|sk)_(?:live|test)_/i);
+  assert.doesNotMatch(providerSource, /<(?:form|input|select|textarea)\b/i);
+});
+
+test("one Radix dialog owns the consent-to-provider sequence", () => {
+  for (const primitive of ["Root", "Portal", "Overlay", "Content"]) {
+    const openingTag = new RegExp(`<DialogPrimitive\\.${primitive}\\b`, "g");
+    assert.equal(
+      checkoutSource.match(openingTag)?.length,
+      1,
+      `DialogCheckout must own exactly one Radix ${primitive}`,
+    );
+    assert.equal(
+      notesSource.match(openingTag)?.length ?? 0,
+      0,
+      `UsageNotes must not own Radix ${primitive}`,
+    );
+    assert.equal(
+      providerSource.match(openingTag)?.length ?? 0,
+      0,
+      `PaymentProviders must not own Radix ${primitive}`,
+    );
+  }
+
+  const compactCheckout = checkoutSource.replace(/\s+/g, "");
+  assert.match(
+    compactCheckout,
+    /useState<CheckoutStep>\("notes"\)/,
+    "Consent notes must be the initial step",
+  );
+  assert.match(
+    compactCheckout,
+    /<UsageNotesonAccept=\{\(\)=>setStep\("providers"\)\}onClose=\{onClose\}\/>/,
+  );
+  assert.match(compactCheckout, /<PaymentProviderscard=\{card\}\/>/);
+  assert.doesNotMatch(
+    checkoutSource,
+    /createLeekPayCheckout|handleCheckout|\bfetch\s*\(|window\.location/,
+  );
+});
+
+test("the catalogue mounts only the unified checkout wrapper", () => {
+  assert.match(pageSource, /\bselectedCard\s*&&\s*\(/);
+  assert.match(pageSource, /<DialogCheckout\b/);
+  assert.match(pageSource, /onClose=\{\(\) => setSelectedCard\(null\)\}/);
+  assert.doesNotMatch(
+    pageSource,
+    /\b(?:checkoutStep|notes-exiting|DialogNotes|DialogProviders)\b/,
+  );
+  assert.match(notesSource, /onClick=\{onAccept\}/);
+  assert.match(notesSource, /onClick=\{onClose\}/);
+  assert.doesNotMatch(notesSource, /createLeekPayCheckout|handleCheckout/);
 });
