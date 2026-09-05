@@ -4,6 +4,8 @@ GitHub Pages reste l'unique hébergement de l'interface DRAVACARD. Le paiement u
 
 Le build inclut maintenant la génération de la PWA **Drava** après l’export Next.js. Publier tout le dossier `out/` issu de `npm run build`, notamment `sw.js`, `offline.html`, le manifeste et les chunks. Ne pas publier directement `public/sw.js`, qui est un modèle sans manifeste de construction. Les contrôles et l’aperçu local sont décrits dans [PWA.md](docs/PWA.md).
 
+Publication du 5 septembre 2026 : le commit `ca86e43` est en ligne sur `https://drava.click`, après réussite des vérifications Worker, frontend, sécurité et CodeQL. Les pages de retour cartes/TikTok, le manifeste **Drava**, le service worker généré et la page hors ligne répondent HTTP 200. L’invite d’installation et l’application d’une mise à jour ont été contrôlées dans Edge sur le domaine public, sans installation système ni paiement. Le Worker existant est déployé en version `a5ca2c5f-9594-4404-b361-7c01821dbbb9` ; sa clé de chiffrement TikTok est configurée. EmailJS reste à terminer après connexion au tableau de bord pour vérifier le modèle et son destinataire, comme décrit dans [TIKTOK_BACKEND.md](docs/TIKTOK_BACKEND.md).
+
 > **Dépôt public et historique** — ce dépôt est public. Considérez toute ancienne valeur présente dans son historique comme exposée : révoquez-la chez le fournisseur, purgez les caches concernés et ne vous contentez jamais de la supprimer du dernier commit.
 
 ## Déployer le proxy Cloudflare Worker
