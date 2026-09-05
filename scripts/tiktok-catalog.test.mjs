@@ -66,9 +66,9 @@ function historyModule({ storageError = false, writeError = false, initial = nul
 const receipt = (overrides = {}) => ({ orderId: "TIKTOK-123", packId: "boost", provider: "leekpay", status: "paid", verified: true, coins: 700, bonus: 70, amount: 7900, currency: "XOF", createdAt: Date.UTC(2026, 8, 5, 12), notification: "sent", ...overrides });
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-test("TikTok catalogue retains all six exact UpCoin quantities, bonuses, prices and badges", () => {
+test("TikTok catalogue keeps the 100 FCFA mini test price and the other UpCoin packs unchanged", () => {
   assert.deepEqual(catalog.tiktokPacks, [
-    { id: "mini", coins: 100, price: 1124 },
+    { id: "mini", coins: 100, price: 100 },
     { id: "starter", coins: 350, price: 3900 },
     { id: "boost", coins: 700, bonus: 70, price: 7900, badge: "popular" },
     { id: "live", coins: 1400, bonus: 140, price: 15700 },

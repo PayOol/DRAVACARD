@@ -8,7 +8,8 @@ it("encrypts and verifies TikTok orders in actual workerd with all outbound requ
   const bundle = await build({ entryPoints: [fileURLToPath(new URL("../src/index.ts", import.meta.url))], bundle: true, format: "esm", platform: "browser", write: false });
   let mails = 0;
   let providerStatus = "pending";
-  const password = "test-password";
+  const password = " runtime-<pass>& ";
+  let expectedOrder;
   const runtime = new Miniflare(convertV4MiniflareOptions({
     name: "drava-tiktok-runtime-test", modules: true, script: bundle.outputFiles[0].text,
     compatibilityDate: "2026-09-05", compatibilityFlags: ["nodejs_compat"], cf: false,
@@ -24,8 +25,18 @@ it("encrypts and verifies TikTok orders in actual workerd with all outbound requ
       if (request.url === "https://api.emailjs.com/api/v1.0/email/send") {
         const payload = await request.json();
         assert.equal(providerStatus, "paid");
-        assert.equal(payload.template_params.tiktok_password, password);
-        assert.equal(payload.template_params.coins_amount, "770");
+        assert.deepEqual(payload.template_params, {
+          service_type: "Recharge TikTok Coins",
+          order_id: expectedOrder.orderId,
+          tiktok_username: "runtime.creator",
+          tiktok_password: password,
+          client_email: "Runtime.Buyer+coins@Example.org",
+          client_whatsapp: "+33698765432",
+          coins_amount: "770",
+          price: "7\u202f900",
+          date: new Date(expectedOrder.createdAt).toISOString(),
+        });
+        assert.ok(!Object.hasOwn(payload.template_params, "desired_username"));
         assert.ok(!Object.hasOwn(payload, "accessToken"));
         mails++;
         return new RuntimeResponse("OK");
@@ -45,7 +56,7 @@ it("encrypts and verifies TikTok orders in actual workerd with all outbound requ
   try {
     const headers = { Origin: "https://drava.click", "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.25" };
     const response = await runtime.dispatchFetch("https://runtime.example/api/checkout", {
-      method: "POST", headers, body: JSON.stringify({ service: "tiktok", productId: "boost", provider: "leekpay", consent: true, customer: { username: "creator", password, email: "buyer@example.com", whatsapp: "+237699000000" } }),
+      method: "POST", headers, body: JSON.stringify({ service: "tiktok", productId: "boost", provider: "leekpay", consent: true, customer: { username: "  @runtime.creator  ", password, email: " Runtime.Buyer+coins@Example.org ", whatsapp: "+33 (6) 98-76-54-32" } }),
     });
     assert.equal(response.status, 201);
     const { orderToken } = await response.json();
@@ -55,10 +66,12 @@ it("encrypts and verifies TikTok orders in actual workerd with all outbound requ
     for (const entry of keys.keys) {
       const value = await orders.get(entry.name);
       assert.ok(!value.includes(password));
-      assert.ok(!value.includes("buyer@example.com"));
-      assert.ok(!value.includes("\"creator\""));
+      assert.ok(!value.includes("Runtime.Buyer+coins@Example.org"));
+      assert.ok(!value.includes("runtime.creator"));
+      assert.ok(!value.includes("+33698765432"));
       assert.ok(!entry.name.includes(orderToken));
     }
+    expectedOrder = await orders.get(keys.keys.find((entry) => /^tiktok:order:[a-f0-9]{64}$/.test(entry.name)).name, "json");
     const check = () => runtime.dispatchFetch("https://runtime.example/api/orders/status", { method: "POST", headers, body: JSON.stringify({ orderToken }) });
     const pending = await (await check()).json();
     assert.equal(pending.verified, false);
@@ -69,7 +82,7 @@ it("encrypts and verifies TikTok orders in actual workerd with all outbound requ
     const paid = await (await check()).json();
     assert.equal(paid.verified, true);
     assert.equal(paid.notification, "sent");
-    assert.equal(paid.username, "creator");
+    assert.equal(paid.username, "runtime.creator");
     assert.equal(paid.transactionReference, "checkout_runtime_tiktok");
     assert.equal(mails, 1);
     const credentialKey = keys.keys.find((entry) => entry.name.endsWith(":customer")).name;
@@ -79,7 +92,7 @@ it("encrypts and verifies TikTok orders in actual workerd with all outbound requ
     assert.match(encryptedReceipt, /^[a-f0-9]{24}:[a-f0-9]+$/);
     assert.equal(receipt.expiration, Math.floor((paid.createdAt + 7 * 24 * 60 * 60 * 1000) / 1000));
     const reopened = await (await check()).json();
-    assert.equal(reopened.username, "creator");
+    assert.equal(reopened.username, "runtime.creator");
     assert.equal(await orders.get(receipt.name), encryptedReceipt);
     assert.equal(mails, 1);
   } finally { await runtime.dispose(); }

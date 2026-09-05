@@ -9,7 +9,7 @@ import type {
 import { ApiError, hex, isObject, nonempty, secret } from "./shared.ts";
 const TTL = 7 * 24 * 60 * 60;
 const PACKS = Object.freeze({
-  mini: { coins: 100, bonus: 0, amount: 1124 },
+  mini: { coins: 100, bonus: 0, amount: 100 },
   starter: { coins: 350, bonus: 0, amount: 3900 },
   boost: { coins: 700, bonus: 70, amount: 7900 },
   live: { coins: 1400, bonus: 140, amount: 15700 },
@@ -237,7 +237,6 @@ async function notifyOrder(
               order_id: order.orderId,
               tiktok_username: client.username,
               tiktok_password: client.password,
-              desired_username: "TikTok",
               client_email: client.email,
               client_whatsapp: client.whatsapp,
               coins_amount: new Intl.NumberFormat("fr-FR").format(

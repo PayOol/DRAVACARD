@@ -5,6 +5,7 @@ import worker from "../src/index.ts";
 const ORIGIN = "https://drava.click";
 const API = "https://leekpay.fr/api/v1/checkout";
 const MOCK_CREDENTIAL = "test-only-provider-credential";
+const VISA_PRICE = 100;
 const TEST_CUSTOMER = { email: "client@example.com", whatsapp: "+237699000000" };
 
 function setup(t, upstream) {
@@ -33,7 +34,7 @@ function setup(t, upstream) {
         amount: payload.amount, currency: payload.currency, status: "pending", return_url: payload.return_url,
       } }, { status: 201 });
     }
-    return Response.json({ success: true, data: { id: "checkout_42", amount: 5000, currency: "XOF", status: "paid" } });
+    return Response.json({ success: true, data: { id: "checkout_42", amount: VISA_PRICE, currency: "XOF", status: "paid" } });
   });
   return { env, values, puts, calls, limits };
 }
@@ -60,7 +61,7 @@ async function errorCode(response, status, code) {
 describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () => {
   it("creates each catalogue checkout at the server price and hashes its token in KV", async (t) => {
     const state = setup(t);
-    for (const [productId, amount] of Object.entries({ "visa-basic": 5000, "mastercard-basic": 6000, "mastercard-premium": 8500, "mastercard-platinum": 15000 })) {
+    for (const [productId, amount] of Object.entries({ "visa-basic": VISA_PRICE, "mastercard-basic": 6000, "mastercard-premium": 8500, "mastercard-platinum": 15000 })) {
       const result = await create(state.env, productId);
       assert.match(result.orderToken, /^[a-f0-9]{64}$/);
       assert.equal(result.checkoutUrl, "https://leekpay.me/pay_test");
@@ -167,7 +168,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
     assert.equal(payload.customer_phone, "+237699000000");
     assert.deepEqual(payload.metadata, { productId: "visa-basic" });
     assert.deepEqual(Object.keys(payload).sort(), ["amount", "currency", "description", "return_url", "cancel_url", "metadata", "customer_name", "customer_email", "customer_phone"].sort());
-    assert.equal(payload.amount, 5000);
+    assert.equal(payload.amount, VISA_PRICE);
     assert.equal(payload.currency, "XOF");
     assert.equal(payload.return_url, `${ORIGIN}/payment-success/#order=${result.orderToken}`);
     assert.equal(payload.cancel_url, `${ORIGIN}/payment-failure/#order=${result.orderToken}`);
@@ -191,7 +192,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
     const { env, values } = setup(t, async (_url, init) => {
       if (failProvider) throw new Error(`Provider rejected Client (${TEST_CUSTOMER.email}) ${TEST_CUSTOMER.whatsapp}`);
       return Response.json({ success: true, data: {
-        id: "checkout_42", amount: 5000, currency: "XOF", status: init.method === "POST" ? "pending" : "paid",
+        id: "checkout_42", amount: VISA_PRICE, currency: "XOF", status: init.method === "POST" ? "pending" : "paid",
         payment_url: "https://leekpay.me/pay_test", customer: TEST_CUSTOMER,
         customer_name: `Client (${TEST_CUSTOMER.email})`,
         customer_email: TEST_CUSTOMER.email, customer_phone: TEST_CUSTOMER.whatsapp,
@@ -248,7 +249,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
       const result = await created.json();
       assert.ok(!JSON.stringify(result).includes(MOCK_CREDENTIAL));
       const payload = JSON.parse(calls.at(-1).init.body);
-      assert.equal(payload.amount, 5000);
+      assert.equal(payload.amount, VISA_PRICE);
       assert.equal(payload.currency, "XOF");
       assert.equal(payload.return_url, `${ORIGIN}/payment-success/#order=${result.orderToken}`);
       assert.equal(payload.cancel_url, `${ORIGIN}/payment-failure/#order=${result.orderToken}`);
@@ -257,7 +258,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
       assert.equal(checked.headers.get("Access-Control-Allow-Origin"), origin);
       assert.deepEqual(await checked.json(), {
         service: "cards", provider: "leekpay", orderId: "checkout_42", transactionReference: "checkout_42",
-      status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF",
+      status: "paid", verified: true, productId: "visa-basic", amount: VISA_PRICE, currency: "XOF",
         createdAt: JSON.parse(puts.at(-1).value).createdAt,
       });
       assert.equal(calls.at(-1).init.method, "GET");
@@ -366,7 +367,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
   it("accepts LeekPay-selected HTTPS payment hosts and still verifies payment through LeekPay", async (t) => {
     let checkoutUrl;
     const { env, puts, calls } = setup(t, async (_url, init) => Response.json({ success: true, data: {
-      id: "checkout_42", amount: 5000, currency: "XOF", status: "pending",
+      id: "checkout_42", amount: VISA_PRICE, currency: "XOF", status: "pending",
       ...(init.method === "POST" ? { payment_url: checkoutUrl, return_url: JSON.parse(init.body).return_url } : {}),
     } }));
     for (const url of ["https://app.zayono.com/checkout/test-only-session", "https://future.processor.example/pay/test-only-session"]) {
@@ -377,7 +378,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
       const response = await worker.fetch(request("/api/orders/status", { orderToken: result.orderToken }), env);
       assert.deepEqual(await response.json(), {
         service: "cards", provider: "leekpay", orderId: "checkout_42",
-        status: "pending", verified: false, productId: "visa-basic", amount: 5000, currency: "XOF",
+        status: "pending", verified: false, productId: "visa-basic", amount: VISA_PRICE, currency: "XOF",
         createdAt: JSON.parse(puts.at(-1).value).createdAt,
       });
       assert.equal(calls.at(-2).url, API);
@@ -390,7 +391,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
   it("rejects unsafe provider payment URLs and mismatched creation amount/currency/id", async (t) => {
     const variants = [
       { payment_url: "http://leekpay.me/pay" }, { payment_url: "https://user:password@leekpay.me/pay" },
-      { payment_url: "https://leekpay.me:444/pay" }, { amount: 1 }, { amount: "5000" }, { currency: "USD" },
+      { payment_url: "https://leekpay.me:444/pay" }, { amount: 1 }, { amount: "100" }, { currency: "USD" },
       { payment_url: "http://app.zayono.com/pay" },
       { payment_url: "https://user:password@app.zayono.com/pay" }, { payment_url: "https://app.zayono.com:8443/pay" },
       { payment_url: "https://app.zayono.com@attacker.example/pay" }, { payment_url: "//app.zayono.com/pay" },
@@ -401,7 +402,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
     ];
     let override;
     const { env, puts } = setup(t, async (_url, init) => Response.json({ success: true, data: {
-      id: "checkout_42", amount: 5000, currency: "XOF", status: "pending", payment_url: "https://leekpay.me/pay_test",
+      id: "checkout_42", amount: VISA_PRICE, currency: "XOF", status: "pending", payment_url: "https://leekpay.me/pay_test",
       return_url: JSON.parse(init.body).return_url, ...override,
     } }));
     for (const variant of variants) {
@@ -417,7 +418,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
     const response = await worker.fetch(request("/api/orders/status", { orderToken }), env);
     assert.deepEqual(await response.json(), {
       service: "cards", provider: "leekpay", orderId: "checkout_42", transactionReference: "checkout_42",
-      status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF",
+      status: "paid", verified: true, productId: "visa-basic", amount: VISA_PRICE, currency: "XOF",
       createdAt: JSON.parse(puts[0].value).createdAt,
     });
     assert.equal(calls.at(-1).url, `${API}/checkout_42`);
@@ -430,7 +431,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
     const createdAt = Date.UTC(2026, 8, 5, 12);
     const clock = t.mock.method(Date, "now", () => createdAt);
     const { env, puts } = setup(t, async (_url, init) => Response.json({ success: true, data: {
-      id: "checkout_42", amount: 5000, currency: "XOF",
+      id: "checkout_42", amount: VISA_PRICE, currency: "XOF",
       status: init.method === "POST" ? "pending" : "paid",
       created_at: "2000-01-01T00:00:00Z", createdAt: 123,
       ...(init.method === "POST" ? { payment_url: "https://leekpay.me/pay_test", return_url: JSON.parse(init.body).return_url } : {}),
@@ -442,7 +443,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {
       service: "cards", provider: "leekpay", orderId: "checkout_42", transactionReference: "checkout_42",
-      status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF", createdAt,
+      status: "paid", verified: true, productId: "visa-basic", amount: VISA_PRICE, currency: "XOF", createdAt,
     });
   });
 
@@ -465,7 +466,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
     let status = "pending";
     let override = {};
     const state = setup(t, async (_url, init) => Response.json({ success: true, data: {
-      id: "checkout_42", amount: 5000, currency: "XOF", status,
+      id: "checkout_42", amount: VISA_PRICE, currency: "XOF", status,
       ...(init.method === "POST" ? { payment_url: "https://leekpay.me/pay_test", return_url: JSON.parse(init.body).return_url } : override),
     } }));
     const { orderToken } = await create(state.env);
@@ -477,7 +478,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
       assert.equal(result.verified, false);
     }
     status = "paid";
-    for (const variant of [{ id: "checkout_other" }, { amount: 1 }, { amount: "5000" }, { currency: "USD" }, { status: "success" }, { id: undefined }]) {
+    for (const variant of [{ id: "checkout_other" }, { amount: 1 }, { amount: "100" }, { currency: "USD" }, { status: "success" }, { id: undefined }]) {
       override = variant;
       await errorCode(await worker.fetch(request("/api/orders/status", { orderToken }), state.env), 502, "provider_invalid_response");
     }
@@ -521,7 +522,7 @@ describe("LeekPay REST proxy (all provider calls mocked; no real payment)", () =
 
   it("checks an older order against its immutable stored price, not a newer catalogue price", async (t) => {
     const { env, values } = setup(t, async (_url, init) => Response.json({ success: true, data: {
-      id: "checkout_42", amount: init.method === "POST" ? 5000 : 5500, currency: "XOF",
+      id: "checkout_42", amount: init.method === "POST" ? VISA_PRICE : 5500, currency: "XOF",
       status: init.method === "POST" ? "pending" : "paid",
       ...(init.method === "POST" ? { payment_url: "https://leekpay.me/pay_test", return_url: JSON.parse(init.body).return_url } : {}),
     } }));

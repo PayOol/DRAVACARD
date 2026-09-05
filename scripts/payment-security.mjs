@@ -222,7 +222,7 @@ export function validateCommonWorker(sources) {
   const orderType = nodes(types,n=>ts.isTypeAliasDeclaration(n)&&n.name.text==='Order')[0]?.getText() ?? ''
   if (!orderType || /\b(?:customer|email|whatsapp|phone|password|otpCode)\b/.test(orderType) || /\b(?:client|customer|password|otpCode)\s*:/.test(create.match(/constorder:Order=\{.*?\};/)?.[0] ?? '')) failures.push('Verification records must exclude customer credentials, contacts and OTP')
   requireAll(failures, functionCode(payments,'normalizeOrder'), ['value.version!==1&&value.version!==2', 'value.expiresAt!==value.createdAt+ORDER_TTL_SECONDS*1000', 'isProviderReference(value.provider,value.providerId)', '!positiveAmount(value.providerAmount)'], 'Legacy and new orders must retain expiry and stored provider-amount validation')
-  for (const [id,amount] of [['visa-basic',5000],['mastercard-basic',6000],['mastercard-premium',8500],['mastercard-platinum',15000]]) {
+  for (const [id,amount] of [['visa-basic',100],['mastercard-basic',6000],['mastercard-premium',8500],['mastercard-platinum',15000]]) {
     if (!new RegExp(`"${id}":\\{amount:${amount},`).test(code(services))) failures.push(`Server card catalogue must retain ${id}/${amount}`)
   }
   requireAll(failures, services, ['normalizePaymentCustomer(value)', 'tiktok.customer(value)', 'tiktok.selection({packId:productId,customCoins})', 'currency:"XOF"', 'currency:"XAF"', 'amount:product.amount', 'payment-success/#order=${token}', 'payment-failure/#order=${token}', 'order.service==="tiktok"?tiktok.notifyOrder(env,key,order):{}'], 'Service adapters must own canonical customers, server catalogue, fragment return URLs and separate TikTok fulfillment')

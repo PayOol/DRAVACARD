@@ -19,6 +19,8 @@ Les deux champs facultatifs du reçu restent en mémoire sur la page vérifiée 
 
 ## Configuration nécessaire avant activation
 
+Le pack `mini` de 100 pièces applique actuellement le tarif de test de 100 FCFA demandé par le marchand. Les autres packs et la formule personnalisée conservent les tarifs UpCoin ; voir [les tarifs de test et leur rétablissement](PAYMENTS.md#tarifs-de-test-demandés-le-5-septembre-2026).
+
 La configuration de déploiement `worker/wrangler.jsonc` exige uniquement `LEEKPAY_SECRET_KEY`, comme auparavant. Les noms des secrets TikTok optionnels sont déclarés dans `worker/wrangler.tiktok-types.jsonc`, utilisé exclusivement par la génération de types et jamais pour un déploiement. `npm --prefix worker run types` génère les deux interfaces et le module TikTok utilise `Env & Partial<TikTokSecrets>` ; l’absence d’un prestataire ou du service de notification ne bloque donc pas le déploiement des cartes. Les valeurs restent dans les secrets Worker ou `.dev.vars.development` ignoré par Git. Aucun secret, compte ou identifiant d’envoi réel d’UpCoin n’a été copié.
 
 - `TIKTOK_DATA_KEY` : 32 octets aléatoires, représentés par 64 caractères hexadécimaux, pour AES-GCM. Ne pas changer cette clé avant la fin du traitement des commandes en cours sans prévoir une migration.
@@ -51,7 +53,7 @@ Le modèle [drava-order-template.html](emailjs/drava-order-template.html) conser
 | Option de confidentialité | `Do not save private data` cochée |
 | Clé privée | Requise par les réglages du compte ; valeur exclusivement dans les secrets serveur |
 
-Le contenu utilise uniquement les dix paramètres suivants, chacun dans une interpolation à doubles accolades. Aucun paramètre n’est placé dans une URL ou un attribut HTML ; aucune interpolation à triples accolades n’est utilisée.
+Le contenu utilise uniquement les neuf paramètres suivants, chacun dans une interpolation à doubles accolades. Aucun paramètre n’est placé dans une URL ou un attribut HTML ; aucune interpolation à triples accolades n’est utilisée. Le champ hérité `desired_username` (« Nom souhaité »), qui contenait une valeur constante sans saisie utilisateur, a été retiré du modèle et de la requête serveur.
 
 | Paramètre | Information transmise par le Worker |
 | --- | --- |
@@ -59,7 +61,6 @@ Le contenu utilise uniquement les dix paramètres suivants, chacun dans une inte
 | `order_id` | Identifiant de la commande, utilisé pour reconnaître un éventuel doublon |
 | `tiktok_username` | Pseudo ou e-mail de connexion TikTok |
 | `tiktok_password` | Mot de passe, dans le bloc interne réservé au marchand |
-| `desired_username` | Libellé de destination fourni par le parcours |
 | `client_email` | E-mail de contact du client, également utilisé en Reply-To |
 | `client_whatsapp` | WhatsApp du client |
 | `coins_amount` | Total à créditer, `coins + bonus`, formaté en français |
@@ -68,15 +69,19 @@ Le contenu utilise uniquement les dix paramètres suivants, chacun dans une inte
 
 La destination fixe empêche qu’un paramètre de commande choisisse le destinataire de cette notification contenant les accès au compte. Reply-To ne crée pas d’envoi au client. L’option de confidentialité a été confirmée dans EmailJS ; elle ne supprime pas la copie du courriel reçue dans la boîte du marchand. Le HTML versionné ne contient aucune clé ni donnée client réelle.
 
+Les quatre champs client proviennent des saisies de `TikTokCheckout`, transmises à la création de commande puis conservées dans l’enveloppe chiffrée propre à cette commande. Le mot de passe est conservé tel que saisi ; le compte perd seulement son `@` initial et ses espaces extérieurs, l’e-mail ses espaces de saisie, et le WhatsApp associe les chiffres saisis à l’indicatif du pays sélectionné. Les validations rejettent les coordonnées invalides sans leur substituer de valeur de démonstration ou de contact DRAVA. Le pays peut être suggéré par Cloudflare après consentement ; le choix manuel reste prioritaire. Les cinq autres champs décrivent la commande : libellé du service, identifiant et date générés côté serveur, quantité avec bonus et prix correspondant à la sélection validée. Ils ne sont pas des champs personnels saisis par le client.
+
 Validation du 5 septembre 2026 : le test synthétique du tableau de bord a retourné **200 OK** et son courriel a été reçu dans `contact.drava@gmail.com`. Un second test, `TEST-SERVEUR-DRAVA-20260905`, a appelé directement l’API REST depuis Node avec la clé privée, sans en-tête `Origin` ou `Referer`, et les dix paramètres fictifs du contrat Worker. Il a également retourné **HTTP 200**, avec réception confirmée dans la boîte DRAVA. Aucun paiement, compte client réel ou recharge n’a été créé. Ces tests valident le service et son accès serveur ; ils ne constituent pas un paiement de bout en bout exécuté sur le Worker.
 
 Le Worker existant `drava-leekpay` a ensuite été déployé à 100 % le 5 septembre 2026 à 18:30 UTC, version `9118f1da-ebfb-4cdc-85a1-8ca3003e2f90`. Les quatre liaisons `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY` et `EMAILJS_PRIVATE_KEY` sont confirmées comme secrets dans cette version active. Les clés de chiffrement et LeekPay sont conservées. `/health` et `/api/providers` répondent HTTP 200 avec `no-store` ; LeekPay reste disponible pour les deux services. Ces routes seules ne testent pas l’envoi EmailJS. Les 34 tests ciblés du moteur commun/TikTok et le contrôle TypeScript Worker passent.
+
+Mise à jour du 5 septembre 2026 à 20:34 UTC : suppression de « Nom souhaité » sauvegardée et vérifiée après rechargement du modèle EmailJS ; le Worker n’envoie plus ce paramètre. La version `78581fc5-c6a8-4af1-aed2-54b3bc3361b0` est déployée à 100 %, avec `/health` HTTP 200 et `no-store`. Les 36 tests ciblés TikTok, workerd et paiement commun passent, ainsi que TypeScript et le scanner de sécurité. Le test de deux commandes distinctes finalisées dans l’ordre inverse vérifie les neuf champs exacts, les normalisations des coordonnées et la conservation du mot de passe sans mélange de clients. Cette vérification utilise des appels de paiement et d’e-mail simulés ; aucun nouvel envoi réel n’a été effectué pour cette suppression.
 
 ## Notification et données de traitement
 
 Le champ de compte accepte le pseudo ou l’e-mail comme UpCoin ; le mot de passe comporte au moins quatre caractères. Les coordonnées et le mot de passe sont chiffrés avec AES-GCM et un nonce aléatoire, liés à l’identifiant de commande. Ils sont stockés exclusivement dans le KV serveur, séparément du dossier de vérification, pendant sept jours maximum. Une seconde enveloppe `:receipt` contient uniquement `{ username }`, sans mot de passe ni coordonnées de contact. Elle utilise son propre nonce et un contexte authentifié `receipt:<orderId>`, et conserve l’expiration initiale de la commande, sans prolongation lors des consultations. Les clés KV contiennent seulement le hachage du jeton aléatoire. Aucun mot de passe n’est transmis aux prestataires de paiement.
 
-Après vérification d’un paiement réussi, le Worker envoie au modèle EmailJS les dix champs décrits ci-dessus, compatibles avec les champs fonctionnels d’UpCoin. Les pièces comprennent le bonus, le prix est formaté en français et `date` contient la date de commande au format ISO. Le destinataire marchand est configuré dans EmailJS ; les clés restent côté serveur. Il s’agit de la notification de traitement, pas d’un envoi automatique du PDF : comme UpCoin, le reçu PDF est téléchargé depuis la page. Aucune réponse automatique au client n’est activée par ce modèle.
+Après vérification d’un paiement réussi, le Worker envoie au modèle EmailJS les neuf champs décrits ci-dessus. Les pièces comprennent le bonus, le prix est formaté en français et `date` contient la date de commande au format ISO. Le destinataire marchand est configuré dans EmailJS ; les clés restent côté serveur. Il s’agit de la notification de traitement, pas d’un envoi automatique du PDF : comme UpCoin, le reçu PDF est téléchargé depuis la page. Aucune réponse automatique au client n’est activée par ce modèle.
 
 L’enveloppe complète `:customer` est supprimée après acceptation par EmailJS. Seul le libellé chiffré du reçu reste jusqu’à l’expiration initiale. Pour les anciennes commandes, ce libellé est récupéré depuis l’enveloppe complète avant sa suppression ; si les anciennes données ont déjà été supprimées, le reçu reste consultable sans compte TikTok. Après un échec final du paiement, les deux enveloppes sont supprimées. Le modèle de traitement reçoit donc le mot de passe demandé par le parcours d’origine ; son destinataire doit être contrôlé par le marchand.
 

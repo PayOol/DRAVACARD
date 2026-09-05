@@ -33,7 +33,7 @@ describe("TikTok orders (isolated KV namespace; all external calls mocked)", () 
   it("uses all six canonical packs and custom formula; stores only encrypted customer data", async (t) => {
     const state = setup(t);
     const packs = [
-      ["mini", 100, 0, 1124], ["starter", 350, 0, 3900], ["boost", 700, 70, 7900],
+      ["mini", 100, 0, 100], ["starter", 350, 0, 3900], ["boost", 700, 70, 7900],
       ["live", 1400, 140, 15700], ["creator", 3500, 350, 39300], ["max", 7000, 700, 78700],
       ["custom", 71, 0, Math.round(71 * 11.24)], ["custom", 1_000_000, 0, 11_240_000],
     ];
@@ -101,14 +101,92 @@ describe("TikTok orders (isolated KV namespace; all external calls mocked)", () 
     assert.equal(result.transactionReference, "checkout_1");
     const email = state.calls.find((call) => call.url.includes("emailjs"));
     const body = JSON.parse(email.init.body);
-    assert.equal(body.template_params.tiktok_password, CUSTOMER.password);
-    assert.equal(body.template_params.coins_amount, "770");
-    assert.equal(body.template_params.client_email, CUSTOMER.email);
+    assert.deepEqual(body.template_params, {
+      service_type: "Recharge TikTok Coins",
+      order_id: result.orderId,
+      tiktok_username: "test.creator",
+      tiktok_password: CUSTOMER.password,
+      client_email: CUSTOMER.email,
+      client_whatsapp: CUSTOMER.whatsapp,
+      coins_amount: "770",
+      price: "7\u202f900",
+      date: new Date(result.createdAt).toISOString(),
+    });
+    assert.ok(!Object.hasOwn(body.template_params, "desired_username"));
     assert.ok(!JSON.stringify(result).includes(CUSTOMER.password));
     assert.ok(!JSON.stringify(result).includes(CUSTOMER.email));
     assert.ok(!Array.from(state.values.keys()).some((key) => key.endsWith(":customer")));
     await readStatus(state, order.orderToken);
     assert.equal(state.calls.filter((call) => call.url.includes("emailjs")).length, 1);
+  });
+
+  it("maps each customer's normalized inputs and immutable order into exactly nine email fields without mixing orders", async (t) => {
+    const state = setup(t);
+    const cases = [
+      {
+        packId: "boost",
+        customer: { username: "  @Mapped.CreatOr  ", password: " pass-A <&>  ", email: "  Recipient.One+shop@Example.com  ", whatsapp: " +237 (699) 123-456 " },
+        expected: { username: "Mapped.CreatOr", password: " pass-A <&>  ", email: "Recipient.One+shop@Example.com", whatsapp: "+237699123456" },
+        coins: "770", price: "7\u202f900",
+      },
+      {
+        packId: "custom", customCoins: 137,
+        customer: { username: " Login.Two@Example.net ", password: "pass-B &<> ", email: " second.buyer@example.org ", whatsapp: "+33 6 12 34 56 78" },
+        expected: { username: "Login.Two@Example.net", password: "pass-B &<> ", email: "second.buyer@example.org", whatsapp: "+33612345678" },
+        coins: "137", price: "1\u202f540",
+      },
+    ];
+    const snapshots = [];
+    for (const input of cases) {
+      const previousKeys = new Set(state.values.keys());
+      const created = await create(state, { ...SELECTION, packId: input.packId, ...(input.customCoins === undefined ? {} : { customCoins: input.customCoins }), customer: input.customer });
+      const [storageKey, serialized] = Array.from(state.values).find(([key]) => !previousKeys.has(key) && /^tiktok:order:[a-f0-9]{64}$/.test(key));
+      const order = JSON.parse(serialized);
+      const encrypted = state.values.get(`${storageKey}:customer`);
+      assert.match(encrypted, /^[a-f0-9]{24}:[a-f0-9]+$/);
+      for (const value of Object.values(input.expected)) {
+        assert.ok(!serialized.includes(value));
+        assert.ok(!encrypted.includes(value));
+      }
+      snapshots.push({ input, created, storageKey, order });
+    }
+    assert.equal(state.calls.filter((call) => call.url.includes("emailjs")).length, 0);
+
+    // Reverse completion order to detect a notification borrowing another
+    // checkout's customer, amount, identifier, or creation timestamp.
+    for (const { input, created, storageKey, order } of snapshots.reverse()) {
+      state.transactions.get(order.providerId).status = "pending";
+      const beforeMail = state.calls.filter((call) => call.url.includes("emailjs")).length;
+      const pending = await (await readStatus(state, created.orderToken)).json();
+      assert.equal(pending.verified, false);
+      assert.equal(state.calls.filter((call) => call.url.includes("emailjs")).length, beforeMail);
+      for (const value of Object.values(input.expected)) assert.ok(!JSON.stringify(pending).includes(value));
+      state.transactions.get(order.providerId).status = "paid";
+      const paid = await (await readStatus(state, created.orderToken)).json();
+      assert.equal(paid.notification, "sent");
+      assert.equal(paid.username, input.expected.username);
+      const message = JSON.parse(state.calls.filter((call) => call.url.includes("emailjs")).at(-1).init.body);
+      assert.deepEqual(message, {
+        service_id: state.env.EMAILJS_SERVICE_ID,
+        template_id: state.env.EMAILJS_TEMPLATE_ID,
+        user_id: state.env.EMAILJS_PUBLIC_KEY,
+        accessToken: state.env.EMAILJS_PRIVATE_KEY,
+        template_params: {
+          service_type: "Recharge TikTok Coins",
+          order_id: order.orderId,
+          tiktok_username: input.expected.username,
+          tiktok_password: input.expected.password,
+          client_email: input.expected.email,
+          client_whatsapp: input.expected.whatsapp,
+          coins_amount: input.coins,
+          price: input.price,
+          date: new Date(order.createdAt).toISOString(),
+        },
+      });
+      assert.ok(!state.values.has(`${storageKey}:customer`));
+      for (const value of [input.expected.password, input.expected.email, input.expected.whatsapp]) assert.ok(!JSON.stringify(paid).includes(value));
+    }
+    assert.equal(state.calls.filter((call) => call.url.includes("emailjs")).length, 2);
   });
 
   it("keeps only an authenticated encrypted account label after notification, with the original seven-day expiry", async (t) => {

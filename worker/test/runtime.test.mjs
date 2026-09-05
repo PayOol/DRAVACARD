@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions, Response as RuntimeResponse } from "miniflare";
 
+const VISA_PRICE = 100;
 const TEST_CUSTOMER = { email: " client@example.com ", whatsapp: "+237 (699) 000-000" };
 
 async function storedCreationDate(runtime, orderToken) {
@@ -71,14 +72,14 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
           }
           assert.deepEqual(Object.keys(createdBody).sort(), ["amount", "currency", "description", "return_url", "cancel_url", "metadata", "customer_name", "customer_email", "customer_phone"].sort());
           return RuntimeResponse.json({ success: true, data: {
-            id: "checkout_runtime", payment_url: paymentUrl, amount: 5000, currency: "XOF",
+            id: "checkout_runtime", payment_url: paymentUrl, amount: VISA_PRICE, currency: "XOF",
             status: "pending", return_url: createdBody.return_url,
           } }, { status: 201 });
         }
         assert.equal(request.method, "GET");
         assert.equal(request.url, "https://leekpay.fr/api/v1/checkout/checkout_runtime");
         return RuntimeResponse.json({ success: true, data: {
-          id: "checkout_runtime", amount: 5000, currency: "XOF", status: "paid",
+          id: "checkout_runtime", amount: VISA_PRICE, currency: "XOF", status: "paid",
           created_at: "2000-01-01T00:00:00Z", createdAt: 123,
         } });
       }
@@ -148,7 +149,7 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
     assert.match(createdPayload.orderToken, /^[a-f0-9]{64}$/);
     assert.deepEqual(Object.keys(createdPayload).sort(), ["checkoutUrl", "orderToken"]);
     assert.ok(!JSON.stringify(createdPayload).includes("Client (client@example.com)"));
-    assert.equal(createdBody.amount, 5000);
+    assert.equal(createdBody.amount, VISA_PRICE);
     assert.equal(createdBody.currency, "XOF");
     const checked = await runtime.dispatchFetch("https://runtime.example/api/orders/status", {
       method: "POST", headers, body: JSON.stringify({ orderToken: createdPayload.orderToken }),
@@ -157,7 +158,7 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
     assert.equal(checked.status, 200, JSON.stringify(checkedPayload));
     assert.deepEqual(checkedPayload, {
       service: "cards", provider: "leekpay", orderId: "checkout_runtime", transactionReference: "checkout_runtime",
-      status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF",
+      status: "paid", verified: true, productId: "visa-basic", amount: VISA_PRICE, currency: "XOF",
       createdAt: await storedCreationDate(runtime, createdPayload.orderToken),
     });
     assert.equal(outboundCalls, 2);
@@ -181,7 +182,7 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
       assert.equal(localCheckout.service, "cards");
       assert.equal(localCheckout.provider, "leekpay");
       assert.equal(localCheckout.checkoutUrl, paymentUrl);
-      assert.equal(createdBody.amount, 5000);
+      assert.equal(createdBody.amount, VISA_PRICE);
       assert.equal(createdBody.currency, "XOF");
       assert.equal(createdBody.return_url, `https://drava.click/payment-success/#order=${localCheckout.orderToken}`);
       assert.equal(createdBody.cancel_url, `https://drava.click/payment-failure/#order=${localCheckout.orderToken}`);
@@ -193,7 +194,7 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
       assert.equal(localStatus.headers.get("Access-Control-Allow-Origin"), origin);
       assert.deepEqual(await localStatus.json(), {
         service: "cards", provider: "leekpay", orderId: createdBody.metadata.orderId, transactionReference: "checkout_runtime",
-      status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF",
+      status: "paid", verified: true, productId: "visa-basic", amount: VISA_PRICE, currency: "XOF",
         createdAt: await storedCreationDate(runtime, localCheckout.orderToken),
       });
     }
