@@ -13,11 +13,16 @@ const Footer = () => {
     <footer className="border-t border-gray-100 bg-gray-50 dark:border-slate-700 dark:bg-[#111c2e]">
       <div className="container mx-auto flex flex-col items-center justify-between gap-6 px-4 py-8 md:flex-row md:px-6">
         <div className="flex flex-col items-center md:items-start">
-          <Link href="/" aria-label="DRAVA">
+          <Link href="/" aria-label="DRAVA" className="flex items-center">
             <img
-              src={withBasePath("/images/drava-logo-transparent.svg")}
+              src={withBasePath("/images/drava-wordmark.svg")}
               alt="DRAVA Logo"
-              className="desktop-brand-logo h-24 w-auto"
+              className="desktop-brand-logo dark:hidden h-10 w-auto"
+            />
+            <img
+              src={withBasePath("/images/drava-wordmark-dark.svg")}
+              alt="DRAVA Logo"
+              className="desktop-brand-logo hidden dark:block h-10 w-auto"
             />
           </Link>
           <p className="text-center text-sm text-gray-600 md:text-left dark:text-slate-300">

@@ -140,25 +140,22 @@
 
   .drava-logo {
     position: relative;
-    display: block;
-    width: 60px;
-    aspect-ratio: 15 / 7;
+    display: flex;
+    align-items: center;
+    width: 44px;
+    aspect-ratio: 280 / 207;
     flex-shrink: 0;
-    overflow: hidden;
   }
 
   .drava-logo-image {
-    /* Frame the original SVG's transparent margins without redrawing it. */
-    position: absolute;
-    top: -55.3571%;
-    left: -23.3333%;
-    width: 146.6667%;
-    max-width: none;
-    height: auto;
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
   }
 
   .app-page-header .drava-logo {
-    width: 60px;
+    width: 44px;
   }
 
   .app-header-title {
@@ -734,9 +731,7 @@
   }
 
   .app-card-art-top .drava-logo {
-    width: 84px;
-    border-radius: 6px;
-    background: rgb(255 255 255 / 96%);
+    width: 46px;
   }
 
   .app-card-art-top > span:last-child {
@@ -798,8 +793,7 @@
   }
 
   .app-card-art--compact .drava-logo {
-    width: 20px;
-    border-radius: 2px;
+    width: 22px;
   }
 
   .app-card-art--compact .app-card-art-bottom {

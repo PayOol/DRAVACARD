@@ -1,31 +1,3 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
-  <defs>
-    <!-- Dégradé holographique dynamique -->
-    <linearGradient id="holoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#7b2ff7">
-        <animate attributeName="stop-color" values="#7b2ff7; #2ec9f3; #41e97d; #7b2ff7" dur="8s" repeatCount="indefinite" calcMode="spline" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1" />
-      </stop>
-      <stop offset="50%" stop-color="#0cb9ed">
-        <animate attributeName="stop-color" values="#0cb9ed; #41e97d; #7b2ff7; #0cb9ed" dur="8s" repeatCount="indefinite" calcMode="spline" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1" />
-      </stop>
-      <stop offset="100%" stop-color="#41e97d">
-        <animate attributeName="stop-color" values="#41e97d; #7b2ff7; #2ec9f3; #41e97d" dur="8s" repeatCount="indefinite" calcMode="spline" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1" />
-      </stop>
-    </linearGradient>
-    
-    <!-- Filtre pour l'effet de flou dynamique -->
-    <filter id="glow" x="-30%" y="-30%" width="160%">
-      <feGaussianBlur stdDeviation="0.8" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-    </filter>
-  </defs>
-  
-  <!-- Fond avec bordure arrondie -->
-  <rect width="16" height="16" rx="3" fill="white" />
-  
-  <!-- Lettre D stylisée -->
-  <g transform="translate(3, 3) scale(0.35)">
-    <text x="15" y="20" font-family="'Righteous', sans-serif" font-size="24" font-weight="700" text-anchor="middle" fill="#000000">D</text>
-    <text x="15" y="20" font-family="'Righteous', sans-serif" font-size="24" font-weight="700" text-anchor="middle" fill="url(#holoGradient)" opacity="0.7" filter="url(#glow)">D</text>
-  </g>
+  <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAYAAABr5z2BAAACb0lEQVR42mXSzYtVZRzA8e/veZ5zz7n3ajo2eovMcUbKIHpBJXDbpkUEs2nVy6agRRFEK1eXQdB0/gAX2i4IDIxCFyKCIKYQgi2aOwRDo87MveV0z9w79+Wce87z/FwNFH3+gy98BVWDSJhbGR1Ks7iVbZu4+CcoqYqmwBaQgVjxcYPOvtfMzy/OjM7+MlPfQNUYdkyBi4lNDas148qatb5qrU+s9cbaMpdK9kQO9db54nGa3HljkL+JSHAANNVEeWbimva9UtF60CJX0YlCoUIpIWB2BTUMW35SZvbw4IH96ZUrekxoqmFBAoCqOoBb/Nc5sPfOcHQ4DmfKYN7V1E/E20qi4ZwA7Fkcz+a15K3Q2sxp9wy9LnarDb1HqsM0iqOi6D08/eP7Ta1cWfdLvm/n2CxwpvjTNX7XV9ONcLvwTFGZhgPT0J6h6DSguh/TXcHlq5/SVPfDAkU8n13zk/qXDLo+WA66+Fk+r+02y/kTPy5FIu8UxStlUqDTUZSMLg5ufPQdtz5MYLbUbHU/4xxCX4RakJ1O+Vez8n8CPPPe8tvbW3o1TEIFHxuXVJccqNBEnp/rT/UfpafKlTSK2n8nJ69fOnXn5uV3tMNJ/hiW5cPuwe32cD5oGUFZSDxl433Vbx1NhAUJ4xuj+jA89zU0MK31z+62Ln+SdTnvA+DqkBioFlCUBdGByEX+1xNf7b0gOyfOtPXw5kb4TVrZx7s+qL2UrrE4WQ6eNUXbATojoecNI0uUFfd3N6bnu5dkTVAVRPT4lh4Rx8vtktdHwjejVZ+Vm2L1L4SOqnS9l+3wOBq672dfcItLCzKgqeYpyyJCxBAturcAAAAASUVORK5CYII=" x="0" y="2" width="16" height="12" />
 </svg>

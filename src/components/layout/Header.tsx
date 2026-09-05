@@ -13,11 +13,16 @@ const Header = () => {
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-gray-100 bg-white/90 backdrop-blur-sm dark:border-slate-700 dark:bg-[#111c2e]/95">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 md:h-20 md:px-6">
-        <Link href="/" aria-label="DRAVA">
+        <Link href="/" aria-label="DRAVA" className="flex items-center">
           <img
-            src={withBasePath("/images/drava-logo-transparent.svg")}
+            src={withBasePath("/images/drava-wordmark.svg")}
             alt="DRAVA Logo"
-            className="desktop-brand-logo h-24 w-auto"
+            className="desktop-brand-logo dark:hidden h-12 w-auto"
+          />
+          <img
+            src={withBasePath("/images/drava-wordmark-dark.svg")}
+            alt="DRAVA Logo"
+            className="desktop-brand-logo hidden dark:block h-12 w-auto"
           />
         </Link>
 

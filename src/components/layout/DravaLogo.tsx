@@ -9,8 +9,8 @@ export default function DravaLogo({
         className="drava-logo-image"
         src={withBasePath("/images/drava-logo-transparent.svg")}
         alt={decorative ? "" : "DRAVA"}
-        width={500}
-        height={300}
+        width={280}
+        height={207}
       />
     </span>
   );
