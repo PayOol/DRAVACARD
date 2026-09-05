@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions, Response as RuntimeResponse } from "miniflare";
 
-const VISA_PRICE = 100;
+const VISA_PRICE = 5000;
 const TEST_CUSTOMER = { email: " client@example.com ", whatsapp: "+237 (699) 000-000" };
 
 async function storedCreationDate(runtime, orderToken) {

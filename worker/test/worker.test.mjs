@@ -5,7 +5,7 @@ import worker from "../src/index.ts";
 const ORIGIN = "https://drava.click";
 const API = "https://leekpay.fr/api/v1/checkout";
 const MOCK_CREDENTIAL = "test-only-provider-credential";
-const VISA_PRICE = 100;
+const VISA_PRICE = 5000;
 const TEST_CUSTOMER = { email: "client@example.com", whatsapp: "+237699000000" };
 
 function setup(t, upstream) {

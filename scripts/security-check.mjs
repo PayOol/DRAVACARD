@@ -1269,7 +1269,7 @@ function validateWorkerSource(source) {
   if (!/env\.LEEKPAY_SECRET_KEY/.test(source) || !/Authorization:\s*`Bearer \$\{env\.LEEKPAY_SECRET_KEY\}`/.test(source)) failures.push('Worker must authenticate LeekPay calls with env.LEEKPAY_SECRET_KEY')
   if (/\bXAF\b/.test(source) || !/CURRENCY\s*=\s*["']XOF["']/.test(source)) failures.push('Worker must use XOF only')
   const products = [
-    ['visa-basic', 100],
+    ['visa-basic', 5000],
     ['mastercard-basic', 6000],
     ['mastercard-premium', 8500],
     ['mastercard-platinum', 15000],

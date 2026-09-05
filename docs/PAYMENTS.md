@@ -2,11 +2,11 @@
 
 Les cartes, les pièces TikTok et les futurs services utilisent le même moteur de paiement. Le service fournit le produit, les coordonnées nécessaires et son traitement après paiement ; le prestataire reçoit une intention de paiement normalisée, sans connaître le fonctionnement du catalogue.
 
-## Tarifs de test demandés le 5 septembre 2026
+## Tarifs rétablis le 5 septembre 2026
 
-La carte `visa-basic` et le pack TikTok `mini` de 100 pièces sans bonus sont fixés à **100 FCFA chacun**, dans les catalogues mobile/desktop partagés et dans le Worker. Les autres cartes, packs et la formule personnalisée sont inchangés. Ces tarifs concernent les nouvelles commandes ; une commande existante conserve son montant enregistré pour la vérification et le reçu.
+La carte `visa-basic` est fixée à **5 000 FCFA** et le pack TikTok `mini` de 100 pièces sans bonus à **1 124 FCFA**, dans les catalogues mobile/desktop partagés et dans le Worker. Les autres cartes, packs et la formule personnalisée sont inchangés. Ces tarifs concernent les nouvelles commandes ; une commande existante conserve son montant enregistré pour la vérification et le reçu, y compris les anciennes commandes à 100 FCFA.
 
-Pour rétablir les tarifs habituels après les tests : Visa Basique 5 000 FCFA dans `src/lib/catalog.ts` et `worker/src/services.ts`, Mini 1 124 FCFA dans `src/lib/tiktok-catalog.ts` et `worker/src/tiktok.ts`, puis aligner les contrôles de tarifs, publier le site et déployer le Worker. Aucun rétablissement automatique n’est programmé.
+Les contrôles de tarifs correspondent à ces montants. Les commandes historiques à 100 FCFA restent vérifiables contre leur montant enregistré ; le Worker ne recalcule jamais leur prix avec le catalogue courant.
 
 ## Répartition
 

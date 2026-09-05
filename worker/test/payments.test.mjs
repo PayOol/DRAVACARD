@@ -62,7 +62,7 @@ describe("one platform payment engine (all external calls mocked)", () => {
       assert.equal(order.productId, service === "cards" ? "visa-basic" : "boost");
       assert.equal(order.provider, provider);
       assert.equal(order.status, "pending");
-      assert.equal(order.amount, service === "cards" ? 100 : 7900);
+      assert.equal(order.amount, service === "cards" ? 5000 : 7900);
       assert.equal(order.currency, service === "cards" ? "XOF" : "XAF");
       assert.equal(Object.hasOwn(order, "checkoutUrl"), provider === "leekpay");
       assert.equal(Object.hasOwn(order, "providerLink"), provider === "sebpay");
@@ -108,7 +108,7 @@ describe("one platform payment engine (all external calls mocked)", () => {
     assert.equal(state.calls.length, 0);
     const countries = await worker.fetch(request("/api/providers/sebpay/countries"), state.env);
     assert.equal(countries.status, 200);
-    for (const [service, productId, amount] of [["cards", "visa-basic", 100], ["tiktok", "boost", 7900]]) {
+    for (const [service, productId, amount] of [["cards", "visa-basic", 5000], ["tiktok", "boost", 7900]]) {
       const quote = await worker.fetch(request("/api/providers/sebpay/quote", { service, productId, country: "CM", operator: "mtn" }), state.env);
       assert.equal(quote.status, 200);
       assert.equal((await quote.json()).amount, amount);
@@ -167,12 +167,12 @@ describe("one platform payment engine (all external calls mocked)", () => {
     assert.equal((await worker.fetch(request("/api/tiktok/orders/status", { orderToken: legacyCard.orderToken }), state.env)).status, 404);
   });
 
-  it("retains pre-test VISA and Mini prices in version-one and version-two orders after new checkout prices become 100", async (t) => {
+  it("retains historical 100 FCFA VISA and Mini prices in version-one and version-two orders after restoring canonical prices", async (t) => {
     const state = setup(t);
-    for (const [service, productId, historicalAmount] of [["cards", "visa-basic", 5000], ["tiktok", "mini", 1124]]) {
+    for (const [service, productId, historicalAmount, canonicalAmount] of [["cards", "visa-basic", 100, 5000], ["tiktok", "mini", 100, 1124]]) {
       for (const version of [1, 2]) {
         const created = await create(state, { ...selection(service), productId });
-        assert.equal(created.amount, 100);
+        assert.equal(created.amount, canonicalAmount);
         if (service === "tiktok") assert.deepEqual([created.coins, created.bonus], [100, 0]);
         const { key, order } = await record(state, created.orderToken, service);
         let historical = { ...order, version, amount: historicalAmount, providerAmount: historicalAmount };
@@ -189,8 +189,8 @@ describe("one platform payment engine (all external calls mocked)", () => {
         assert.equal(paid.verified, true);
         assert.equal(paid.amount, historicalAmount);
         assert.equal(state.values.get(key), snapshot);
-        // A payment matching today's test price must not validate an older bill.
-        state.transactions.get(order.providerId).amount = 100;
+        // A payment matching today's canonical price must not validate an older bill.
+        state.transactions.get(order.providerId).amount = canonicalAmount;
         const mismatch = await worker.fetch(request("/api/orders/status", { orderToken: created.orderToken }), state.env);
         assert.equal(mismatch.status, 502);
         assert.equal((await mismatch.json()).error.code, "provider_invalid_response");

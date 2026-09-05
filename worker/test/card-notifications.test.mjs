@@ -12,7 +12,7 @@ const NORMALIZED_CUSTOMER = {
   whatsapp: "+237699123456",
 };
 const PRODUCTS = {
-  "visa-basic": { amount: 100, name: "VISA BASIQUE" },
+  "visa-basic": { amount: 5000, name: "VISA BASIQUE" },
   "mastercard-basic": { amount: 6000, name: "MASTERCARD BASIQUE" },
   "mastercard-premium": { amount: 8500, name: "MASTERCARD PREMIUM" },
   "mastercard-platinum": { amount: 15000, name: "MASTERCARD PLATINIUM" },

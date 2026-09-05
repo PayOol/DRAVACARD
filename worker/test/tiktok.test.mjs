@@ -33,7 +33,7 @@ describe("TikTok orders (isolated KV namespace; all external calls mocked)", () 
   it("uses all six canonical packs and custom formula; stores only encrypted customer data", async (t) => {
     const state = setup(t);
     const packs = [
-      ["mini", 100, 0, 100], ["starter", 350, 0, 3900], ["boost", 700, 70, 7900],
+      ["mini", 100, 0, 1124], ["starter", 350, 0, 3900], ["boost", 700, 70, 7900],
       ["live", 1400, 140, 15700], ["creator", 3500, 350, 39300], ["max", 7000, 700, 78700],
       ["custom", 71, 0, Math.round(71 * 11.24)], ["custom", 1_000_000, 0, 11_240_000],
     ];

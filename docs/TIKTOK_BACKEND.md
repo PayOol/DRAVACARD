@@ -21,7 +21,7 @@ Les deux champs facultatifs du reçu restent en mémoire sur la page vérifiée 
 
 ## Configuration nécessaire avant activation
 
-Le pack `mini` de 100 pièces applique actuellement le tarif de test de 100 FCFA demandé par le marchand. Les autres packs et la formule personnalisée conservent les tarifs UpCoin ; voir [les tarifs de test et leur rétablissement](PAYMENTS.md#tarifs-de-test-demandés-le-5-septembre-2026).
+Le pack `mini` de 100 pièces applique le tarif rétabli de 1 124 FCFA. Les autres packs et la formule personnalisée conservent les tarifs UpCoin. Les commandes historiques créées à 100 FCFA restent vérifiées contre leur montant enregistré.
 
 La configuration de déploiement `worker/wrangler.jsonc` exige uniquement `LEEKPAY_SECRET_KEY`, comme auparavant. Les noms des secrets TikTok optionnels sont déclarés dans `worker/wrangler.tiktok-types.jsonc`, utilisé exclusivement par la génération de types et jamais pour un déploiement. `npm --prefix worker run types` génère les deux interfaces et le module TikTok utilise `Env & Partial<TikTokSecrets>` ; l’absence d’un prestataire ou du service de notification ne bloque donc pas le déploiement des cartes. Les valeurs restent dans les secrets Worker ou `.dev.vars.development` ignoré par Git. Aucun secret, compte ou identifiant d’envoi réel d’UpCoin n’a été copié.
 

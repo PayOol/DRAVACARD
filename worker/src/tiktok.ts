@@ -16,7 +16,7 @@ import {
 } from "./notifications.ts";
 import { ApiError, isObject, nonempty } from "./shared.ts";
 const PACKS = Object.freeze({
-  mini: { coins: 100, bonus: 0, amount: 100 },
+  mini: { coins: 100, bonus: 0, amount: 1124 },
   starter: { coins: 350, bonus: 0, amount: 3900 },
   boost: { coins: 700, bonus: 70, amount: 7900 },
   live: { coins: 1400, bonus: 140, amount: 15700 },

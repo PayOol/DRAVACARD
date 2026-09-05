@@ -31,7 +31,7 @@ export const cards: CatalogCard[] = [
       fr: "VISA BASIQUE",
       en: "BASIC VISA",
     },
-    price: "100",
+    price: "5000",
     currency: "Fcfa",
     icon: "visa",
     color: "blue",
