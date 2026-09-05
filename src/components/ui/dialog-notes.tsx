@@ -2,7 +2,6 @@
 
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/lib/language-context";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 interface UsageNotesProps {
@@ -20,11 +19,11 @@ export function UsageNotes({ onClose, onAccept }: UsageNotesProps) {
           <h3 className="mb-2 font-bold text-blue-800">
             {language === "fr" ? "CARTES VIRTUELLES" : "VIRTUAL CARDS"}
           </h3>
-          <DialogPrimitive.Description className="text-sm text-blue-700">
+          <p className="text-sm text-blue-700">
             {language === "fr"
               ? "Nous émettons des cartes virtuelles Mastercard et Visa (USD) qui fonctionnent sur toutes les plateformes à l’exception des plateformes de paris sportifs, de crypto monnaie, Wise et des films pour adulte."
               : "We issue Mastercard and Visa virtual cards (USD) that work on all platforms except sports betting platforms, cryptocurrency, Wise, and adult content sites."}
-          </DialogPrimitive.Description>
+          </p>
         </div>
 
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">

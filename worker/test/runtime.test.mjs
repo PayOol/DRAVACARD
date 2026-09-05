@@ -1,13 +1,22 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { stripTypeScriptTypes } from "node:module";
 import { it } from "node:test";
+import { fileURLToPath } from "node:url";
+import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions, Response as RuntimeResponse } from "miniflare";
+
+const TEST_CUSTOMER = { email: " client@example.com ", whatsapp: "+237 (699) 000-000" };
 
 // Miniflare/workerd ships with our exact pinned Wrangler version. Every outbound
 // fetch is intercepted locally; these tests never contact a payment provider.
 it("runs the Worker in workerd with actual KV/rate bindings and blocked external network", { timeout: 30_000 }, async () => {
-  const source = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const bundle = await build({
+    entryPoints: [fileURLToPath(new URL("../src/index.ts", import.meta.url))],
+    bundle: true,
+    format: "esm",
+    platform: "browser",
+    write: false,
+  });
   const config = JSON.parse(await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
   assert.equal(config.vars.ENVIRONMENT, "production");
   assert.deepEqual(config.vars.LOCAL_ORIGINS, ["http://127.0.0.1:3000", "http://localhost:3000"]);
@@ -20,7 +29,7 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
   const runtime = new Miniflare(convertV4MiniflareOptions({
     name: "drava-payment-runtime-test",
     modules: true,
-    script: stripTypeScriptTypes(source),
+    script: bundle.outputFiles[0].text,
     compatibilityDate: config.compatibility_date,
     compatibilityFlags: config.compatibility_flags,
     cf: false,
@@ -39,6 +48,10 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
         if (request.method === "POST") {
           assert.equal(request.url, "https://leekpay.fr/api/v1/checkout");
           createdBody = await request.json();
+          assert.equal(createdBody.customer_email, "client@example.com");
+          assert.equal(createdBody.customer_phone, "+237699000000");
+          assert.deepEqual(createdBody.metadata, { productId: "visa-basic" });
+          assert.deepEqual(Object.keys(createdBody).sort(), ["amount", "currency", "description", "return_url", "cancel_url", "metadata", "customer_email", "customer_phone"].sort());
           return RuntimeResponse.json({ success: true, data: {
             id: "checkout_runtime", payment_url: "https://leekpay.me/pay_runtime", amount: 5000, currency: "XOF",
             status: "pending", return_url: createdBody.return_url,
@@ -66,13 +79,23 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
     });
     assert.equal(invalid.status, 400);
     assert.deepEqual(await invalid.json(), { error: { code: "invalid_product" } });
+    const missingCustomer = await runtime.dispatchFetch("https://runtime.example/api/checkout", {
+      method: "POST", headers, body: JSON.stringify({ productId: "visa-basic" }),
+    });
+    assert.equal(missingCustomer.status, 400);
+    assert.deepEqual(await missingCustomer.json(), { error: { code: "invalid_product" } });
+    const malformedCustomer = await runtime.dispatchFetch("https://runtime.example/api/checkout", {
+      method: "POST", headers, body: JSON.stringify({ productId: "visa-basic", customer: { email: "bad", whatsapp: "699000000" } }),
+    });
+    assert.equal(malformedCustomer.status, 400);
+    assert.deepEqual(await malformedCustomer.json(), { error: { code: "invalid_customer" } });
     const unknown = await runtime.dispatchFetch("https://runtime.example/api/orders/status", {
       method: "POST", headers, body: JSON.stringify({ orderToken: "a".repeat(64) }),
     });
     assert.equal(unknown.status, 404);
     assert.deepEqual(await unknown.json(), { error: { code: "order_not_found" } });
     const forbidden = await runtime.dispatchFetch("https://runtime.example/api/checkout", {
-      method: "POST", headers: { ...headers, Origin: "https://attacker.example" }, body: JSON.stringify({ productId: "visa-basic" }),
+      method: "POST", headers: { ...headers, Origin: "https://attacker.example" }, body: JSON.stringify({ productId: "visa-basic", customer: TEST_CUSTOMER }),
     });
     assert.equal(forbidden.status, 403);
     assert.equal(forbidden.headers.get("Access-Control-Allow-Origin"), null);
@@ -86,12 +109,13 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
     assert.equal(outboundCalls, 0);
     allowMockCheckout = true;
     const created = await runtime.dispatchFetch("https://runtime.example/api/checkout", {
-      method: "POST", headers, body: JSON.stringify({ productId: "visa-basic" }),
+      method: "POST", headers, body: JSON.stringify({ productId: "visa-basic", customer: TEST_CUSTOMER }),
     });
     const createdPayload = await created.json();
     assert.equal(created.status, 201, JSON.stringify(createdPayload));
     assert.equal(createdPayload.checkoutUrl, "https://leekpay.me/pay_runtime");
     assert.match(createdPayload.orderToken, /^[a-f0-9]{64}$/);
+    assert.deepEqual(Object.keys(createdPayload).sort(), ["checkoutUrl", "orderToken"]);
     assert.equal(createdBody.amount, 5000);
     assert.equal(createdBody.currency, "XOF");
     const checked = await runtime.dispatchFetch("https://runtime.example/api/orders/status", {
@@ -112,7 +136,7 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
         assert.equal(localPreflight.headers.get("Access-Control-Allow-Credentials"), null);
       }
       const localCreate = await runtime.dispatchFetch("https://runtime.example/api/checkout", {
-        method: "POST", headers: localHeaders, body: JSON.stringify({ productId: "visa-basic" }),
+        method: "POST", headers: localHeaders, body: JSON.stringify({ productId: "visa-basic", customer: TEST_CUSTOMER }),
       });
       assert.equal(localCreate.status, 201);
       assert.equal(localCreate.headers.get("Access-Control-Allow-Origin"), origin);
@@ -130,9 +154,18 @@ it("runs the Worker in workerd with actual KV/rate bindings and blocked external
       assert.deepEqual(await localStatus.json(), { status: "paid", verified: true, productId: "visa-basic", amount: 5000, currency: "XOF" });
     }
     assert.equal(outboundCalls, 6);
+    const orders = await runtime.getKVNamespace("ORDERS");
+    const orderKeys = await orders.list();
+    assert.equal(orderKeys.keys.length, 3);
+    for (const key of orderKeys.keys) {
+      const record = await orders.get(key.name);
+      assert.ok(!record.includes("client@example.com"));
+      assert.ok(!record.includes("237699000000"));
+      assert.ok(!record.includes("customer"));
+    }
     simulateRedirect = true;
     const redirected = await runtime.dispatchFetch("https://runtime.example/api/checkout", {
-      method: "POST", headers, body: JSON.stringify({ productId: "visa-basic" }),
+      method: "POST", headers, body: JSON.stringify({ productId: "visa-basic", customer: TEST_CUSTOMER }),
     });
     assert.equal(redirected.status, 502);
     assert.deepEqual(await redirected.json(), { error: { code: "provider_unavailable" } });

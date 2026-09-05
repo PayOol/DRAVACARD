@@ -1,3 +1,8 @@
+import {
+  type PaymentCustomer,
+  normalizePaymentCustomer,
+} from "./payment-customer.ts";
+
 export const LEEKPAY_API_BASE =
   "https://drava-leekpay.sebpay-proxy.workers.dev";
 export const LEEKPAY_CHECKOUT_CURRENCY = "XOF" as const;
@@ -94,7 +99,7 @@ function isSafeCheckoutUrl(value: unknown): value is string {
 
 async function requestPaymentApi(
   path: "/api/checkout" | "/api/orders/status",
-  body: { productId: string } | { orderToken: string },
+  body: { productId: string; customer: PaymentCustomer } | { orderToken: string },
   signal?: AbortSignal,
 ): Promise<unknown> {
   const controller = new AbortController();
@@ -146,10 +151,23 @@ async function requestPaymentApi(
 
 export async function createLeekPayCheckout(
   productId: string,
+  customer: PaymentCustomer,
   signal?: AbortSignal,
 ): Promise<LeekPayCheckout> {
   if (!productIds.has(productId)) throw new PaymentApiError(false);
-  const data = await requestPaymentApi("/api/checkout", { productId }, signal);
+  const normalizedCustomer = normalizePaymentCustomer(customer);
+  if (!normalizedCustomer) throw new PaymentApiError(false);
+  const data = await requestPaymentApi(
+    "/api/checkout",
+    {
+      productId,
+      customer: {
+        email: normalizedCustomer.email,
+        whatsapp: normalizedCustomer.whatsapp,
+      },
+    },
+    signal,
+  );
   if (
     !isRecord(data) ||
     !isSafeCheckoutUrl(data.checkoutUrl) ||

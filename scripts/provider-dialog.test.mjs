@@ -10,16 +10,36 @@ const checkoutPath = new URL(
   "../src/components/ui/dialog-checkout.tsx",
   import.meta.url,
 );
+const customerPath = new URL(
+  "../src/components/ui/dialog-customer.tsx",
+  import.meta.url,
+);
 const notesPath = new URL(
   "../src/components/ui/dialog-notes.tsx",
   import.meta.url,
 );
+const paymentCustomerPath = new URL(
+  "../src/lib/payment-customer.ts",
+  import.meta.url,
+);
 const pagePath = new URL("../src/app/page.tsx", import.meta.url);
-const [providerSource, checkoutSource, notesSource, pageSource] =
+const [
+  providerSource,
+  checkoutSource,
+  customerSource,
+  notesSource,
+  paymentCustomerSource,
+  pageSource,
+] =
   await Promise.all(
-    [providerPath, checkoutPath, notesPath, pagePath].map((file) =>
-      readFile(file, "utf8"),
-    ),
+    [
+      providerPath,
+      checkoutPath,
+      customerPath,
+      notesPath,
+      paymentCustomerPath,
+      pagePath,
+    ].map((file) => readFile(file, "utf8")),
   );
 
 function blockAround(source, marker, opening, closing) {
@@ -103,12 +123,20 @@ test("only the separate global Pay button starts checkout", () => {
   );
   assert.match(
     checkoutHandler,
-    /createLeekPayCheckout\(card\.id, controller\.signal\)/,
+    /createLeekPayCheckout\([\s\S]*?card\.id,[\s\S]*?customer,[\s\S]*?controller\.signal,[\s\S]*?\)/,
   );
   assert.match(
     checkoutHandler,
     /window\.location\.assign\(checkout\.checkoutUrl\)/,
   );
+  const backButton = blockAround(
+    providerSource,
+    "onClick={onBack}",
+    "<Button",
+    "</Button>",
+  );
+  assert.match(backButton, /disabled=\{isProcessing\}/);
+  assert.match(backButton, /type="button"/);
 });
 
 test("the provider modal cannot bypass the reviewed payment adapter", () => {
@@ -121,7 +149,7 @@ test("the provider modal cannot bypass the reviewed payment adapter", () => {
   assert.doesNotMatch(providerSource, /<(?:form|input|select|textarea)\b/i);
 });
 
-test("one Radix dialog owns the consent-to-provider sequence", () => {
+test("one Radix dialog owns the consent-to-customer-to-provider sequence", () => {
   for (const primitive of ["Root", "Portal", "Overlay", "Content"]) {
     const openingTag = new RegExp(`<DialogPrimitive\\.${primitive}\\b`, "g");
     assert.equal(
@@ -139,6 +167,11 @@ test("one Radix dialog owns the consent-to-provider sequence", () => {
       0,
       `PaymentProviders must not own Radix ${primitive}`,
     );
+    assert.equal(
+      customerSource.match(openingTag)?.length ?? 0,
+      0,
+      `CustomerDetails must not own Radix ${primitive}`,
+    );
   }
 
   const compactCheckout = checkoutSource.replace(/\s+/g, "");
@@ -149,13 +182,59 @@ test("one Radix dialog owns the consent-to-provider sequence", () => {
   );
   assert.match(
     compactCheckout,
-    /<UsageNotesonAccept=\{\(\)=>setStep\("providers"\)\}onClose=\{onClose\}\/>/,
+    /typeCheckoutStep="notes"\|"customer"\|"providers"/,
   );
-  assert.match(compactCheckout, /<PaymentProviderscard=\{card\}\/>/);
+  assert.match(
+    compactCheckout,
+    /<UsageNotesonAccept=\{\(\)=>setStep\("customer"\)\}onClose=\{onClose\}\/>/,
+  );
+  assert.match(
+    compactCheckout,
+    /<CustomerDetailsvalue=\{customer\}onChange=\{setCustomer\}onNext=\{\(details\)=>\{setCustomer\(details\);setStep\("providers"\);\}\}onBack=\{\(\)=>setStep\("notes"\)\}\/>/,
+  );
+  assert.match(
+    compactCheckout,
+    /<PaymentProviderscard=\{card\}customer=\{validCustomer\}onBack=\{\(\)=>setStep\("customer"\)\}\/>/,
+  );
   assert.doesNotMatch(
     checkoutSource,
     /createLeekPayCheckout|handleCheckout|\bfetch\s*\(|window\.location/,
   );
+  assert.match(compactCheckout, /<AnimatePresenceinitial=\{false\}mode="wait">/);
+  assert.match(
+    compactCheckout,
+    /<CheckoutPanelkey=\{step\}reducedMotion=\{reducedMotion\}>/,
+  );
+  assert.equal(checkoutSource.match(/key=\{step\}/g)?.length, 1);
+  assert.match(checkoutSource, /useReducedMotion\(\) === true/);
+  assert.match(
+    compactCheckout,
+    /useLayoutEffect\(\(\)=>\{if\(panelRef\.current\)panelRef\.current\.inert=!isPresent;\},\[isPresent\]\)/,
+  );
+  assert.match(compactCheckout, /aria-hidden=\{!isPresent\|\|undefined\}/);
+  assert.match(compactCheckout, /ref=\{panelRef\}/);
+});
+
+test("customer collection is limited to validated email and WhatsApp", () => {
+  assert.equal(customerSource.match(/<input\b/g)?.length, 2);
+  assert.match(
+    customerSource,
+    /name="email"[\s\S]*?type="email"[\s\S]*?maxLength=\{254\}/,
+  );
+  assert.match(
+    customerSource,
+    /name="whatsapp"[\s\S]*?type="tel"[\s\S]*?maxLength=\{40\}/,
+  );
+  assert.match(customerSource, /normalizePaymentCustomer\(value\)/);
+  assert.match(customerSource, /event\.preventDefault\(\)/);
+  assert.match(customerSource, /onNext\(customer\)/);
+  assert.doesNotMatch(
+    customerSource,
+    /\bfetch\s*\(|createLeekPayCheckout|localStorage|sessionStorage|window\.location/,
+  );
+  assert.match(paymentCustomerSource, /Reflect\.ownKeys\(value\)/);
+  assert.match(paymentCustomerSource, /return \{ email, whatsapp \};/);
+  assert.doesNotMatch(providerSource, /customer\.(?:email|whatsapp)/);
 });
 
 test("the catalogue mounts only the unified checkout wrapper", () => {

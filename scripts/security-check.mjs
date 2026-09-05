@@ -17,8 +17,10 @@ const proxyOrigin = 'https://drava-leekpay.sebpay-proxy.workers.dev'
 const providerCheckoutApi = 'https://leekpay.fr/api/v1/checkout'
 const frontendAdapterPath = 'src/lib/leekpay.ts'
 const checkoutDialogPath = 'src/components/ui/dialog-checkout.tsx'
+const customerDialogPath = 'src/components/ui/dialog-customer.tsx'
 const providerDialogPath = 'src/components/ui/dialog-providers.tsx'
 const usageNotesDialogPath = 'src/components/ui/dialog-notes.tsx'
+const paymentCustomerPath = 'src/lib/payment-customer.ts'
 const paymentResultPath = 'src/components/payment/PaymentResult.tsx'
 const workerSourcePath = 'worker/src/index.ts'
 const workerConfigPath = 'worker/wrangler.jsonc'
@@ -49,10 +51,12 @@ const requiredPaths = [
   'src/app/payment-failure/page.tsx',
   'src/app/layout.tsx',
   checkoutDialogPath,
+  customerDialogPath,
   usageNotesDialogPath,
   providerDialogPath,
   paymentResultPath,
   frontendAdapterPath,
+  paymentCustomerPath,
   workerSourcePath,
   workerConfigPath,
   'worker/package.json',
@@ -126,7 +130,7 @@ const forbiddenFrontendPatterns = [
   { label: 'obsolete service-worker cache', pattern: /drava-cache-v1/ },
   {
     label: 'financial or personal data in browser storage',
-    pattern: /(?:localStorage|sessionStorage)\.(?:getItem|setItem)\(\s*["'][^"']*(?:card|cvv|email|otp|pan|withdraw|code|order|payment|token)/i,
+    pattern: /(?:localStorage|sessionStorage)\.(?:getItem|setItem)\(\s*["'][^"']*(?:card|cvv|email|whatsapp|phone|customer|otp|pan|withdraw|code|order|payment|token)/i,
   },
   {
     label: 'automatic card fulfillment from browser state',
@@ -387,10 +391,17 @@ function validateFrontendAdapter(source) {
   for (const name of ['createLeekPayCheckout', 'getLeekPayOrderStatus', 'readOrderToken']) {
     if (!new RegExp(`export(?:async)?function${name}`).test(condensed)) failures.push(`Frontend adapter is missing ${name}`)
   }
+  if (!/from["']\.\/payment-customer\.ts["']/.test(condensed)
+    || !/normalizePaymentCustomer/.test(source)
+    || !/exportasyncfunctioncreateLeekPayCheckout\(productId:string,customer:PaymentCustomer,signal\?:AbortSignal,?\)/.test(condensed)) {
+    failures.push('Frontend checkout must require and revalidate a PaymentCustomer')
+  }
   if (!source.includes('"/api/checkout"') && !source.includes("'/api/checkout'")) failures.push('Frontend adapter is missing POST /api/checkout')
   if (!source.includes('"/api/orders/status"') && !source.includes("'/api/orders/status'")) failures.push('Frontend adapter is missing POST /api/orders/status')
   if (!/method:\s*["']POST["']/.test(source)) failures.push('Frontend payment requests must use POST')
-  if (!/requestPaymentApi\(["']\/api\/checkout["'],\{productId\},signal,?\)/.test(condensed)) failures.push('Checkout request body must contain only productId')
+  if (!/requestPaymentApi\(["']\/api\/checkout["'],\{productId,customer:\{email:normalizedCustomer\.email,whatsapp:normalizedCustomer\.whatsapp,?\},?\},signal,?\)/.test(condensed)) {
+    failures.push('Checkout request body must contain only productId and canonical email/whatsapp')
+  }
   if (!/requestPaymentApi\(["']\/api\/orders\/status["'],\{orderToken\},signal,?\)/.test(condensed)) failures.push('Status request body must contain only orderToken')
   if (!/credentials:\s*["']omit["']/.test(source) || !/cache:\s*["']no-store["']/.test(source)
     || !/redirect:\s*["']error["']/.test(source)) failures.push('Frontend proxy fetch must omit credentials, disable caching and reject redirects')
@@ -400,6 +411,11 @@ function validateFrontendAdapter(source) {
     || !/LEEKPAY_CHECKOUT_CURRENCY\s*=\s*["']XOF["']/.test(source)) failures.push('Frontend adapter must accept XOF only')
   if (/\b(?:amount|currency|description)\s*:\s*[^,}]+/.test(source.match(/requestPaymentApi\(["']\/api\/checkout["'][\s\S]{0,200}/)?.[0] ?? '')) {
     failures.push('Frontend checkout request must not send amount, currency or description')
+  }
+  if (/\b(?:localStorage|sessionStorage)\b/.test(source)
+    || /\bconsole\.(?:log|info|warn|error|debug)\s*\([^)]*(?:customer|email|whatsapp|phone)/i.test(source)
+    || /(?:URLSearchParams|location\.(?:href|search)|new URL)\s*\([^)]*(?:customer|email|whatsapp|phone)/i.test(source)) {
+    failures.push('Frontend adapter must not persist, log or place customer details in URLs')
   }
   return failures
 }
@@ -418,6 +434,26 @@ function hasExactInterfaceProperties(source, interfaceName, expectedNames) {
   return actualNames.every((name) => name !== null) && expectedNames.every((name) => actualNames.includes(name))
 }
 
+function validatePaymentCustomer(source) {
+  const failures = []
+  const condensed = compact(source)
+  if (!hasExactInterfaceProperties(source, 'PaymentCustomer', ['email', 'whatsapp'])) failures.push('PaymentCustomer must contain only email and whatsapp')
+  for (const name of ['normalizeCustomerEmail', 'normalizeWhatsAppNumber', 'normalizePaymentCustomer']) {
+    if (!new RegExp(`exportfunction${name}\\(`).test(condensed)) failures.push(`Customer validator is missing ${name}`)
+  }
+  if (!/Reflect\.ownKeys\(value\)/.test(source)
+    || !/keys\.length\s*!==\s*2/.test(source)
+    || !/keys\.includes\(["']email["']\)/.test(source)
+    || !/keys\.includes\(["']whatsapp["']\)/.test(source)) failures.push('Customer validator must reject missing, extra and symbol keys')
+  if (!/email\.length\s*>\s*254/.test(source)
+    || !/local\.length\s*>\s*64/.test(source)
+    || !/code\s*<\s*32\s*\|\|\s*code\s*>\s*126/.test(source)) failures.push('Customer email validation must retain length and control-character bounds')
+  if (!/\^\\\+\[1-9\]\[0-9\]\{7,14\}\$/.test(source)) failures.push('WhatsApp validation must produce a bounded E.164 number')
+  if (!/return\s*\{\s*email,\s*whatsapp\s*\}/.test(source)) failures.push('Customer normalization must return only canonical email and whatsapp')
+  if (/\b(?:name|address|city|country|postal|password|cardNumber|card_number|cvv|otp|pan)\s*[:;,]/i.test(source)) failures.push('Customer validation must not introduce additional personal or payment fields')
+  return failures
+}
+
 function validateUsageNotesStructure(source) {
   const failures = []
   const condensed = compact(source)
@@ -426,8 +462,7 @@ function validateUsageNotesStructure(source) {
     failures.push('Usage notes must export the onAccept/onClose content fragment')
   }
   if (!hasExactInterfaceProperties(source, 'UsageNotesProps', ['onAccept', 'onClose'])) failures.push('Usage notes props must contain only onAccept and onClose')
-  if (!/<DialogPrimitive\.Description\b/.test(source)) failures.push('Usage notes must retain the accessible dialog description')
-  if (/DialogPrimitive\.(?:Root|Portal|Overlay|Content)\b/.test(source)) failures.push('Usage notes must not create a nested Radix dialog')
+  if (/DialogPrimitive\./.test(source)) failures.push('Usage notes must remain a plain fragment inside the checkout dialog')
   if (/\b(?:isOpen|onExitComplete)\b/.test(source)) failures.push('Usage notes must not receive dialog lifecycle props')
   if (/\b(?:createLeekPayCheckout|requestPaymentApi|handleCheckout)\b|\bfetch\s*\(|window\.location/.test(source)) {
     failures.push('Accepting usage notes must not initiate or redirect a payment')
@@ -435,21 +470,100 @@ function validateUsageNotesStructure(source) {
   return failures
 }
 
+function validateCustomerDialog(source) {
+  const failures = []
+  const condensed = compact(source)
+  if (!hasExactInterfaceProperties(source, 'CustomerDetailsProps', ['value', 'onChange', 'onNext', 'onBack'])) {
+    failures.push('Customer details props must contain only value, onChange, onNext and onBack')
+  }
+  if (!/exportfunctionCustomerDetails\(\{value,onChange,onNext,onBack,?\}:CustomerDetailsProps\)/.test(condensed)) failures.push('Customer details must export the reviewed controlled form')
+  if (/DialogPrimitive\./.test(source) || /\b(?:isOpen|onClose|onAccept|onExitComplete)\b/.test(source)) failures.push('Customer details must not own dialog lifecycle')
+  if (countOpeningTags(source, 'form') !== 1 || countOpeningTags(source, 'input') !== 2
+    || /<(?:select|textarea)\b|\bcontentEditable\b/i.test(source)) failures.push('Customer details must contain exactly one form with two inputs')
+  const sourceFile = ts.createSourceFile(customerDialogPath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const inputs = []
+  function visit(node) {
+    const openingElement = getJsxOpeningElement(node)
+    if (openingElement?.tagName.getText() === 'input') inputs.push(openingElement)
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  const expectedInputs = new Map([
+    ['email', { type: 'email', maxLength: '254' }],
+    ['whatsapp', { type: 'tel', maxLength: '40' }],
+  ])
+  for (const input of inputs) {
+    if (input.attributes.properties.some(ts.isJsxSpreadAttribute)) {
+      failures.push('Customer inputs must not use spread attributes')
+      continue
+    }
+    const attributes = input.attributes.properties.filter(ts.isJsxAttribute)
+    const attribute = (name) => attributes.find((candidate) => candidate.name.getText() === name)
+    const nameAttribute = attribute('name')
+    const name = nameAttribute?.initializer && ts.isStringLiteral(nameAttribute.initializer) ? nameAttribute.initializer.text : ''
+    const expected = expectedInputs.get(name)
+    const typeAttribute = attribute('type')
+    const type = typeAttribute?.initializer && ts.isStringLiteral(typeAttribute.initializer) ? typeAttribute.initializer.text : ''
+    const maxLength = attribute('maxLength')?.initializer?.getText(sourceFile).replace(/[{}]/g, '')
+    const inputModeAttribute = attribute('inputMode')
+    const inputMode = inputModeAttribute?.initializer && ts.isStringLiteral(inputModeAttribute.initializer) ? inputModeAttribute.initializer.text : ''
+    const autocompleteAttribute = attribute('autoComplete')
+    const autocomplete = autocompleteAttribute?.initializer && ts.isStringLiteral(autocompleteAttribute.initializer) ? autocompleteAttribute.initializer.text : ''
+    const value = attribute('value')?.initializer?.getText(sourceFile).replace(/[{}]/g, '')
+    const onChange = attribute('onChange')?.initializer?.getText(sourceFile) ?? ''
+    if (!expected || type !== expected.type || inputMode !== expected.type || autocomplete !== expected.type
+      || maxLength !== expected.maxLength || !attribute('required') || value !== `value.${name}`
+      || !onChange.includes('onChange') || !onChange.includes(name)) {
+      failures.push(`Customer input is not in the strict email/whatsapp allowlist: ${name || 'unnamed'}`)
+    }
+    expectedInputs.delete(name)
+  }
+  if (expectedInputs.size > 0) failures.push(`Customer inputs are missing: ${[...expectedInputs.keys()].join(', ')}`)
+  if (!/<form[^>]*\bnoValidate\b[^>]*onSubmit=\{handleSubmit\}/.test(source)
+    || !/event\.preventDefault\(\)/.test(source)
+    || !/const customer\s*=\s*normalizePaymentCustomer\(value\)/.test(source)
+    || !/onNext\(customer\)/.test(source)) failures.push('Customer form must prevent native submission and pass only canonical details')
+  if (!/normalizeCustomerEmail\(value\.email\)/.test(source)
+    || !/normalizeWhatsAppNumber\(value\.whatsapp\)/.test(source)
+    || !/emailRef\.current\?\.focus\(\)/.test(source)
+    || !/whatsappRef\.current\?\.focus\(\)/.test(source)) failures.push('Customer form must validate and focus the first invalid field')
+  if (!/onClick=\{onBack\}/.test(source) || !/type=["']submit["']/.test(source)) failures.push('Customer form must retain Back and explicit submit controls')
+  if (/\b(?:fetch|createLeekPayCheckout|requestPaymentApi|handleCheckout)\s*\(|\b(?:localStorage|sessionStorage)\b|window\.location/.test(source)) {
+    failures.push('Customer details must not send, persist or place PII in a URL')
+  }
+  if (/\bconsole\.(?:log|info|warn|error|debug)\s*\(/.test(source)
+    || /\b(?:password|cardNumber|card_number|cvv|otp|pan)\b/i.test(source)) {
+    failures.push('Customer details must not collect or log additional personal/payment data')
+  }
+  return failures
+}
+
 function validateProviderDialog(source) {
   const failures = []
   const condensed = compact(source)
-  if (!/exportfunctionPaymentProviders\(\{card\}:PaymentProvidersProps\)/.test(condensed)) failures.push('Providers must export the card-only content fragment')
-  if (!hasExactInterfaceProperties(source, 'PaymentProvidersProps', ['card'])) failures.push('Provider props must contain only card')
+  if (!/exportfunctionPaymentProviders\(\{card,customer,onBack,?\}:PaymentProvidersProps\)/.test(condensed)) failures.push('Providers must export the reviewed card/customer/back fragment')
+  if (!hasExactInterfaceProperties(source, 'PaymentProvidersProps', ['card', 'customer', 'onBack'])) failures.push('Provider props must contain only card, customer and onBack')
   if (/DialogPrimitive\.(?:Root|Portal|Overlay|Content)\b/.test(source)) failures.push('Providers must not create a nested Radix dialog')
   if (/\b(?:isOpen|onClose|onAccept|onOpenChange|handleClose)\b/.test(source)) failures.push('Providers must not receive or manage dialog lifecycle props')
+  if (!/type\s*\{\s*PaymentCustomer\s*\}\s*from\s*["']@\/lib\/payment-customer["']/.test(source)) failures.push('Providers must receive the canonical PaymentCustomer type')
   if (!/createLeekPayCheckout/.test(source) || !/from\s*["']@\/lib\/leekpay["']/.test(source)) failures.push('Provider dialog must use the reviewed REST adapter')
-  if (!/createLeekPayCheckout\(card\.id,\s*controller\.signal\)/.test(source)) failures.push('Provider dialog must send only the selected product identifier')
+  if (!/createLeekPayCheckout\(\s*card\.id,\s*customer,\s*controller\.signal,?\s*\)/.test(source)) failures.push('Provider dialog must send only the selected product and canonical customer')
   if (!/window\.location\.assign\(checkout\.checkoutUrl\)/.test(source)) failures.push('Provider dialog must navigate only to the validated checkout URL')
   if (!/\bLeekPay\b/.test(source)) failures.push('Provider dialog must identify LeekPay')
   if (!/window\.addEventListener\(["']pageshow["']/.test(source)
     || !/window\.removeEventListener\(["']pageshow["']/.test(source)
     || !/requestRef\.current\?\.abort\(\)/.test(source)
     || !/\},\s*\[\]\s*\);/.test(source)) failures.push('Providers must clean up checkout requests and pageshow handling on unmount')
+  if (!/disabled=\{isProcessing\}onClick=\{onBack\}type=["']button["']/.test(condensed)) failures.push('Provider Back control must be disabled during checkout')
+  const checkoutActionCount = source.match(/onClick=\{handleCheckout\}/g)?.length ?? 0
+  if (checkoutActionCount !== 1 || source.indexOf('onClick={handleCheckout}') < source.indexOf('</fieldset>')
+    || !/disabled=\{isProcessing\}onClick=\{handleCheckout\}type=["']button["']/.test(condensed)
+    || (source.match(/createLeekPayCheckout\s*\(/g)?.length ?? 0) !== 1
+    || (source.match(/\bhandleCheckout\b/g)?.length ?? 0) !== 2) {
+    failures.push('Only the separate global Pay button may start checkout')
+  }
+  if (/customer\.(?:email|whatsapp)|\b(?:localStorage|sessionStorage)\b/.test(source)
+    || /\bconsole\.(?:log|info|warn|error|debug)\s*\([^)]*(?:customer|email|whatsapp|phone)/i.test(source)) failures.push('Providers must pass customer details opaquely without storing or logging them')
   if (/<(?:form|input|select|textarea)\b|\bcontentEditable\b/i.test(source)) failures.push('Provider dialog must not collect input')
   if (/\b(?:customerEmail|customerName|customerPhone|customer_email|customer_name|customer_phone|cardNumber|card_number|cvv|pan)\b/i.test(source)) failures.push('Provider dialog must not collect personal/card data')
   if (/\bfetch\s*\(/.test(source)) failures.push('Provider dialog must not bypass the REST adapter')
@@ -464,23 +578,43 @@ function validateCheckoutDialog(source) {
     failures.push('Checkout dialog must export the card/onClose wrapper')
   }
   if (!hasExactInterfaceProperties(source, 'DialogCheckoutProps', ['card', 'onClose'])) failures.push('Checkout dialog props must contain only card and onClose')
-  if (!/typeCheckoutStep=["']notes["']\|["']providers["'];?/.test(condensed)
+  if (!/typeCheckoutStep=["']notes["']\|["']customer["']\|["']providers["'];?/.test(condensed)
     || !/useState<CheckoutStep>\(["']notes["']\)/.test(condensed)) failures.push('Checkout dialog must start at usage notes')
+  if (!/useState<PaymentCustomer>\(\{email:["']["'],whatsapp:["']["'],?\}\)/.test(condensed)
+    || !/constvalidCustomer=normalizePaymentCustomer\(customer\)/.test(condensed)) failures.push('Checkout dialog must keep a controlled customer draft and canonical value')
   for (const primitive of ['Root', 'Portal', 'Overlay', 'Content']) {
     const count = countOpeningTags(source, `DialogPrimitive.${primitive}`)
     if (count !== 1) failures.push(`Checkout dialog must contain exactly one Radix ${primitive} (found ${count})`)
   }
+  if (countOpeningTags(source, 'DialogPrimitive.Description') !== 1) failures.push('Checkout dialog must own one persistent accessible description')
   if (!/<DialogPrimitive\.Root\b[^>]*\bopen\b/.test(source)) failures.push('Checkout dialog must keep its single Radix root open while mounted')
   if (!/onOpenChange=\{\(open\)=>\{if\(!open\)onClose\(\);?\}\}/.test(condensed)) failures.push('Checkout dialog dismiss must call onClose')
-  if (!/<UsageNotesonAccept=\{\(\)=>setStep\(["']providers["']\)\}onClose=\{onClose\}\/>/.test(condensed)) {
-    failures.push('Usage-notes acceptance must only advance to providers')
+  if (!/<UsageNotesonAccept=\{\(\)=>setStep\(["']customer["']\)\}onClose=\{onClose\}\/>/.test(condensed)) {
+    failures.push('Usage-notes acceptance must only advance to customer details')
   }
-  if (!/<PaymentProviderscard=\{card\}\/>/.test(condensed)) failures.push('Checkout dialog must pass only the selected card to providers')
+  if (!/<CustomerDetailsvalue=\{customer\}onChange=\{setCustomer\}onNext=\{\(details\)=>\{setCustomer\(details\);setStep\(["']providers["']\);?\}\}onBack=\{\(\)=>setStep\(["']notes["']\)\}\/>/.test(condensed)) {
+    failures.push('Customer details must control the draft and advance only canonical details')
+  }
+  if (!/validCustomer\?\(?<PaymentProviderscard=\{card\}customer=\{validCustomer\}onBack=\{\(\)=>setStep\(["']customer["']\)\}\/?>\)?:null/.test(condensed)) {
+    failures.push('Providers must receive a valid customer and retain a Back path')
+  }
   if (!/step===["']notes["']\?\(?<UsageNotes/.test(condensed)) failures.push('Provider selection must remain gated behind the notes step')
   if (/\b(?:createLeekPayCheckout|requestPaymentApi|handleCheckout)\b|\bfetch\s*\(|window\.location/.test(source)) {
     failures.push('Checkout step transitions must not initiate or redirect a payment')
   }
   if (/\b(?:isOpen|onExitComplete|notes-exiting|checkoutStep)\b/.test(source)) failures.push('Checkout wrapper must not restore the previous multi-dialog lifecycle')
+  if (!/useReducedMotion\(\)\s*===\s*true/.test(source)
+    || !/<DialogPrimitive\.Content\b[\s\S]*?\basChild\b/.test(source)
+    || !/layout=\{reducedMotion\?false:["']size["']\}/.test(condensed)
+    || !/<AnimatePresenceinitial=\{false\}mode=["']wait["']>/.test(condensed)
+    || !/<CheckoutPanelkey=\{step\}reducedMotion=\{reducedMotion\}>/.test(condensed)
+    || (source.match(/key=\{step\}/g)?.length ?? 0) !== 1) failures.push('Checkout dialog must retain reduced-motion-aware wait/layout transitions keyed only at the panel')
+  if (!/constisPresent=useIsPresent\(\)/.test(condensed)
+    || !/constpanelRef=useRef<HTMLDivElement>\(null\)/.test(condensed)
+    || !/useLayoutEffect\(\(\)=>\{if\(panelRef\.current\)panelRef\.current\.inert=!isPresent;?\},\[isPresent\]\)/.test(condensed)
+    || !/aria-hidden=\{!isPresent\|\|undefined\}/.test(condensed)
+    || !/ref=\{panelRef\}/.test(condensed)) failures.push('Exiting checkout panels must be reactively inert and hidden from assistive technology')
+  if (!/titleRef\.current\?\.focus\([^)]*\)/.test(source) || !/\},\s*\[step\]\s*\);/.test(source)) failures.push('Checkout heading focus must follow committed step changes')
   return failures
 }
 
@@ -515,6 +649,8 @@ function validateWorkerSource(source) {
   const failures = []
   if ((source.split(providerCheckoutApi).length - 1) !== 1) failures.push(`Worker must declare the exact LeekPay REST endpoint once: ${providerCheckoutApi}`)
   failures.push(...validateWorkerUrls(source))
+  if (!/import\s*\{\s*normalizePaymentCustomer\s*\}\s*from\s*["']\.\.\/\.\.\/src\/lib\/payment-customer\.ts["']/.test(source)
+    || !/const customer\s*=\s*normalizePaymentCustomer\(payload\.customer\)/.test(source)) failures.push('Worker must revalidate customer details with the shared canonical validator')
   if (!/env\.LEEKPAY_SECRET_KEY/.test(source) || !/Authorization:\s*`Bearer \$\{env\.LEEKPAY_SECRET_KEY\}`/.test(source)) failures.push('Worker must authenticate LeekPay calls with env.LEEKPAY_SECRET_KEY')
   if (/\bXAF\b/.test(source) || !/CURRENCY\s*=\s*["']XOF["']/.test(source)) failures.push('Worker must use XOF only')
   const products = [
@@ -531,7 +667,14 @@ function validateWorkerSource(source) {
   }
   if (!source.includes('"/api/checkout"') || !source.includes('"/api/orders/status"')) failures.push('Worker must expose the two reviewed payment routes')
   if (!/request\.method\s*!==\s*["']POST["']/.test(source)) failures.push('Worker payment routes must reject non-POST methods')
-  if (!/Object\.keys\(payload\)\.length\s*!==\s*1/.test(source) || !/isProductId\(payload\.productId\)/.test(source)) failures.push('Worker checkout must accept only one known productId')
+  if (!/Object\.keys\(payload\)\.length\s*!==\s*2/.test(source)
+    || !/Object\.hasOwn\(payload,\s*["']productId["']\)/.test(source)
+    || !/Object\.hasOwn\(payload,\s*["']customer["']\)/.test(source)
+    || !/isProductId\(payload\.productId\)/.test(source)) failures.push('Worker checkout must accept only one known productId and one customer object')
+  if ((source.match(/\bcustomer_email\b/g)?.length ?? 0) !== 1
+    || (source.match(/\bcustomer_phone\b/g)?.length ?? 0) !== 1
+    || !/customer_email:\s*customer\.email/.test(source)
+    || !/customer_phone:\s*customer\.whatsapp/.test(source)) failures.push('Worker may forward customer details only through LeekPay customer_email/customer_phone')
   if (!/\^\[a-f0-9\]\{64\}\$/.test(source) || !/crypto\.getRandomValues\(new Uint8Array\(32\)\)/.test(source)) failures.push('Worker order tokens must be random 32-byte lowercase hex values')
   if (!/payment-success\/#order=\$\{orderToken\}/.test(source) || !/payment-failure\/#order=\$\{orderToken\}/.test(source)) failures.push('Worker must generate static success/cancel fragment URLs')
   if (!/env\.ORDERS\.put/.test(source) || !/expirationTtl:\s*ORDER_TTL_SECONDS/.test(source)
@@ -547,7 +690,16 @@ function validateWorkerSource(source) {
   if (!/redirect:\s*["']manual["']/.test(source) || /redirect:\s*["']error["']/.test(source)) failures.push('Worker must inspect manual redirects without forwarding its Authorization header')
   if (!/safeCheckoutUrl\(data\.payment_url\)/.test(source)) failures.push('Worker must validate the provider checkout URL before returning it')
   if (!/REQUEST_LIMIT_BYTES/.test(source) || !/PROVIDER_LIMIT_BYTES/.test(source) || !/AbortController/.test(source)) failures.push('Worker must bound request/provider bodies and upstream time')
-  if (/\b(?:customer_email|customer_name|customer_phone|card_number|cardNumber|cvv|pan)\b/i.test(source)) failures.push('Worker must not collect or transmit customer/card data')
+  const orderType = source.match(/type\s+Order\s*=\s*\{([\s\S]*?)\};/)?.[1] ?? ''
+  if (/\b(?:customer|email|whatsapp|phone)\b/i.test(orderType)
+    || !/JSON\.stringify\(order\)/.test(source)) failures.push('Worker must not persist customer PII in ORDERS KV')
+  for (const metadata of source.matchAll(/\bmetadata\s*:\s*\{([^}]*)\}/g)) {
+    if (/\b(?:customer|email|whatsapp|phone)\b/i.test(metadata[1])) failures.push('Worker must not copy customer PII into provider metadata')
+  }
+  if (/\bconsole\.(?:log|info|warn|error|debug)\s*\([\s\S]{0,400}?(?:customer|email|whatsapp|phone)/i.test(source)) failures.push('Worker must not log customer PII')
+  if (/(?:return_url|cancel_url|returnUrl)\s*[:=][^,}\n]*(?:customer|email|whatsapp|phone)/i.test(source)
+    || /(?:URLSearchParams|url\.searchParams)[\s\S]{0,160}(?:customer|email|whatsapp|phone)/i.test(source)) failures.push('Worker must not place customer PII in callback URLs')
+  if (/\b(?:customer_name|customer_address|card_number|cardNumber|cvv|otp|pan)\b/i.test(source)) failures.push('Worker must not collect or transmit additional personal/card data')
   if (/\b(?:autoFulfill|fulfillOrder|issueCard|issueVirtualCard|provisionCard|deliverCard|revealCard|generateCard|activateCard)\s*\(/i.test(source)) failures.push('Worker must never auto-fulfill cards')
   return failures
 }
@@ -587,24 +739,61 @@ function selfTest() {
   assert.deepEqual(validateFrontendUrls(`const url = '${proxyOrigin}'`, frontendAdapterPath), [])
 
   const safeNotes = `
-    import * as DialogPrimitive from "@radix-ui/react-dialog";
     interface UsageNotesProps { onClose: () => void; onAccept: () => void; }
     export function UsageNotes({ onClose, onAccept }: UsageNotesProps) {
-      return <><DialogPrimitive.Description>Notes</DialogPrimitive.Description><Button type="button" onClick={onAccept}>Accept</Button><Button type="button" onClick={onClose}>Refuser / Decline</Button></>
+      return <><p>Notes</p><Button type="button" onClick={onAccept}>Accept</Button><Button type="button" onClick={onClose}>Refuser / Decline</Button></>
     }
   `
   assert.deepEqual(validateUsageNotesButtons(safeNotes, 'notes.tsx'), [])
   assert.deepEqual(validateUsageNotesStructure(safeNotes), [])
   assert.ok(validateUsageNotesButtons(safeNotes.replace('onClick={onClose}', 'disabled'), 'notes.tsx').length > 0)
-  assert.ok(validateUsageNotesStructure(safeNotes.replace('<>', '<DialogPrimitive.Root>')).length > 0)
+  assert.ok(validateUsageNotesStructure(`${safeNotes}\n<DialogPrimitive.Root />`).length > 0)
+
+  const safeCustomerLibrary = `
+    export interface PaymentCustomer { readonly email: string; readonly whatsapp: string; }
+    export function normalizeCustomerEmail(value: unknown) {
+      let email = ""; let local = ""; let code = 64;
+      if (email.length > 254 || local.length > 64 || code < 32 || code > 126) return null;
+      return email;
+    }
+    export function normalizeWhatsAppNumber(value: unknown) {
+      const whatsapp = String(value); return /^\\+[1-9][0-9]{7,14}$/.test(whatsapp) ? whatsapp : null;
+    }
+    export function normalizePaymentCustomer(value: unknown) {
+      const keys = Reflect.ownKeys(value); if (keys.length !== 2 || !keys.includes("email") || !keys.includes("whatsapp")) return null;
+      const email = normalizeCustomerEmail(value.email); const whatsapp = normalizeWhatsAppNumber(value.whatsapp);
+      return { email, whatsapp };
+    }
+  `
+  assert.deepEqual(validatePaymentCustomer(safeCustomerLibrary), [])
+  assert.ok(validatePaymentCustomer(safeCustomerLibrary.replace('readonly whatsapp: string;', 'readonly whatsapp: string; readonly name: string;')).length > 0)
+
+  const safeCustomerDialog = `
+    interface CustomerDetailsProps { value: PaymentCustomer; onChange: (value: PaymentCustomer) => void; onNext: (value: PaymentCustomer) => void; onBack: () => void; }
+    export function CustomerDetails({ value, onChange, onNext, onBack }: CustomerDetailsProps) {
+      const emailInvalid = !normalizeCustomerEmail(value.email); const whatsappInvalid = !normalizeWhatsAppNumber(value.whatsapp);
+      const handleSubmit = (event) => { event.preventDefault(); const customer = normalizePaymentCustomer(value); if (!customer) { if (!normalizeCustomerEmail(value.email)) emailRef.current?.focus(); else whatsappRef.current?.focus(); return; } onNext(customer); };
+      return <form noValidate onSubmit={handleSubmit}>
+        <input name="email" type="email" inputMode="email" autoComplete="email" required maxLength={254} value={value.email} onChange={(event) => onChange({ ...value, email: event.target.value })} />
+        <input name="whatsapp" type="tel" inputMode="tel" autoComplete="tel" required maxLength={40} value={value.whatsapp} onChange={(event) => onChange({ ...value, whatsapp: event.target.value })} />
+        <Button onClick={onBack} type="button">Back</Button><Button type="submit">Next</Button>
+      </form>;
+    }
+  `
+  assert.deepEqual(validateCustomerDialog(safeCustomerDialog), [])
+  assert.ok(validateCustomerDialog(safeCustomerDialog.replace('</form>', '<input name="name" type="text" required maxLength={80} /></form>')).length > 0)
 
   const safeAdapter = `
+    import { type PaymentCustomer, normalizePaymentCustomer } from "./payment-customer.ts";
     export const LEEKPAY_API_BASE = "${proxyOrigin}";
     export const LEEKPAY_CHECKOUT_CURRENCY = "XOF";
     async function requestPaymentApi(path, body, signal) {
       return fetch(LEEKPAY_API_BASE + path, { method: "POST", credentials: "omit", cache: "no-store", redirect: "error", body: JSON.stringify(body) });
     }
-    export async function createLeekPayCheckout(productId, signal) { return requestPaymentApi("/api/checkout", { productId }, signal); }
+    export async function createLeekPayCheckout(productId: string, customer: PaymentCustomer, signal?: AbortSignal) {
+      const normalizedCustomer = normalizePaymentCustomer(customer);
+      return requestPaymentApi("/api/checkout", { productId, customer: { email: normalizedCustomer.email, whatsapp: normalizedCustomer.whatsapp } }, signal);
+    }
     export async function getLeekPayOrderStatus(orderToken, signal) {
       const data = await requestPaymentApi("/api/orders/status", { orderToken }, signal);
       if (data.verified !== (data.status === "paid") || data.currency !== LEEKPAY_CHECKOUT_CURRENCY) throw Error();
@@ -612,12 +801,13 @@ function selfTest() {
     export function readOrderToken(fragment) { return /^#order=([a-f0-9]{64})$/.exec(fragment)?.[1] ?? null; }
   `
   assert.deepEqual(validateFrontendAdapter(safeAdapter), [])
-  assert.ok(validateFrontendAdapter(safeAdapter.replace('{ productId }', '{ productId, amount: 1 }')).length > 0)
+  assert.ok(validateFrontendAdapter(safeAdapter.replace('whatsapp: normalizedCustomer.whatsapp', 'whatsapp: normalizedCustomer.whatsapp, amount: 1')).length > 0)
 
   const safeProviderDialog = `
+    import type { PaymentCustomer } from "@/lib/payment-customer";
     import { createLeekPayCheckout } from "@/lib/leekpay";
-    interface PaymentProvidersProps { card: PaymentCardSelection; }
-    export function PaymentProviders({ card }: PaymentProvidersProps) {
+    interface PaymentProvidersProps { card: PaymentCardSelection; customer: PaymentCustomer; onBack: () => void; }
+    export function PaymentProviders({ card, customer, onBack }: PaymentProvidersProps) {
       useEffect(() => {
         window.addEventListener("pageshow", handlePageShow);
         return () => {
@@ -627,33 +817,49 @@ function selfTest() {
       }, []);
     }
     async function handleCheckout(card, controller) {
-      const checkout = await createLeekPayCheckout(card.id, controller.signal);
+      const checkout = await createLeekPayCheckout(card.id, customer, controller.signal);
       window.location.assign(checkout.checkoutUrl);
     }
-    const providerName = <span>LeekPay</span>;
+    const provider = <><fieldset><span>LeekPay</span></fieldset><Button disabled={isProcessing} onClick={onBack} type="button">Back</Button><Button disabled={isProcessing} onClick={handleCheckout} type="button">Pay</Button></>;
   `
   assert.deepEqual(validateProviderDialog(safeProviderDialog), [])
   assert.ok(validateProviderDialog(safeProviderDialog.replace('>LeekPay<', '>Provider<')).length > 0)
   assert.ok(validateProviderDialog(`${safeProviderDialog}\n<DialogPrimitive.Root />`).length > 0)
 
   const safeCheckoutDialog = `
+    import { CustomerDetails } from "@/components/ui/dialog-customer";
     import { UsageNotes } from "@/components/ui/dialog-notes";
     import { PaymentProviders } from "@/components/ui/dialog-providers";
     interface DialogCheckoutProps { card: PaymentCardSelection; onClose: () => void; }
-    type CheckoutStep = "notes" | "providers";
+    type CheckoutStep = "notes" | "customer" | "providers";
+    function CheckoutPanel({ children, reducedMotion }) {
+      const isPresent = useIsPresent();
+      const panelRef = useRef<HTMLDivElement>(null);
+      useLayoutEffect(() => { if (panelRef.current) panelRef.current.inert = !isPresent; }, [isPresent]);
+      return <motion.div aria-hidden={!isPresent || undefined} ref={panelRef}>{children}</motion.div>;
+    }
     export function DialogCheckout({ card, onClose }: DialogCheckoutProps) {
       const [step, setStep] = useState<CheckoutStep>("notes");
+      const [customer, setCustomer] = useState<PaymentCustomer>({ email: "", whatsapp: "" });
+      const validCustomer = normalizePaymentCustomer(customer);
+      const reducedMotion = useReducedMotion() === true;
+      useEffect(() => { titleRef.current?.focus(); }, [step]);
       return <DialogPrimitive.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
-        <DialogPrimitive.Portal><DialogPrimitive.Overlay /><DialogPrimitive.Content>
-          {step === "notes" ? <UsageNotes onAccept={() => setStep("providers")} onClose={onClose} /> : <PaymentProviders card={card} />}
-        </DialogPrimitive.Content></DialogPrimitive.Portal>
+        <DialogPrimitive.Portal><DialogPrimitive.Overlay /><DialogPrimitive.Content asChild><motion.div layout={reducedMotion ? false : "size"}>
+          <DialogPrimitive.Description>Description</DialogPrimitive.Description>
+          <AnimatePresence initial={false} mode="wait"><CheckoutPanel key={step} reducedMotion={reducedMotion}>
+          {step === "notes" ? <UsageNotes onAccept={() => setStep("customer")} onClose={onClose} /> : step === "customer" ?
+            <CustomerDetails value={customer} onChange={setCustomer} onNext={(details) => { setCustomer(details); setStep("providers"); }} onBack={() => setStep("notes")} /> : validCustomer ?
+            <PaymentProviders card={card} customer={validCustomer} onBack={() => setStep("customer")} /> : null}
+          </CheckoutPanel></AnimatePresence>
+        </motion.div></DialogPrimitive.Content></DialogPrimitive.Portal>
       </DialogPrimitive.Root>;
     }
   `
   assert.deepEqual(validateCheckoutDialog(safeCheckoutDialog), [])
   assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('useState<CheckoutStep>("notes")', 'useState<CheckoutStep>("providers")')).length > 0)
   assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('<DialogPrimitive.Overlay />', '<DialogPrimitive.Overlay /><DialogPrimitive.Overlay />')).length > 0)
-  assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('setStep("providers")', 'createLeekPayCheckout()')).length > 0)
+  assert.ok(validateCheckoutDialog(safeCheckoutDialog.replace('setStep("customer")', 'createLeekPayCheckout()')).length > 0)
 
   const safeCatalogue = `
     import { DialogCheckout } from "@/components/ui/dialog-checkout";
@@ -708,6 +914,10 @@ for (const file of frontendFiles) {
   if (/^src\/(?:app|components)\//.test(relativePath) && /\bfetch\s*\(/.test(source)) {
     failures.push(`Direct fetch is forbidden in UI code: ${relativePath}`)
   }
+  if (relativePath !== customerDialogPath
+    && (/<(?:form|input|select|textarea)\b|\bcontentEditable\b/i.test(source))) {
+    failures.push(`Data-collection controls are allowed only in ${customerDialogPath}: ${relativePath}`)
+  }
 }
 
 const routeSources = frontendFiles
@@ -758,6 +968,10 @@ if (notesSource) {
   failures.push(...validateUsageNotesButtons(notesSource, usageNotesDialogPath))
   failures.push(...validateUsageNotesStructure(notesSource))
 }
+const paymentCustomerSource = await readRequired(paymentCustomerPath)
+if (paymentCustomerSource) failures.push(...validatePaymentCustomer(paymentCustomerSource))
+const customerDialogSource = await readRequired(customerDialogPath)
+if (customerDialogSource) failures.push(...validateCustomerDialog(customerDialogSource))
 const adapterSource = await readRequired(frontendAdapterPath)
 if (adapterSource) failures.push(...validateFrontendAdapter(adapterSource))
 const providerDialogSource = await readRequired(providerDialogPath)

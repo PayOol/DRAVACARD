@@ -5,7 +5,10 @@ Catalogue de cartes virtuelles DRAVA. L'interface reste un export statique Next.
 ## Architecture
 
 - GitHub Pages sert le catalogue et les pages techniques `/payment-success/` et `/payment-failure/`.
-- Le navigateur envoie uniquement un `productId` au proxy `https://drava-leekpay.sebpay-proxy.workers.dev`.
+- Une seule modale enchaîne les notes d'utilisation, les coordonnées (e-mail et WhatsApp), puis le choix du provider, avec transitions animées et respect de la réduction des animations.
+- Au clic sur « Payer », le navigateur envoie `{ productId, customer: { email, whatsapp } }` au proxy `https://drava-leekpay.sebpay-proxy.workers.dev`. Les coordonnées restent uniquement en mémoire pendant le parcours et peuvent être corrigées avec « Précédent ».
+- Le validateur partagé `src/lib/payment-customer.ts` vérifie les coordonnées côté navigateur et côté Worker. Le WhatsApp doit inclure `+` et l'indicatif international ; les espaces, parenthèses et tirets sont normalisés.
+- L'adaptateur LeekPay transmet ces valeurs dans les champs REST documentés `customer_email` et `customer_phone`. Les futurs adaptateurs réutiliseront le contrat `PaymentCustomer` et mapperont les champs selon leur propre documentation. Aucun contact n'est ajouté aux URL, aux logs, à KV ou aux réponses du proxy.
 - Le Worker sélectionne le prix dans son catalogue serveur, impose `XOF`, puis crée le checkout LeekPay avec son secret chiffré.
 - Un identifiant de commande aléatoire est placé dans le fragment `#order=…`. Le fragment n'est pas envoyé automatiquement dans la requête HTTP ; la page de résultat le transmet explicitement au proxy pour vérifier la commande.
 - Le proxy relit le statut chez LeekPay avec une requête serveur authentifiée et compare l'identifiant du checkout, le montant et la devise enregistrés avant de répondre `verified: true`.

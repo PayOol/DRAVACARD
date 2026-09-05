@@ -1,3 +1,5 @@
+import { normalizePaymentCustomer } from "../../src/lib/payment-customer.ts";
+
 const SITE_ORIGIN = "https://drava.click";
 const CHECKOUT_API = "https://leekpay.fr/api/v1/checkout";
 const CURRENCY = "XOF";
@@ -234,9 +236,12 @@ async function enforceRateLimit(request: Request, env: Env, create: boolean): Pr
 
 async function createCheckout(request: Request, env: Env, origin: string): Promise<Response> {
   const payload = await requestJson(request);
-  if (Object.keys(payload).length !== 1 || !isProductId(payload.productId)) {
+  if (Object.keys(payload).length !== 2 || !Object.hasOwn(payload, "productId") ||
+    !Object.hasOwn(payload, "customer") || !isProductId(payload.productId)) {
     throw new ApiError(400, "invalid_product");
   }
+  const customer = normalizePaymentCustomer(payload.customer);
+  if (!customer) throw new ApiError(400, "invalid_customer");
   const productId = payload.productId;
   const product = PRODUCTS[productId];
   const orderToken = hex(crypto.getRandomValues(new Uint8Array(32)));
@@ -247,6 +252,8 @@ async function createCheckout(request: Request, env: Env, origin: string): Promi
     description: `DRAVA — ${product.name}`,
     return_url: returnUrl,
     cancel_url: `${SITE_ORIGIN}/payment-failure/#order=${orderToken}`,
+    customer_email: customer.email,
+    customer_phone: customer.whatsapp,
     metadata: { productId },
   });
   if (!isCheckoutId(data.id) || data.amount !== product.amount || data.currency !== CURRENCY ||

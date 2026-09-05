@@ -3,21 +3,33 @@
 import { Button } from "@/components/ui/button";
 import { withBasePath } from "@/lib/base-path";
 import { useLanguage } from "@/lib/language-context";
+import type { PaymentCustomer } from "@/lib/payment-customer";
 import {
   type PaymentCardSelection,
   createLeekPayCheckout,
 } from "@/lib/leekpay";
-import { AlertCircle, CheckCircle2, LoaderCircle } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  LoaderCircle,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 interface PaymentProvidersProps {
   card: PaymentCardSelection;
+  customer: PaymentCustomer;
+  onBack: () => void;
 }
 
 type CheckoutState = "idle" | "processing" | "error";
 type PaymentProvider = "leekpay";
 
-export function PaymentProviders({ card }: PaymentProvidersProps) {
+export function PaymentProviders({
+  card,
+  customer,
+  onBack,
+}: PaymentProvidersProps) {
   const { language } = useLanguage();
   const [checkoutState, setCheckoutState] = useState<CheckoutState>("idle");
   const [selectedProvider, setSelectedProvider] =
@@ -47,7 +59,11 @@ export function PaymentProviders({ card }: PaymentProvidersProps) {
     setCheckoutState("processing");
 
     try {
-      const checkout = await createLeekPayCheckout(card.id, controller.signal);
+      const checkout = await createLeekPayCheckout(
+        card.id,
+        customer,
+        controller.signal,
+      );
       if (!controller.signal.aborted) {
         window.location.assign(checkout.checkoutUrl);
       }
@@ -151,22 +167,36 @@ export function PaymentProviders({ card }: PaymentProvidersProps) {
           </div>
         )}
 
-        <Button
-          className="h-11 w-full gap-2 bg-emerald-600 text-sm text-white hover:bg-emerald-700"
-          disabled={isProcessing}
-          onClick={handleCheckout}
-          type="button"
-        >
-          {isProcessing ? (
-            <LoaderCircle
-              aria-hidden="true"
-              className="h-4 w-4 shrink-0 animate-spin"
-            />
-          ) : (
-            <CheckCircle2 aria-hidden="true" className="h-4 w-4 shrink-0" />
-          )}
-          <span className="min-w-0">{language === "fr" ? "Payer" : "Pay"}</span>
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            className="h-11 gap-2"
+            disabled={isProcessing}
+            onClick={onBack}
+            type="button"
+            variant="outline"
+          >
+            <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+            {language === "fr" ? "Précédent" : "Back"}
+          </Button>
+          <Button
+            className="h-11 flex-1 gap-2 bg-emerald-600 text-sm text-white hover:bg-emerald-700"
+            disabled={isProcessing}
+            onClick={handleCheckout}
+            type="button"
+          >
+            {isProcessing ? (
+              <LoaderCircle
+                aria-hidden="true"
+                className="h-4 w-4 shrink-0 animate-spin"
+              />
+            ) : (
+              <CheckCircle2 aria-hidden="true" className="h-4 w-4 shrink-0" />
+            )}
+            <span className="min-w-0">
+              {language === "fr" ? "Payer" : "Pay"}
+            </span>
+          </Button>
+        </div>
       </div>
     </>
   );

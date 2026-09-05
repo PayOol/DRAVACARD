@@ -6,7 +6,9 @@ Card checkout initiation uses a dedicated Cloudflare Worker REST proxy. Top-ups,
 
 Neither a LeekPay public key nor a LeekPay secret key belongs in the Pages source, a `NEXT_PUBLIC_*` variable, a browser bundle, GitHub Actions configuration, or a committed environment file. `LEEKPAY_SECRET_KEY` is an encrypted Cloudflare Worker secret and is read only as `env.LEEKPAY_SECRET_KEY` at runtime.
 
-The browser sends only an immutable `productId` to `POST /api/checkout`. The Worker owns the product catalogue, amount, description and `XOF` currency. It stores the LeekPay checkout identifier and expected values under a random order token in the `ORDERS` KV namespace. The static return and cancellation pages receive only `#order=` followed by 64 hexadecimal characters.
+The browser sends an immutable `productId` and exactly `customer: { email, whatsapp }` to `POST /api/checkout`, only after usage-note acceptance, contact validation and an explicit Pay action. The shared contact validator runs in both the browser and Worker. LeekPay receives only the documented `customer_email` and `customer_phone` fields. Contact details are held in React memory until the modal closes; they must never be copied into browser storage, KV, URLs, metadata, logs or proxy responses. Future providers must explicitly map the same canonical customer contract to their documented fields.
+
+The Worker owns the product catalogue, amount, description and `XOF` currency. It stores the LeekPay checkout identifier and expected values under a random order token in the `ORDERS` KV namespace. The static return and cancellation pages receive only `#order=` followed by 64 hexadecimal characters.
 
 `POST /api/orders/status` accepts that opaque order token. The Worker retrieves the stored checkout identifier, performs an authenticated server-to-server `GET` to LeekPay, and compares the provider identifier, amount and currency with the stored order. A response may contain `verified: true` only when the authenticated provider response is `paid` and every comparison succeeds.
 
