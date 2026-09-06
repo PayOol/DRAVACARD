@@ -6,6 +6,7 @@ import { withBasePath } from "@/lib/base-path";
 import { LanguageProvider } from "@/lib/language-context";
 import { ThemeProvider } from "@/lib/theme-context";
 import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
+import WhatsAppButton from "@/components/layout/WhatsAppButton";
 import Script from "next/script";
 
 // Fonts
@@ -135,6 +136,7 @@ export default function RootLayout({
         <LanguageProvider>
           <ThemeProvider>
             {children}
+            <WhatsAppButton />
             <PwaInstallPrompt />
           </ThemeProvider>
         </LanguageProvider>

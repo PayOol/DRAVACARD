@@ -374,6 +374,7 @@ test("root layout loads the base-path-safe prepaint script in head before the sh
     "@/lib/language-context": { LanguageProvider: "language-provider" },
     "@/lib/theme-context": { ThemeProvider: "theme-provider" },
     "@/components/pwa/PwaInstallPrompt": { PwaInstallPrompt: "pwa-install-prompt" },
+    "@/components/layout/WhatsAppButton": { default: "whatsapp-button" },
     "next/script": { default: "next-script" },
   }, { URL, process: { env: {} } });
   const tree = module.default({ children: child });
@@ -395,7 +396,7 @@ test("root layout loads the base-path-safe prepaint script in head before the sh
   assert.equal(languageProvider.props.children.type, "theme-provider");
   const themedChildren = languageProvider.props.children.props.children;
   assert.equal(themedChildren[0], child, "One theme context wraps the unchanged page and checkout");
-  assert.deepEqual(Array.from(themedChildren.slice(1), node => node.type), ["pwa-install-prompt"], "The installation prompt shares the current language and theme without replacing the page");
+  assert.deepEqual(Array.from(themedChildren.slice(1), node => node.type), ["whatsapp-button", "pwa-install-prompt"], "The contact button and installation prompt share the current language and theme without replacing the page");
   assert.ok(headChildren.some(node => node?.type === "script" && node.props.src === "/DRAVACARD/pwa-install-capture.js"), "Install event capture respects the deployment base path");
   assert.equal(module.viewport.colorScheme, "light dark");
 });

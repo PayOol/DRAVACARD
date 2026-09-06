@@ -1,0 +1,74 @@
+.whatsapp-button {
+  position: fixed;
+  right: calc(24px + env(safe-area-inset-right, 0px));
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #15803d;
+  color: #fff;
+  box-shadow: 0 6px 22px rgb(0 0 0 / 22%);
+  touch-action: manipulation;
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.whatsapp-button:hover {
+  background: #166534;
+  transform: translateY(-2px);
+}
+
+.whatsapp-button:active {
+  transform: scale(0.96);
+}
+
+.whatsapp-button:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 4px;
+}
+
+.dark .whatsapp-button:focus-visible {
+  outline-color: #93c5fd;
+}
+
+/* Keep modal focus and checkout actions isolated, including lazy loading. */
+body:has([role="dialog"], [role="alertdialog"], [data-drava-checkout-active="true"]) .whatsapp-button {
+  visibility: hidden;
+}
+
+@media (max-width: 767px), (max-width: 1023px) and (max-height: 500px) and (pointer: coarse) {
+  .whatsapp-button {
+    right: calc(16px + env(safe-area-inset-right, 0px));
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Leave room to scroll the last catalogue action clear of the button. */
+  .app-screen:not(.app-screen--detail) {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body:has(.app-purchase-bar) .whatsapp-button {
+    bottom: calc(102px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .whatsapp-button {
+    transition: none;
+  }
+
+  .whatsapp-button:hover,
+  .whatsapp-button:active {
+    transform: none;
+  }
+}
+
+@media print {
+  .whatsapp-button {
+    display: none !important;
+  }
+}

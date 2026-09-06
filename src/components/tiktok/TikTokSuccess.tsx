@@ -343,12 +343,6 @@ export function TikTokReceipt({
           {fr ? "Assistance réactive" : "Responsive support"}
         </TikTokWhatsAppPicker>
       </div>
-      <TikTokWhatsAppPicker
-        className="tiktok-success-floating"
-        message={supportMessage}
-      >
-        <span className="tiktok-success-floating-label">WhatsApp</span>
-      </TikTokWhatsAppPicker>
     </section>
   );
 }
