@@ -35,6 +35,15 @@ for (const service of ["cards", "tiktok"]) {
     assert.equal(fields.currency, service === "cards" ? "XOF" : "XAF");
     assert.equal(fields.amount, String(checkout.amount));
     assert.equal(new URL(fields.successUrl).hash, `#order=${checkout.orderToken}`);
+    const failureUrl = new URL(fields.failureUrl);
+    assert.equal(failureUrl.hash, `#order=${checkout.orderToken}`);
+    if (service === "tiktok") {
+      assert.equal(failureUrl.pathname, "/tiktok-payment/");
+      assert.equal(failureUrl.searchParams.get("drava_return"), "failure");
+    } else {
+      assert.equal(failureUrl.pathname, "/payment-failure/");
+      assert.equal(failureUrl.search, "");
+    }
     assert.equal(state.calls.length, 0);
     const check = async (providerReturn) => worker.fetch(request("/api/orders/status", {
       orderToken: checkout.orderToken, ...(providerReturn === undefined ? {} : { providerReturn }),
@@ -97,4 +106,3 @@ it("supports only canonical fee bearers and rejects invalid server amounts or mi
     assert.throws(() => buildSoleasPayCheckoutRequest(env, { ...intent, amount }));
   assert.throws(() => buildSoleasPayCheckoutRequest({}, intent));
 });
-
