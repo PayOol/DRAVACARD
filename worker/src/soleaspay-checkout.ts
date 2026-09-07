@@ -1,6 +1,13 @@
 import type { CheckoutReturn, PaymentEnv, ProviderIntent, ProviderTransaction } from "./payment-types.ts";
 import { ApiError, isObject, secret } from "./shared.ts";
 
+function soleasPayFailureUrl(intent: ProviderIntent): string {
+  if (intent.metadata.service !== "tiktok") return intent.cancelUrl;
+  const url = new URL(intent.cancelUrl);
+  url.searchParams.set("drava_return", "failure");
+  return url.toString();
+}
+
 // The documented HTML checkout exposes a plugin-scoped merchant API key.
 // Never configure a key with privileges outside the plugin context.
 export function buildSoleasPayCheckoutRequest(
@@ -32,7 +39,7 @@ export function buildSoleasPayCheckoutRequest(
         description: intent.description,
         shopName: "DRAVA",
         successUrl: intent.returnUrl,
-        failureUrl: intent.cancelUrl,
+        failureUrl: soleasPayFailureUrl(intent),
         customer: { name: intent.customer.name, email: intent.customer.email },
         ...(feeBearer === undefined ? {} : { feeBearer }),
       }),
