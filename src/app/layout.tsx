@@ -49,6 +49,10 @@ const structuredData = JSON.stringify([
     url: siteUrl.href,
     logo: logoUrl.href,
     email: "contact.drava@gmail.com",
+    areaServed: {
+      "@type": "Continent",
+      name: "Africa",
+    },
   },
   {
     "@context": "https://schema.org",
@@ -57,18 +61,18 @@ const structuredData = JSON.stringify([
     url: siteUrl.href,
     inLanguage: ["fr", "en"],
     description:
-      "Plateforme DRAVA de cartes virtuelles Visa et Mastercard et de packs de pièces TikTok au Cameroun.",
+      "Plateforme DRAVA de cartes virtuelles Visa et Mastercard et de packs de pièces TikTok disponibles à travers l’Afrique.",
   },
 ]).replace(/</g, "\\u003c");
 
 export const metadata: Metadata = {
   metadataBase: siteUrl,
   title: {
-    default: "Carte virtuelle au Cameroun & pièces TikTok | DRAVA",
+    default: "Cartes virtuelles en Afrique & pièces TikTok | DRAVA",
     template: "%s | DRAVA",
   },
   description:
-    "Découvrez les cartes virtuelles Visa et Mastercard DRAVA au Cameroun, comparez les offres et accédez aussi aux packs de pièces TikTok.",
+    "Découvrez les cartes virtuelles Visa et Mastercard DRAVA disponibles à travers l’Afrique, comparez les offres et accédez aussi aux packs de pièces TikTok.",
   alternates: {
     canonical: "/",
   },
@@ -120,9 +124,9 @@ export const metadata: Metadata = {
     ],
   },
   openGraph: {
-    title: "Carte virtuelle au Cameroun & pièces TikTok | DRAVA",
+    title: "Cartes virtuelles en Afrique & pièces TikTok | DRAVA",
     description:
-      "Cartes virtuelles Visa et Mastercard DRAVA au Cameroun et packs de pièces TikTok.",
+      "Cartes virtuelles Visa et Mastercard DRAVA à travers l’Afrique et packs de pièces TikTok.",
     url: siteUrl,
     siteName: "DRAVA",
     images: [
@@ -132,14 +136,15 @@ export const metadata: Metadata = {
         height: 630,
       },
     ],
-    locale: "fr_CM",
+    locale: "fr_FR",
+    alternateLocale: ["en_US"],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Carte virtuelle au Cameroun & pièces TikTok | DRAVA",
+    title: "Cartes virtuelles en Afrique & pièces TikTok | DRAVA",
     description:
-      "Cartes virtuelles Visa et Mastercard DRAVA au Cameroun et packs de pièces TikTok.",
+      "Cartes virtuelles Visa et Mastercard DRAVA à travers l’Afrique et packs de pièces TikTok.",
     images: [socialImageUrl],
   },
 };
