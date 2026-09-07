@@ -128,6 +128,18 @@ export async function getTikTokOrderStatus(
       : { transactionReference: result.transactionReference }),
   };
 }
+
+export function isTikTokCheckoutReturnFailure(
+  order: TikTokOrder,
+  providerReturn: unknown,
+): boolean {
+  return (
+    order.provider === "soleaspay" &&
+    providerReturn === undefined &&
+    order.status !== "paid"
+  );
+}
+
 export function getTikTokSebPayQuote(
   input: {
     packId: string;
