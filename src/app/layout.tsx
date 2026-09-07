@@ -27,7 +27,7 @@ const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
-  "form-action 'none'",
+  "form-action https://pay.soleaspay.com",
   "script-src 'self' 'unsafe-inline'",
   "script-src-attr 'none'",
   "style-src 'self' 'unsafe-inline'",

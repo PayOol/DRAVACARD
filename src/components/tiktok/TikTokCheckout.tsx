@@ -1,4 +1,5 @@
 "use client";
+import { submitCheckoutForm } from "@/lib/payment-api";
 
 import { SebPayForm } from "@/components/payment/SebPayForm";
 import {
@@ -318,7 +319,7 @@ export function TikTokCheckout({
       );
       if (controller.signal.aborted) return;
       setPassword("");
-      if (result.checkoutUrl) {
+      if (result.checkoutUrl || result.checkoutForm) {
         try {
           const pending = await getTikTokOrderStatus(
             result.orderToken,
@@ -329,7 +330,8 @@ export function TikTokCheckout({
           /* A slow status response must not delay the provider redirect. */
         }
         if (controller.signal.aborted) return;
-        window.location.assign(result.checkoutUrl);
+        if (result.checkoutForm) submitCheckoutForm(result.checkoutForm);
+        else if (result.checkoutUrl) window.location.assign(result.checkoutUrl);
         return;
       }
       setOrderToken(result.orderToken);

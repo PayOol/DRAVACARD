@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
-import { readOrderToken } from "../src/lib/payment-api.ts";
+import { readOrderToken, readCheckoutReturn } from "../src/lib/payment-api.ts";
 import { DRAVA_CONTACT } from "../src/lib/drava-contact.ts";
 
 const require = createRequire(import.meta.url);
@@ -77,7 +77,7 @@ async function renderResult({
     "@/lib/language-context": { useLanguage: () => ({ language }) },
     "@/lib/drava-contact": { DRAVA_CONTACT },
     "@/lib/payment-api": {
-      readOrderToken,
+      readOrderToken, readCheckoutReturn,
       PaymentApiError: class extends Error {},
     async getPaymentOrderStatus(token) {
       calls.push(token);

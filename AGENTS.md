@@ -12,3 +12,5 @@ La plateforme possède deux interfaces : mobile sous 768 px et desktop à partir
 - Vérifier les interfaces aux largeurs 320, 390, 767, 768 et 1440 px, ainsi qu’en paysage tactile 844 × 390 px et aux mêmes dimensions avec une souris, puis exécuter les contrôles applicables décrits dans le document d’architecture. Rapporter les limites de validation ; une émulation navigateur ne prouve pas une validation sur appareil iOS/Android.
 
 Les données de paiement, les coordonnées et les jetons ne doivent pas être mis en cache par le service worker ni stockés dans l’historique. Une page de retour ou une simulation locale ne constitue jamais une preuve de paiement.
+
+Exception SoleasPay autorisée explicitement le 7 septembre 2026 : utiliser exclusivement le formulaire et le retour Checkout v4 documentés, avec confirmation automatique après rapprochement serveur de la commande, du montant et de la devise. Ne pas ajouter de gateway, status API ou webhook non documenté. Cette exception remplace l’exigence de vérification externe authentifiée pour SoleasPay uniquement ; voir `docs/SOLEASPAY.md`.

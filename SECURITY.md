@@ -1,3 +1,5 @@
+> SoleasPay exception, 7 September 2026: the merchant explicitly requested automatic confirmation from the documented Checkout v4 browser return. Its plugin-scoped key is sent in the temporary HTML form; the server matches and persists the reported result, without an invented authenticated status API. The authenticated-polling requirements below continue to apply to LeekPay and SebPay. See [docs/SOLEASPAY.md](docs/SOLEASPAY.md) for the trust boundary and limitations.
+
 # Security policy
 
 ## Financial operations

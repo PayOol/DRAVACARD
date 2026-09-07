@@ -7,7 +7,7 @@ LEEKPAY_SECRET_KEY=replace-with-development-credential
 TIKTOK_DATA_KEY=replace-with-64-hexadecimal-characters
 SEBPAY_PUBLIC_KEY=replace-with-development-public-key
 SEBPAY_SECRET_KEY=replace-with-development-secret-key
-# SoleasPay is intentionally unavailable until its server verification contract is supplied.
+# SoleasPay Checkout v4: plugin-scoped key only; exposed in the documented checkout form.
 SOLEASPAY_API_KEY=replace-with-development-api-key
 # Use the merchant-owned EmailJS service and template, with non-browser REST enabled.
 # The source's template field names are supported; recipient/auto-reply stays in EmailJS.

@@ -9,6 +9,7 @@ import {
   PaymentApiError,
   getPaymentOrderStatus,
   readOrderToken,
+  readCheckoutReturn,
 } from "@/lib/payment-api";
 import { AlertTriangle, LoaderCircle } from "lucide-react";
 import Link from "next/link";
@@ -36,8 +37,8 @@ const content = {
   checking: {
     title: { fr: "Vérification du paiement", en: "Checking your payment" },
     description: {
-      fr: "Nous vérifions le statut de votre paiement auprès du prestataire.",
-      en: "We are checking your payment status with the payment provider.",
+      fr: "Nous vérifions les informations de votre paiement.",
+      en: "We are checking your payment details.",
     },
     notice: {
       fr: "Veuillez patienter. Le retour sur cette page ne confirme pas à lui seul le paiement.",
@@ -105,6 +106,7 @@ export default function PaymentResult({
   const [canRetry, setCanRetry] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const orderTokenRef = useRef<string | null | undefined>(suppliedToken);
+  const checkoutReturnRef = useRef<unknown>(undefined);
   const Wrapper = embedded ? Fragment : MainLayout;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: an explicit retry restarts this bounded verification cycle.
@@ -125,9 +127,11 @@ export default function PaymentResult({
       return;
     }
 
-    // Neither the return pathname nor a query parameter is payment evidence.
+    // SoleasPay returns its Checkout payload here; only the server can update
+    // the matching order. The pathname alone never confirms a payment.
     if (orderTokenRef.current === undefined) {
       orderTokenRef.current = readOrderToken(window.location.hash);
+      checkoutReturnRef.current = readCheckoutReturn(window.location.search);
       // Keep the capability only in this mounted result, including retries.
       // It must not remain in history, copied links or printed receipts.
       if (window.location.hash || window.location.search) {
@@ -174,6 +178,7 @@ export default function PaymentResult({
         const result = await getPaymentOrderStatus(
           orderToken,
           controller.signal,
+          checkoutReturnRef.current,
         );
         if (!active || controller.signal.aborted) return;
         if (result.service !== "cards") {

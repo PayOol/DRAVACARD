@@ -30,7 +30,7 @@ La configuration de déploiement `worker/wrangler.jsonc` exige uniquement `LEEKP
 - `SEBPAY_PUBLIC_KEY` et `SEBPAY_SECRET_KEY` : identifiants du marchand SebPay.
 - `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY` : compte EmailJS du marchand, trois valeurs requises. Autoriser les appels API pour les applications non navigateur dans les réglages de sécurité EmailJS. Le modèle DRAVA décrit ci-dessous a un destinataire marchand fixe et un champ Reply-To ; aucune réponse automatique au client n’est configurée.
 - `EMAILJS_PRIVATE_KEY` : obligatoire pour le compte DRAVA selon ses réglages de sécurité. Elle doit être ajoutée aux secrets Worker et transmise uniquement côté serveur dans `accessToken`. Le moteur sait omettre ce champ pour les comptes ne l’exigeant pas, mais cette possibilité générique ne convient pas au compte DRAVA. Une valeur fournie vide ou mal formée désactive la création TikTok. Aucune clé publique ou privée ne doit être ajoutée à cette documentation ni au modèle HTML.
-- `SOLEASPAY_API_KEY` est réservé ; il n’active pas SoleasPay à lui seul.
+- `SOLEASPAY_API_KEY` active désormais Checkout v4 ; voir [SOLEASPAY.md](SOLEASPAY.md).
 
 La création TikTok exige le chiffrement et la notification de traitement, afin de ne pas accepter une commande impossible à transmettre au marchand. Si ces réglages manquent, `fulfillment_unavailable` est renvoyé avant tout appel au prestataire. La vérification d’une commande existante dépend seulement des identifiants de son prestataire et du dossier serveur : une configuration EmailJS absente ou une panne de lecture des données annexes ne transforme pas un paiement confirmé en échec. La notification reste alors en attente et le libellé du compte peut être absent. L’absence de configuration TikTok ne désactive ni la disponibilité LeekPay ni les paiements de cartes.
 
@@ -92,7 +92,9 @@ Un échec d’envoi, de lecture annexe ou de nettoyage conserve `verified: true`
 
 Limites conservées/documentées : l’envoi est déclenché par la consultation du statut ; aucune tâche de fond ne traite une commande si le client ne revient pas. Le marqueur KV évite les renvois séquentiels lorsqu’il est visible, mais KV ne garantit pas l’unicité de deux envois concurrents dans plusieurs régions. Un succès EmailJS suivi d’une réponse réseau perdue ou d’une erreur d’écriture du marqueur peut également provoquer un doublon au réessai. EmailJS ne documente pas de clé d’idempotence pour `/send` ; le consommateur du courriel doit reconnaître `order_id`. L’API documente une limite d’un envoi par seconde, partagée par les appels utilisant le compte : une erreur de débit reste en attente pour une consultation ultérieure. La création d’un paiement n’a pas de garantie d’idempotence prestataire : après une réponse réseau ambiguë, le navigateur ne doit pas relancer automatiquement la création. Si un jeton a été reçu, il doit uniquement vérifier son statut. Une garantie atomique plus forte nécessite un stockage transactionnel et une stratégie de reprise adaptée au contrat du prestataire.
 
-## SoleasPay : blocage de vérification explicite
+## SoleasPay : historique avant intégration Checkout v4
+
+Le blocage ci-dessous a été remplacé le 7 septembre 2026 par le contrat Checkout demandé explicitement par le marchand : [SOLEASPAY.md](SOLEASPAY.md).
 
 L’implémentation UpCoin envoie un formulaire natif à `https://pay.soleaspay.com` contenant `apiKey` et se fie aux paramètres de retour. Le plugin WooCommerce publié par SoleasPay effectue aussi une validation de forme des paramètres `soleaspay_data`, sans vérification authentifiée de la transaction. Ces mécanismes ne satisfont pas la règle DRAVA de confirmation serveur, et transmettraient la clé au navigateur.
 

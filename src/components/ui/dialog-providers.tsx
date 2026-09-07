@@ -10,7 +10,7 @@ import {
 import { useLanguage } from "@/lib/language-context";
 import type { PaymentCustomer } from "@/lib/payment-customer";
 import type { PaymentCardSelection } from "@/lib/leekpay";
-import { createPaymentCheckout, type PaymentInput } from "@/lib/payment-api";
+import { createPaymentCheckout, submitCheckoutForm, type PaymentInput } from "@/lib/payment-api";
 import {
   PAYMENT_PROVIDERS,
   type PaymentProvider,
@@ -123,6 +123,7 @@ export function PaymentProviders({
       );
       if (!controller.signal.aborted) {
         if (checkout.checkoutUrl) window.location.assign(checkout.checkoutUrl);
+        else if (checkout.checkoutForm) submitCheckoutForm(checkout.checkoutForm);
         else {
           setCreatedOrder({
             orderToken: checkout.orderToken,

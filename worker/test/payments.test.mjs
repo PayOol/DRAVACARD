@@ -47,6 +47,7 @@ describe("one platform payment engine (all external calls mocked)", () => {
       state.env[binding][method] = saved;
     }
     delete state.env.SEBPAY_SECRET_KEY;
+    delete state.env.SOLEASPAY_API_KEY;
     const unavailable = await health();
     assert.equal(unavailable.status, 503);
     assert.deepEqual(await unavailable.json(), { status: "unavailable" });
@@ -126,7 +127,7 @@ describe("one platform payment engine (all external calls mocked)", () => {
     await create(state, selection("cards", "sebpay"));
     delete state.env.LEEKPAY_SECRET_KEY;
     const catalog = await (await worker.fetch(request("/api/providers"), state.env)).json();
-    assert.deepEqual(catalog.providers.map(({ available }) => available), [false, false, true]);
+    assert.deepEqual(catalog.providers.map(({ available }) => available), [false, true, true]);
     await create(state, selection("cards", "sebpay"));
   });
 
@@ -141,6 +142,7 @@ describe("one platform payment engine (all external calls mocked)", () => {
     for (const body of variants) assert.equal((await worker.fetch(request("/api/checkout", body), state.env)).status, 400, JSON.stringify(body));
     assert.equal(state.calls.length, 0);
     assert.equal(state.values.size, 0);
+    delete state.env.SOLEASPAY_API_KEY;
     const disabled = await worker.fetch(request("/api/checkout", { ...base, provider: "soleaspay" }), state.env);
     assert.equal(disabled.status, 503);
     assert.equal(state.calls.length, 0);

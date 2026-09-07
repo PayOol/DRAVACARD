@@ -27,8 +27,8 @@ Les contrôles de tarifs correspondent à ces montants. Les commandes historique
 
 - `GET /api/providers` → `{ providers: [{ id, available }] }`. La configuration d’un prestataire vaut pour toute la plateforme ; EmailJS n’intervient pas dans cette réponse.
 - `POST /api/checkout` → `{ service, productId, customCoins?, provider, customer, consent: true, payment? }`. `service` vaut `cards` ou `tiktok`. Le serveur calcule le montant et la devise ; le navigateur ne transmet ni prix ni URL de retour.
-- Création → `{ service, productId, provider, orderToken, status, amount, currency, checkoutUrl?, providerLink?, coins?, bonus? }`. Les liens sont contrôlés avant affichage ; une création ne prouve jamais le paiement.
-- `POST /api/orders/status` → `{ orderToken }`. La réponse identifie le service, le produit et le prestataire. `verified: true` exige un paiement authentifié et la correspondance de la référence, du montant et de la devise enregistrés.
+- Création → `{ service, productId, provider, orderToken, status, amount, currency, checkoutUrl?, checkoutForm?, providerLink?, coins?, bonus? }`. Les liens sont contrôlés avant affichage ; une création ne prouve jamais le paiement.
+- `POST /api/orders/status` → `{ orderToken, providerReturn? }`. `providerReturn` est réservé au retour Checkout SoleasPay. La réponse identifie le service, le produit et le prestataire. `verified: true` exige la confirmation selon le contrat du prestataire ([exception Checkout SoleasPay](SOLEASPAY.md)) et la correspondance de la référence, du montant et de la devise enregistrés.
 - `GET /api/providers/sebpay/countries` et `POST /api/providers/sebpay/quote` sont partagés. Le devis reçoit `{ service, productId, customCoins?, country, operator }` ; le serveur le recalcule à la création.
 
 `customer` contient les coordonnées de contact validées ; TikTok ajoute le compte et le mot de passe nécessaires à son traitement. Seules les coordonnées documentées sont transmises au prestataire ; le mot de passe TikTok n’y est jamais envoyé. `payment`, réservé au formulaire Mobile Money, contient `{ country, operator, phone, otpCode? }`. L’OTP requis par l’opérateur sert exclusivement à cette transaction SebPay et n’est pas conservé.
@@ -49,7 +49,7 @@ Extension déployée le 5 septembre 2026 sur `drava-leekpay`, version `ae4402e7-
 
 L’ancien corps cartes `{ productId, customer }` reste accepté sur `/api/checkout`, avec sa réponse historique. Les routes `/api/tiktok/*` restent des alias du moteur commun. Les commandes v1 cartes et TikTok sont normalisées en mémoire ; leurs clés KV, leurs jetons et le contexte de chiffrement restent inchangés.
 
-Le Worker existant et son secret `LEEKPAY_SECRET_KEY` sont réutilisés. Il n’y a ni nouveau Worker ni deuxième configuration LeekPay par service. SebPay est proposé à tous les services dès que ses identifiants sont configurés. SoleasPay reste indisponible tant qu’une création et une vérification serveur authentifiées ne sont pas intégrées.
+Le Worker existant et son secret `LEEKPAY_SECRET_KEY` sont réutilisés. Il n’y a ni nouveau Worker ni deuxième configuration LeekPay par service. SebPay est proposé à tous les services dès que ses identifiants sont configurés. SoleasPay utilise Checkout v4 dès configuration de sa clé plugin, avec confirmation automatique du retour documenté ; voir [SOLEASPAY.md](SOLEASPAY.md).
 
 La disponibilité du paiement est distincte de celle du traitement métier. Avant toute création TikTok, le serveur exige le chiffrement et la configuration EmailJS et renvoie `fulfillment_unavailable` s’ils manquent. Cela n’empêche ni l’affichage de LeekPay ni le paiement des cartes. Une panne EmailJS après un paiement vérifié laisse ce paiement confirmé, avec une notification en attente.
 

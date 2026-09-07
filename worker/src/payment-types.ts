@@ -76,12 +76,22 @@ export type ProviderTransaction = {
   providerAmount: number;
   providerCurrency: string;
   orderId: string;
+  checkoutReturn?: CheckoutReturn;
+};
+export type CheckoutReturn = {
+  transaction_reference: string;
+  invoice_reference: string;
+  status: string;
+  success?: boolean;
+  amount: number;
+  currency: string;
 };
 export type ProviderCheckout = Omit<
   ProviderTransaction,
   "provider" | "orderId"
 > & {
   checkoutUrl?: string;
+  checkoutForm?: { action: string; fields: Record<string, string> };
   providerLink?: string;
   status: "pending" | "processing";
 };

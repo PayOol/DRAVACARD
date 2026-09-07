@@ -8,7 +8,7 @@ export const commonPaymentPaths = [
   'src/components/ui/dialog-providers.tsx', 'src/components/ui/dialog-checkout.tsx',
   'src/components/tiktok/TikTokCheckout.tsx', 'src/components/payment/PaymentResult.tsx',
   'worker/src/index.ts', 'worker/src/shared.ts', 'worker/src/providers.ts',
-  'worker/src/payments.ts', 'worker/src/services.ts', 'worker/src/payment-types.ts', 'worker/src/notifications.ts', 'worker/src/tiktok.ts',
+  'worker/src/soleaspay-checkout.ts', 'worker/src/payments.ts', 'worker/src/services.ts', 'worker/src/payment-types.ts', 'worker/src/notifications.ts', 'worker/src/tiktok.ts',
 ]
 const proxy = 'https://drava-leekpay.sebpay-proxy.workers.dev'
 const network = /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon)\b/
@@ -59,7 +59,8 @@ export function validateCommonPaymentApi(source) {
   const checkoutCall = calls(source, 'requestPaymentApi').find(node => node.arguments[0]?.getText() === '"/api/checkout"')
   if (!checkoutCall || objectKeys(checkoutCall.arguments[1]).some(key => key && !['provider','customer','consent'].includes(key))) failures.push('Checkout transport must not accept client amounts, currency, redirects or extra fields')
   const status = calls(source, 'requestPaymentApi').find(node => node.arguments[0]?.getText() === '"/api/orders/status"')
-  if (!status || JSON.stringify(objectKeys(status.arguments[1])) !== '["orderToken"]') failures.push('Status transport must send only the opaque order token')
+  if (!status || objectKeys(status.arguments[1]).some(key => key && key !== 'orderToken')) failures.push('Status transport must send only the opaque token and optional Checkout return')
+  requireAll(failures, source, ['value.action!=="https://pay.soleaspay.com"', 'if(!isCheckoutForm(value))', 'form.method="POST"', 'form.submit()', 'form.remove()', 'input.value=content', 'providerReturn===undefined?{}:{providerReturn}'], 'Checkout form and return must remain bounded to the documented contract')
   requireAll(failures, functionCode(source, 'getPaymentOrderStatus'), ['!isValidOrderToken(orderToken)', 'data.verified!==(data.status==="paid")', '!positive(data.amount)', '!currency(data.currency)', 'data.currency!==(service==="cards"?"XOF":"XAF")', 'cardIds:packIds'], 'Payment status must validate service/product, amount/currency, token and paid/verified consistency')
   requireAll(failures, checkout, ['data.currency!==(selection.service==="cards"?"XOF":"XAF")'], 'Checkout must retain the XOF cards/XAF TikTok currency boundary')
   requireAll(failures, source, ['/^#order=([a-f0-9]{64})$/', '/^[a-f0-9]{64}$/', 'url.protocol==="https:"&&!url.port&&!url.username&&!url.password', '"/api/providers"', 'data.providers.length!==PAYMENT_PROVIDERS.length', '"/api/providers/sebpay/countries"', '"/api/providers/sebpay/quote"'], 'Common payment capabilities, redirect URLs and provider endpoints must remain constrained')
@@ -199,6 +200,8 @@ function validateCommonResult(source) {
 export function validateCommonWorker(sources) {
   const failures = [], get = name => sources[`worker/src/${name}.ts`] ?? ''
   const index = get('index'), shared = get('shared'), providers = get('providers'), payments = get('payments'), services = get('services'), types = get('payment-types'), notifications = get('notifications'), tiktok = get('tiktok')
+  requireAll(failures, get('soleaspay-checkout'), ['order.provider!=="soleaspay"', 'value.invoice_reference!==order.orderId', 'value.amount!==order.providerAmount', 'value.currency!==order.providerCurrency', 'value.reference!==value.transaction_reference', '["SUCCESS","COMPLETED"].includes(value.status)', 'value.success!==true'], 'SoleasPay Checkout return must match the stored order and documented successful status')
+  requireAll(failures, payments, ['acceptProviderReturn(order,payload.providerReturn)', 'order.checkoutReturn.transaction_reference!==returned.transaction_reference', 'expiration:Math.floor(order.expiresAt/1000)'], 'Checkout return must be validated and persisted without extending order expiry')
   requireAll(failures, index, ['allowedOrigin(request,env)', 'Object.hasOwn(PAYMENT_ROUTES,url.pathname)', 'if((!location&&!route)||url.search)', 'if(!origin)thrownewApiError(403,"origin_forbidden")', 'request.method!==method', 'Access-Control-Request-Method', 'Access-Control-Request-Headers', 'awaitenforceRateLimit(request,env,route==="checkout")', 'if(location)returnlocationResponse(request,origin)', 'handlePaymentRequest(request,env,origin,route)'], 'Worker routing must remain queryless, origin/method/header checked and rate-limited before common dispatch')
   requireAll(failures, shared, ['SITE_ORIGIN="https://drava.click"', 'origin===SITE_ORIGIN', 'local.origin===origin', 'local.protocol==="http:"', 'local.hostname==="localhost"||local.hostname==="127.0.0.1"', 'returnnull', '"Cache-Control":"no-store,max-age=0"', '"Referrer-Policy":"no-referrer"', '"X-Content-Type-Options":"nosniff"', '"X-Frame-Options":"DENY"', 'env.CREATE_LIMITER:env.STATUS_LIMITER', 'if(!result.success)thrownewApiError(429,"rate_limited")', 'thrownewApiError(503,"service_unavailable")'], 'Worker must retain exact CORS, loopback opt-in, private response headers and fail-closed rate limiting')
   requireAll(failures, functionCode(shared,'readBoundedJson'), ['Number(declaredSize)>limit', 'size>limit', 'fatal:true', 'PROVIDER_TIMEOUT_MS', 'reader.cancel()', 'reader.releaseLock()', 'clearTimeout(timeout)'], 'Worker request/upstream bodies must be size-, time- and UTF-8 bounded')
@@ -218,7 +221,7 @@ export function validateCommonWorker(sources) {
   const create = code(functionCode(payments,'createCheckout'))
   if (!create.includes('order.providerId=transaction.providerId') && !create.includes('providerId:transaction.providerId')) failures.push('Worker must store the authenticated provider identifier')
   if (create.indexOf('awaitenv.ORDERS.put') > create.indexOf('returnjsonResponse(') || create.indexOf('awaitenv.ORDERS.put') < 0) failures.push('Worker must persist verification facts before returning a payable URL')
-  requireAll(failures, functionCode(payments,'orderStatus'), ['requestJson(request,1024)', 'Object.keys(payload).length!==1', '/^[a-f0-9]{64}$/', 'awaitorderKey(payload.orderToken)', 'env.ORDERS.get(key,"json")', 'normalizeOrder(value)', 'order.expiresAt<=Date.now()', 'awaitverifyProviderPayment(env,order)', 'constverified=status==="paid"', 'verified?awaitcompleteFulfillment(env,key,order):{}'], 'Worker status must verify an unexpired stored order with its provider before any paid result or fulfillment')
+  requireAll(failures, functionCode(payments,'orderStatus'), ['requestJson(request,4096)', 'exactKeys(payload,["orderToken","providerReturn"])', '/^[a-f0-9]{64}$/', 'awaitorderKey(payload.orderToken)', 'env.ORDERS.get(key,"json")', 'normalizeOrder(value)', 'order.expiresAt<=Date.now()', 'awaitverifyProviderPayment(env,order)', 'constverified=status==="paid"', 'verified?awaitcompleteFulfillment(env,key,order):{}'], 'Worker status must verify an unexpired stored order with its provider before any paid result or fulfillment')
   const orderType = nodes(types,n=>ts.isTypeAliasDeclaration(n)&&n.name.text==='Order')[0]?.getText() ?? ''
   if (!orderType || /\b(?:customer|email|whatsapp|phone|password|otpCode)\b/.test(orderType) || /\b(?:client|customer|password|otpCode)\s*:/.test(create.match(/constorder:Order=\{.*?\};/)?.[0] ?? '')) failures.push('Verification records must exclude customer credentials, contacts and OTP')
   requireAll(failures, functionCode(payments,'normalizeOrder'), ['value.version!==1&&value.version!==2', 'value.expiresAt!==value.createdAt+ORDER_TTL_SECONDS*1000', 'isProviderReference(value.provider,value.providerId)', '!positiveAmount(value.providerAmount)'], 'Legacy and new orders must retain expiry and stored provider-amount validation')
@@ -229,7 +232,7 @@ export function validateCommonWorker(sources) {
   if (network.test(code(services)) || /leekpay|sebpay|soleaspay/i.test(services)) failures.push('Service modules must not branch on providers or own provider transport')
   if (calls(providers,'fetch').length !== 2 || calls(notifications,'fetch').length !== 1 || calls(tiktok,'fetch').length !== 0) failures.push('Only the two reviewed provider transports and shared EmailJS transport may issue upstream requests')
   for (const [label, source] of [['index',index],['shared',shared],['payments',payments],['services',services]]) if (calls(source,'fetch').length) failures.push(`Worker ${label} must delegate upstream transport`)
-  requireAll(failures, providers, ['"https://leekpay.fr/api/v1/checkout"', '"https://newapi.sebpay.bj/api/v1"', 'Authorization:`Bearer${env.LEEKPAY_SECRET_KEY}`', '"X-Public-Key":env.SEBPAY_PUBLIC_KEY', '"X-Secret-Key":env.SEBPAY_SECRET_KEY', 'redirect:"manual"', 'signal:controller.signal', 'readBoundedJson(', 'clearTimeout(timeout)', 'checkoutId?"GET":"POST"', 'safeCheckoutUrl(data.payment_url)', 'soleaspay:{available:()=>false', 'configured(env,order.provider).verify(env,order)', 'configured(env,provider).create(env,intent,prepared)', 'exactKeys(value,["country","operator","phone","otpCode"])', 'calculated.otpRequired', 'customer_email:intent.customer.email', 'customer_phone:intent.customer.whatsapp'], 'Provider adapters must authenticate fixed endpoints, reject redirects, bound responses, share creation/status and keep unsupported providers unavailable')
+  requireAll(failures, providers, ['"https://leekpay.fr/api/v1/checkout"', '"https://newapi.sebpay.bj/api/v1"', 'Authorization:`Bearer${env.LEEKPAY_SECRET_KEY}`', '"X-Public-Key":env.SEBPAY_PUBLIC_KEY', '"X-Secret-Key":env.SEBPAY_SECRET_KEY', 'redirect:"manual"', 'signal:controller.signal', 'readBoundedJson(', 'clearTimeout(timeout)', 'checkoutId?"GET":"POST"', 'safeCheckoutUrl(data.payment_url)', 'soleaspay:{available:(env)=>secret(env.SOLEASPAY_API_KEY)', 'configured(env,order.provider).verify(env,order)', 'configured(env,provider).create(env,intent,prepared)', 'exactKeys(value,["country","operator","phone","otpCode"])', 'calculated.otpRequired', 'customer_email:intent.customer.email', 'customer_phone:intent.customer.whatsapp'], 'Provider adapters must authenticate fixed endpoints, reject redirects, bound responses, share creation/status and require configured provider credentials')
   requireAll(failures, providers, ['data.id!==order.providerId', 'data.amount!==order.providerAmount', 'data.currency!==order.providerCurrency', 'data.transaction_id!==order.providerId', 'data.external_reference!==order.orderId', 'number(data.amount)!==order.providerAmount', '!isPaymentStatus(data.status)', 'returnsebpayStatus(data.status)'], 'Every provider confirmation must match the stored ID, amount, currency and external order reference')
   const registryInit=nodes(providers,node=>ts.isVariableDeclaration(node)&&node.name.getText()==='registry')[0]?.initializer
   const registry=registryInit&&ts.isCallExpression(registryInit)?registryInit.arguments[0]:null
@@ -302,7 +305,7 @@ export async function runPaymentSecuritySelfTests(readSource) {
     ['src/lib/payment-api.ts', 'normalizeTikTokCustomer(input.customerasTikTokCustomer)', 'input.customer'],
     ['src/lib/payment-api.ts', '...selection,provider:input.provider,customer,consent:true,', '...selection,provider:input.provider,customer,consent:true,amount:1,'],
     ['src/lib/payment-api.ts', 'data.verified!==(data.status==="paid")', 'false'],
-    ['src/lib/payment-api.ts', '"/api/orders/status",{orderToken}', '"/api/orders/status",{orderToken,customer}'],
+    ['src/lib/payment-api.ts', '"/api/orders/status",{orderToken,...(providerReturn===undefined?{}:{providerReturn})}', '"/api/orders/status",{orderToken,customer,...(providerReturn===undefined?{}:{providerReturn})}'],
     ['src/lib/payment-api.ts', 'data.productId!==selection.productId', 'false'],
     ['src/lib/payment-api.ts', 'data.currency!==(selection.service==="cards"?"XOF":"XAF")', 'false'],
     ['src/lib/payment-providers.ts', 'logo:"/images/leekpay.webp"', 'logo:"https://example.test/logo.png"'],
@@ -339,7 +342,11 @@ export async function runPaymentSecuritySelfTests(readSource) {
     ['worker/src/providers.ts', 'Authorization:`Bearer${env.LEEKPAY_SECRET_KEY}`', 'Authorization:""'],
     ['worker/src/providers.ts', '"X-Secret-Key":env.SEBPAY_SECRET_KEY', '"X-Secret-Key":""'],
     ['worker/src/providers.ts', 'redirect:"manual"', 'redirect:"follow"'],
-    ['worker/src/providers.ts', 'soleaspay:{available:()=>false', 'soleaspay:{available:()=>true'],
+    ['worker/src/soleaspay-checkout.ts', 'value.amount!==order.providerAmount', 'false'],
+    ['worker/src/soleaspay-checkout.ts', 'value.invoice_reference!==order.orderId', 'false'],
+    ['worker/src/soleaspay-checkout.ts', 'value.currency!==order.providerCurrency', 'false'],
+    ['src/lib/payment-api.ts', 'value.action!=="https://pay.soleaspay.com"', 'false'],
+    ['worker/src/providers.ts', 'soleaspay:{available:(env)=>secret(env.SOLEASPAY_API_KEY)', 'soleaspay:{available:()=>true'],
     ['worker/src/tiktok.ts', 'awaitseal(client,order.orderId,env)', 'JSON.stringify(client)'],
     ['worker/src/notifications.ts', 'additionalData:newTextEncoder().encode(additionalData)', 'additionalData:new Uint8Array()'],
     ['worker/src/services.ts', '`cards:${key}`', '`cards:shared`'],

@@ -81,7 +81,7 @@ describe("TikTok orders (isolated KV namespace; all external calls mocked)", () 
     delete state.env.TIKTOK_DATA_KEY;
     const response = await worker.fetch(request("providers"), state.env);
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { providers: ["leekpay", "soleaspay", "sebpay"].map((id) => ({ id, available: id !== "soleaspay" })) });
+    assert.deepEqual(await response.json(), { providers: ["leekpay", "soleaspay", "sebpay"].map((id) => ({ id, available: true })) });
     assert.equal((await worker.fetch(request("checkout", SELECTION), state.env)).status, 503);
     const card = new Request("https://worker.example/api/checkout", { method: "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.24" }, body: JSON.stringify({ productId: "visa-basic", customer: { email: CUSTOMER.email, whatsapp: CUSTOMER.whatsapp } }) });
     assert.equal((await worker.fetch(card, state.env)).status, 201);

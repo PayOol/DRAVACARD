@@ -167,7 +167,7 @@ const forbiddenFrontendPatterns = [
   },
   {
     label: 'retired payment provider integration',
-    pattern: /\b(?:Stripe|PayPal|PaystackPop|FlutterwaveCheckout|SoleasPay)\s*\.|(?:js\.stripe\.com|paypal\.com\/sdk|js\.paystack\.co|checkout\.flutterwave\.com)/i,
+    pattern: /\b(?:Stripe|PayPal|PaystackPop|FlutterwaveCheckout)\s*\.|\bSoleasPay\s*\.(?!com\b)|(?:js\.stripe\.com|paypal\.com\/sdk|js\.paystack\.co|checkout\.flutterwave\.com)/i,
   },
   {
     label: 'external image host',
@@ -312,6 +312,7 @@ function validateFrontendUrls(source, relativePath, productionBundle = false) {
       failures.push(`Provider URL must not be bundled in the browser: ${relativePath} (${url})`)
     }
     if (/(?:^https?:\/\/)(?:pay\.)?soleaspay\.com|newapi\.sebpay\.bj|api\.emailjs\.com/i.test(url)) {
+      if (url === "https://pay.soleaspay.com" && (["src/lib/payment-api.ts", "src/app/layout.tsx"].includes(relativePath) || productionBundle)) continue
       failures.push(`TikTok provider or fulfillment API must stay server-side: ${relativePath} (${url})`)
     }
     if (/workers\.dev/i.test(url)) {
@@ -331,7 +332,7 @@ function allowReviewedOutputPaymentCurrency(source, relativePath) {
 
 function allowReviewedTikTokRule(source, relativePath, label) {
   if (label === 'legacy XAF currency') return relativePath === 'src/lib/payment-api.ts' && allowReviewedPaymentCurrency(source)
-  if (label === 'Soleas integration') return [tiktokPaymentPath, tiktokHistoryPath, 'src/lib/payment-providers.ts'].includes(relativePath)
+  if (label === 'Soleas integration') return [tiktokPaymentPath, tiktokHistoryPath, 'src/lib/payment-providers.ts', 'src/lib/payment-api.ts', 'src/components/payment/PaymentResult.tsx', 'src/app/layout.tsx'].includes(relativePath)
   if (label === 'WhatsApp personal-data handoff') return relativePath === dravaContactPath
     ? validateDravaContact(source).length === 0
     : relativePath === tiktokSupportPath && validateTikTokSupport(source).length === 0
@@ -473,7 +474,7 @@ function validateTikTokSource(source, relativePath) {
   }
   if (relativePath === tiktokSoundPath && (!/SOUND_PREFERENCE_KEY = "drava-tiktok-sound-enabled"/.test(source)
     || /\b(?:password|customer|email|whatsapp|orderToken|otpCode)\b/.test(source))) failures.push('TikTok sound storage must contain only the sound preference')
-  if (relativePath === tiktokResultPath && (!/getTikTokOrderStatus\(\s*orderToken,\s*controller\.signal,?\s*\)/.test(source)
+  if (relativePath === tiktokResultPath && (!/getTikTokOrderStatus\(\s*orderToken,\s*controller\.signal,\s*providerReturn,?\s*\)/.test(source)
     || !/order\?\.status === "paid" && order\.verified/.test(source)
     || !/window\.history\.replaceState\(null,\s*"",\s*window\.location\.pathname\)/.test(source))) failures.push('TikTok results must verify server status and remove the return capability from the URL')
   return failures
@@ -1894,7 +1895,7 @@ if (layoutSource) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https://img.youtube.com",
     `connect-src 'self' ${proxyOrigin}`,
-    "form-action 'none'",
+    "form-action https://pay.soleaspay.com",
     "frame-src https://www.youtube.com",
   ]
   for (const directive of requiredCspDirectives) {
@@ -1986,7 +1987,7 @@ if (requireOutput) {
         "script-src &#x27;self&#x27; &#x27;unsafe-inline&#x27;;",
         "img-src &#x27;self&#x27; data: https://img.youtube.com;",
         `connect-src &#x27;self&#x27; ${proxyOrigin};`,
-        "form-action &#x27;none&#x27;;",
+        "form-action https://pay.soleaspay.com;",
         "frame-src https://www.youtube.com;",
       ]
       for (const directive of encodedCspDirectives) {

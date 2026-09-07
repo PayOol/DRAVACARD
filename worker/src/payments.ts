@@ -6,6 +6,7 @@ import type {
   ProviderIntent,
 } from "./payment-types.ts";
 import {
+  acceptProviderReturn,
   createProviderPayment,
   isProvider,
   isProviderReference,
@@ -127,6 +128,9 @@ function normalizeOrder(value: unknown): Order {
     createdAt: value.createdAt,
     expiresAt: value.expiresAt,
   };
+  const checkoutReturn = value.checkoutReturn === undefined
+    ? {}
+    : { checkoutReturn: acceptProviderReturn(common, value.checkoutReturn) };
   if (service === "cards") {
     if (
       !isCardProduct(productId) ||
@@ -134,7 +138,7 @@ function normalizeOrder(value: unknown): Order {
       value.amount < 100
     )
       throw new ApiError(503, "service_unavailable");
-    return { ...common, service, productId, currency: "XOF" };
+    return { ...common, ...checkoutReturn, service, productId, currency: "XOF" };
   }
   if (
     typeof productId !== "string" ||
@@ -159,6 +163,7 @@ function normalizeOrder(value: unknown): Order {
   }
   return {
     ...common,
+    ...checkoutReturn,
     service,
     productId,
     packId: productId,
@@ -312,6 +317,7 @@ async function createCheckout(
       ...(transaction.checkoutUrl
         ? { checkoutUrl: transaction.checkoutUrl }
         : {}),
+      ...(transaction.checkoutForm ? { checkoutForm: transaction.checkoutForm } : {}),
       ...(transaction.providerLink
         ? { providerLink: transaction.providerLink }
         : {}),
@@ -330,9 +336,9 @@ async function orderStatus(
   origin: string,
   alias: boolean,
 ): Promise<Response> {
-  const payload = await requestJson(request, 1024);
+  const payload = await requestJson(request, 4096);
+  exactKeys(payload, ["orderToken", "providerReturn"]);
   if (
-    Object.keys(payload).length !== 1 ||
     typeof payload.orderToken !== "string" ||
     !/^[a-f0-9]{64}$/.test(payload.orderToken)
   )
@@ -349,6 +355,17 @@ async function orderStatus(
   if ((key.startsWith("tiktok:") ? "tiktok" : "cards") !== order.service)
     throw new ApiError(503, "service_unavailable");
   if (order.expiresAt <= Date.now()) throw new ApiError(404, "order_not_found");
+  if (payload.providerReturn !== undefined) {
+    const returned = acceptProviderReturn(order, payload.providerReturn);
+    if (order.checkoutReturn && order.checkoutReturn.transaction_reference !== returned.transaction_reference)
+      throw new ApiError(409, "payment_return_conflict");
+    if (!order.checkoutReturn) {
+      order.checkoutReturn = returned;
+      await env.ORDERS.put(key, JSON.stringify(order), {
+        expiration: Math.floor(order.expiresAt / 1000),
+      });
+    }
+  }
   const status = await verifyProviderPayment(env, order);
   const verified = status === "paid";
   const notification = verified
@@ -374,7 +391,7 @@ async function orderStatus(
         ? { notification: "pending" }
         : {}),
       ...(verified
-        ? { ...notification, transactionReference: order.providerId }
+        ? { ...notification, transactionReference: order.checkoutReturn?.transaction_reference ?? order.providerId }
         : {}),
     },
     200,

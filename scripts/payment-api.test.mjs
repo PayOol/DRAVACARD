@@ -4,6 +4,7 @@ import { PAYMENT_API_BASE, PaymentApiError, createPaymentCheckout, getPaymentPro
 import { PAYMENT_PROVIDERS } from "../src/lib/payment-providers.ts";
 import { getTikTokOrderStatus } from "../src/lib/tiktok-payment.ts";
 import { getLeekPayOrderStatus } from "../src/lib/leekpay.ts";
+import { readCheckoutReturn, isCheckoutForm, submitCheckoutForm } from "../src/lib/payment-api.ts";
 
 const token = "b".repeat(64);
 const contact = {email:"shared@example.test",whatsapp:"+237600000000"};
@@ -11,6 +12,47 @@ const tiktok = {...contact,username:"shared_creator",password:"fictitious-passwo
 const selections = [{service:"cards",productId:"visa-basic"},{service:"tiktok",productId:"boost"}];
 const json = (value,status=200) => new Response(JSON.stringify(value),{status,headers:{"content-type":"application/json"}});
 afterEach(() => mock.restoreAll());
+
+test("Checkout HTML submission uses only the fixed SoleasPay endpoint and removes its transient form", async () => {
+  const checkoutForm = { action: "https://pay.soleaspay.com", fields: {
+    apiKey: "test-plugin-key", amount: "5000", currency: "XOF", orderId: "DRAVA-PAY-test",
+    description: "Carte", shopName: "DRAVA", successUrl: "https://drava.click/payment-success/", failureUrl: "https://drava.click/payment-failure/",
+  } };
+  assert.equal(isCheckoutForm(checkoutForm), true);
+  for (const action of ["https://evil.example", "https://pay.soleaspay.com.evil.example", "javascript:alert(1)"])
+    assert.equal(isCheckoutForm({ ...checkoutForm, action }), false);
+  assert.equal(isCheckoutForm({ ...checkoutForm, fields: { ...checkoutForm.fields, submit: "injected" } }), false);
+  const elements = [], submitted = [];
+  const oldDocument = globalThis.document;
+  globalThis.document = { createElement(tag) {
+    if (tag === "input") return {};
+    return { append(input) { elements.push(input); }, submit() { submitted.push({ method: this.method, action: this.action }); }, remove() { this.removed = true; } };
+  }, body: { append(form) { this.form = form; } } };
+  try {
+    submitCheckoutForm(checkoutForm);
+    assert.deepEqual(submitted, [{ method: "POST", action: checkoutForm.action }]);
+    assert.equal(globalThis.document.body.form.removed, true);
+    assert.equal(elements.length, 8);
+    assert.ok(elements.every(item => item.type === "hidden"));
+  } finally { if (oldDocument === undefined) delete globalThis.document; else globalThis.document = oldDocument; }
+  mock.method(globalThis, "fetch", async () => json({ service: "cards", productId: "visa-basic", provider: "soleaspay", orderToken: token, amount: 5000, currency: "XOF", status: "pending", checkoutForm }));
+  const result = await createPaymentCheckout({ selection: selections[0], provider: "soleaspay", customer: contact, consent: true });
+  assert.deepEqual(result.checkoutForm, checkoutForm);
+});
+
+test("Checkout return is decoded once and forwarded only with its order capability", async () => {
+  const data = { transaction_reference: "TRX-123", invoice_reference: "ORDER-123", status: "SUCCESS", success: true, amount: 5000, currency: "XOF" };
+  const query = `?soleaspay_data=${encodeURIComponent(JSON.stringify(data))}`;
+  assert.deepEqual(readCheckoutReturn(query), data);
+  for (const query of ["", "?soleaspay_data=invalid", "?soleaspay_data=[]", "?soleaspay_data={}&soleaspay_data={}", "?soleaspay_data=" + "a".repeat(12000)])
+    assert.equal(readCheckoutReturn(query), undefined);
+  mock.method(globalThis, "fetch", async (_url, init) => {
+    assert.deepEqual(JSON.parse(init.body), { orderToken: token, providerReturn: data });
+    return json({ service: "cards", productId: "visa-basic", provider: "soleaspay", amount: 5000, currency: "XOF", status: "paid", verified: true });
+  });
+  assert.equal((await getPaymentOrderStatus(token, undefined, readCheckoutReturn(query))).verified, true);
+  await assert.rejects(getPaymentOrderStatus("invalid", undefined, data));
+});
 
 test("each registered provider uses exactly the same checkout API for both services", async () => {
   const calls=[];

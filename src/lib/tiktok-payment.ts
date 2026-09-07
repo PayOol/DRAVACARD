@@ -98,8 +98,9 @@ export async function createTikTokCheckout(
 export async function getTikTokOrderStatus(
   orderToken: string,
   signal?: AbortSignal,
+  providerReturn?: unknown,
 ): Promise<TikTokOrder> {
-  const result = await getPaymentOrderStatus(orderToken, signal);
+  const result = await getPaymentOrderStatus(orderToken, signal, providerReturn);
   if (
     result.service !== "tiktok" ||
     result.coins === undefined ||

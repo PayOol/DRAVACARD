@@ -47,12 +47,55 @@ export interface PaymentCheckout {
   provider: PaymentProvider;
   orderToken: string;
   checkoutUrl?: string;
+  checkoutForm?: CheckoutForm;
   providerLink?: string;
   status: "pending" | "processing";
   amount: number;
   currency: string;
   coins?: number;
   bonus?: number;
+}
+export interface CheckoutForm {
+  action: "https://pay.soleaspay.com";
+  fields: Record<string, string>;
+}
+
+export function isCheckoutForm(value: unknown): value is CheckoutForm {
+  if (!record(value) || value.action !== "https://pay.soleaspay.com" || !record(value.fields)) return false;
+  const fields = value.fields;
+  const required = ["apiKey", "amount", "currency", "orderId", "description", "shopName", "successUrl", "failureUrl"];
+  return Object.keys(fields).length === required.length &&
+    required.every((key) => typeof fields[key] === "string" && fields[key].length > 0 && fields[key].length <= 2048);
+}
+
+export function submitCheckoutForm(value: CheckoutForm): void {
+  if (!isCheckoutForm(value)) throw new PaymentApiError(false);
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = value.action;
+  form.hidden = true;
+  form.acceptCharset = "UTF-8";
+  for (const [name, content] of Object.entries(value.fields)) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = content;
+    form.append(input);
+  }
+  document.body.append(form);
+  try { form.submit(); } finally { form.remove(); }
+}
+
+// Retain only in the mounted result, then clear the original URL. The server
+// performs the order matching; no receipt is inferred here from these fields.
+export function readCheckoutReturn(search: string): unknown {
+  if (!search || search.length > 12000) return undefined;
+  const values = new URLSearchParams(search).getAll("soleaspay_data");
+  if (values.length !== 1 || values[0].length > 3000) return undefined;
+  try {
+    const data: unknown = JSON.parse(values[0]);
+    return record(data) ? data : undefined;
+  } catch { return undefined; }
 }
 export interface PaymentOrder {
   service: PaymentService;
@@ -351,10 +394,11 @@ export async function createPaymentCheckout(
     (selection.service === "tiktok" &&
       (!positive(data.coins) || !nonnegative(data.bonus))) ||
     (data.checkoutUrl !== undefined && !isSafePaymentUrl(data.checkoutUrl)) ||
+    (data.checkoutForm !== undefined && (input.provider !== "soleaspay" || !isCheckoutForm(data.checkoutForm))) ||
     (data.providerLink != null && !isSafePaymentUrl(data.providerLink)) ||
     (PAYMENT_PROVIDERS.find((item) => item.id === input.provider)?.flow ===
       "redirect" &&
-      !isSafePaymentUrl(data.checkoutUrl))
+      !isSafePaymentUrl(data.checkoutUrl) && !isCheckoutForm(data.checkoutForm))
   )
     throw new PaymentApiError(false);
   return {
@@ -371,6 +415,7 @@ export async function createPaymentCheckout(
     ...(isSafePaymentUrl(data.checkoutUrl)
       ? { checkoutUrl: data.checkoutUrl }
       : {}),
+    ...(isCheckoutForm(data.checkoutForm) ? { checkoutForm: data.checkoutForm } : {}),
     ...(isSafePaymentUrl(data.providerLink)
       ? { providerLink: data.providerLink }
       : {}),
@@ -380,11 +425,12 @@ export async function createPaymentCheckout(
 export async function getPaymentOrderStatus(
   orderToken: string,
   signal?: AbortSignal,
+  providerReturn?: unknown,
 ): Promise<PaymentOrder> {
   if (!isValidOrderToken(orderToken)) throw new PaymentApiError(false);
   const data = await requestPaymentApi(
     "/api/orders/status",
-    { orderToken },
+    { orderToken, ...(providerReturn === undefined ? {} : { providerReturn }) },
     signal,
   );
   if (!record(data)) throw new PaymentApiError(false);

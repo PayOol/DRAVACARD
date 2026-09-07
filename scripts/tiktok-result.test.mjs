@@ -6,6 +6,8 @@ import vm from "node:vm";
 import ts from "typescript";
 import { PaymentApiError, readOrderToken } from "../src/lib/leekpay.ts";
 
+import { readCheckoutReturn } from "../src/lib/payment-api.ts";
+
 const require = createRequire(import.meta.url);
 const source = await readFile(new URL("../src/components/tiktok/TikTokResult.tsx", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: {
@@ -39,6 +41,7 @@ function verification(responses, props = { orderToken: token }, language = "fr")
     },
     "@/components/layout/MainLayout": { default: "main" },
     "@/lib/language-context": { useLanguage: () => ({ language }) },
+    "@/lib/payment-api": { readCheckoutReturn },
     "@/lib/leekpay": { PaymentApiError, readOrderToken },
     "@/lib/tiktok-payment": { async getTikTokOrderStatus(value, signal) {
       calls.push({ token: value, signal });

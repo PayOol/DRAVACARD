@@ -3,6 +3,7 @@
 import MainLayout from "@/components/layout/MainLayout";
 import { useLanguage } from "@/lib/language-context";
 import { PaymentApiError, readOrderToken } from "@/lib/leekpay";
+import { readCheckoutReturn } from "@/lib/payment-api";
 import { rememberTikTokOrder } from "@/lib/tiktok-history";
 import { type TikTokOrder, getTikTokOrderStatus } from "@/lib/tiktok-payment";
 import { playFailure, playSuccess } from "@/lib/tiktok-sound";
@@ -16,10 +17,12 @@ export { TikTokReceipt } from "./TikTokSuccess";
 
 export function TikTokVerification({
   orderToken,
+  providerReturn,
   providerLink,
   onReturnHome,
 }: {
   orderToken: string | null;
+  providerReturn?: unknown;
   providerLink?: string;
   onReturnHome?: () => void;
 }) {
@@ -58,6 +61,7 @@ export function TikTokVerification({
         const result = await getTikTokOrderStatus(
           orderToken,
           controller.signal,
+          providerReturn,
         );
         if (!active || controller.signal.aborted) return;
         setOrder((previous) => {
@@ -115,7 +119,7 @@ export function TikTokVerification({
       clearTimeout(timer);
       clearTimeout(deadline);
     };
-  }, [orderToken, attempt]);
+  }, [orderToken, attempt, providerReturn]);
   if (order?.status === "paid" && order.verified)
     return (
       <TikTokReceipt
@@ -220,12 +224,14 @@ export function TikTokVerification({
 export default function TikTokResult() {
   const { language } = useLanguage();
   const token = useRef<string | null>(null);
+  const checkoutReturn = useRef<unknown>(undefined);
   const consumed = useRef(false);
   const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!consumed.current) {
       consumed.current = true;
       token.current = readOrderToken(window.location.hash);
+      checkoutReturn.current = readCheckoutReturn(window.location.search);
       // Retain the capability only in this mounted page; never in history/storage.
       window.history.replaceState(null, "", window.location.pathname);
     }
@@ -239,7 +245,7 @@ export default function TikTokResult() {
             ? "Paiement des pièces TikTok"
             : "TikTok coin payment"}
         </h1>
-        {ready && <TikTokVerification orderToken={token.current} />}
+        {ready && <TikTokVerification orderToken={token.current} providerReturn={checkoutReturn.current} />}
         <Link className="tiktok-secondary tiktok-return" href="/#tiktok">
           {language === "fr"
             ? "Retour aux pièces TikTok"

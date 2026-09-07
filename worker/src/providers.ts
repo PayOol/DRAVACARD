@@ -1,4 +1,5 @@
 import type {
+  CheckoutReturn,
   Country,
   Operator,
   PaymentEnv,
@@ -19,6 +20,7 @@ import {
   safeCheckoutUrl,
   secret,
 } from "./shared.ts";
+import { soleasPayCheckoutForm, validateSoleasPayReturn } from "./soleaspay-checkout.ts";
 const CHECKOUT_API = "https://leekpay.fr/api/v1/checkout";
 const PROVIDER_LIMIT_BYTES = 32 * 1024;
 const PROVIDER_TIMEOUT_MS = 10_000;
@@ -60,6 +62,7 @@ export type PreparedPayment = {
   quote?: Quote;
 };
 type Adapter = {
+  acceptReturn?(value: unknown, order: ProviderTransaction): CheckoutReturn;
   available(env: PaymentEnv): boolean;
   prepare(
     env: PaymentEnv,
@@ -138,10 +141,26 @@ const registry: Readonly<Record<Provider, Adapter>> = Object.freeze({
     },
   },
   soleaspay: {
-    available: () => false,
-    prepare: async () => unavailable(),
-    create: async () => unavailable(),
-    verify: async () => unavailable(),
+    available: (env) => secret(env.SOLEASPAY_API_KEY),
+    async prepare(_env, intent, payment) {
+      if (payment !== undefined) throw new ApiError(400, "invalid_payment");
+      return { amount: intent.amount, currency: intent.currency };
+    },
+    async create(env, intent, prepared) {
+      return {
+        providerId: intent.orderId,
+        providerAmount: prepared.amount,
+        providerCurrency: prepared.currency,
+        checkoutForm: soleasPayCheckoutForm(env, intent),
+        status: "pending",
+      };
+    },
+    acceptReturn: validateSoleasPayReturn,
+    async verify(_env, order) {
+      if (!order.checkoutReturn) return "pending";
+      validateSoleasPayReturn(order.checkoutReturn, order);
+      return ["SUCCESS", "COMPLETED"].includes(order.checkoutReturn.status) ? "paid" : "failed";
+    },
   },
   sebpay: {
     available: (env) =>
@@ -281,6 +300,11 @@ export async function verifyProviderPayment(
   order: ProviderTransaction,
 ) {
   return configured(env, order.provider).verify(env, order);
+}
+export function acceptProviderReturn(order: ProviderTransaction, value: unknown) {
+  const accept = registry[order.provider].acceptReturn;
+  if (!accept) throw new ApiError(400, "invalid_payment_return");
+  return accept(value, order);
 }
 export async function providerCountries(env: PaymentEnv, provider: Provider) {
   const get = configured(env, provider).countries;
