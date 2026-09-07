@@ -58,13 +58,14 @@ function verification(responses, props = { orderToken: token }, language = "fr")
     "./TikTokSuccess": { TikTokReceipt: "receipt" },
     "./tiktok-checkout.css": {},
   };
-  const context = vm.createContext({ exports: {}, AbortController, require(name) {
+  const context = vm.createContext({ exports: {}, AbortController, URLSearchParams, require(name) {
     assert.ok(name in imports, `Unexpected dependency ${name}`); return imports[name];
   }, setTimeout(callback, delay) { const id = ++nextTimer; timers.set(id, { callback, delay }); return id; }, clearTimeout(id) { timers.delete(id); } });
   vm.runInContext(compiled, context);
   const render = () => { cursor = 0; return context.exports.TikTokVerification(props); };
   return {
     calls, sounds, saved, timers, render,
+    readFailureReturn: context.exports.readTikTokFailureReturn,
     async flush() { render(); pending.splice(0).forEach(effect => effect()); await settle(); return render(); },
     async tick(predicate = delay => delay < 300000) {
       const entry = [...timers].find(([, timer]) => predicate(timer.delay));
@@ -77,6 +78,14 @@ function verification(responses, props = { orderToken: token }, language = "fr")
 function nodes(element) {
   if (Array.isArray(element)) return element.flatMap(nodes);
   return element && typeof element === "object" ? [element, ...nodes(element.props?.children)] : [];
+}
+
+function textOf(element) {
+  if (Array.isArray(element)) return element.map(textOf).join("");
+  if (element == null || typeof element === "boolean") return "";
+  return typeof element === "object"
+    ? textOf(element.props?.children)
+    : String(element);
 }
 
 test("verified payment shows its receipt before email delivery and polls notification without replaying the success sound", async () => {
@@ -157,6 +166,54 @@ test("missing order capability performs no request, produces no receipt and leav
   const run = verification([], { orderToken: null });
   const tree = await run.flush();
   assert.equal(tree.type, "section");
+  assert.equal(run.calls.length, 0);
+  assert.equal(run.timers.size, 0);
+  run.cleanup();
+});
+
+test("TikTok failure return marker is strict and does not accept duplicates or arbitrary values", () => {
+  const run = verification([], { orderToken: null });
+  assert.equal(run.readFailureReturn("?drava_return=failure"), true);
+  for (const search of [
+    "",
+    "?drava_return=success",
+    "?drava_return=cancelled",
+    "?drava_return=failure&drava_return=failure",
+    "?DRAVA_RETURN=failure",
+  ]) assert.equal(run.readFailureReturn(search), false);
+  run.cleanup();
+});
+
+test("explicit TikTok provider cancellation stays on payment not completed when the server order is still pending", async () => {
+  for (const language of ["fr", "en"]) {
+    const pending = { ...order, status: "pending", verified: false, notification: undefined };
+    const run = verification([pending], { orderToken: token, failureReturn: true }, language);
+    const tree = await run.flush();
+    const text = textOf(tree);
+    assert.equal(tree.type, "section");
+    assert.match(text, language === "fr" ? /Paiement non finalisé/ : /Payment not completed/);
+    assert.doesNotMatch(text, /Paiement non confirmé|Payment not confirmed|Paiement en attente|Payment pending/);
+    assert.equal(nodes(tree).some(node => node.type === "receipt"), false);
+    assert.equal(run.calls.length, 1, "The order is checked once so a verified payment can still override the failure return");
+    assert.equal(run.timers.size, 0, "A pending order must not turn the explicit cancellation into a polling screen");
+    run.cleanup();
+  }
+});
+
+test("a verified TikTok payment overrides an explicit failure return", async () => {
+  const run = verification([{ ...order, notification: "sent" }], { orderToken: token, failureReturn: true });
+  const tree = await run.flush();
+  assert.equal(tree.type, "receipt");
+  assert.equal(tree.props.order.verified, true);
+  assert.deepEqual(run.sounds, ["success"]);
+  run.cleanup();
+});
+
+test("TikTok failure return without an order token still shows payment not completed without a request", async () => {
+  const run = verification([], { orderToken: null, failureReturn: true });
+  const tree = await run.flush();
+  assert.match(textOf(tree), /Paiement non finalisé/);
+  assert.doesNotMatch(textOf(tree), /Paiement non confirmé/);
   assert.equal(run.calls.length, 0);
   assert.equal(run.timers.size, 0);
   run.cleanup();
