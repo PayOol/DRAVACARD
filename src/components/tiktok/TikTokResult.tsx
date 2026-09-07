@@ -5,7 +5,11 @@ import { useLanguage } from "@/lib/language-context";
 import { PaymentApiError, readOrderToken } from "@/lib/leekpay";
 import { readCheckoutReturn } from "@/lib/payment-api";
 import { rememberTikTokOrder } from "@/lib/tiktok-history";
-import { type TikTokOrder, getTikTokOrderStatus } from "@/lib/tiktok-payment";
+import {
+  type TikTokOrder,
+  getTikTokOrderStatus,
+  isTikTokCheckoutReturnFailure,
+} from "@/lib/tiktok-payment";
 import { playFailure, playSuccess } from "@/lib/tiktok-sound";
 import { LoaderCircle, TriangleAlert } from "lucide-react";
 import Link from "next/link";
@@ -89,16 +93,11 @@ export function TikTokVerification({
         const providerFailed = ["failed", "cancelled", "expired"].includes(
           result.status,
         );
-        // SoleasPay uses the same TikTok return route for success and failure.
-        // A successful Checkout v4 return carries soleaspay_data; cancelling the
-        // checkout returns without it and leaves the server order pending. Treat
-        // that exact combination as a non-finalized payment while still letting
-        // an already-verified paid order win on reload.
-        const soleasCancelled =
-          result.provider === "soleaspay" &&
-          providerReturn === undefined &&
-          !paid;
-        const failed = providerFailed || soleasCancelled;
+        const returnFailed = isTikTokCheckoutReturnFailure(
+          result,
+          providerReturn,
+        );
+        const failed = providerFailed || returnFailed;
         if ((paid || failed) && terminalSound.current !== result.orderId) {
           terminalSound.current = result.orderId;
           if (paid) playSuccess();
@@ -139,12 +138,11 @@ export function TikTokVerification({
         onReturnHome={onReturnHome}
       />
     );
-  const soleasCancelled =
-    order?.provider === "soleaspay" &&
-    providerReturn === undefined &&
-    order.status !== "paid";
+  const returnFailed = Boolean(
+    order && isTikTokCheckoutReturnFailure(order, providerReturn),
+  );
   const failed = Boolean(
-    soleasCancelled ||
+    returnFailed ||
       (order && ["failed", "cancelled", "expired"].includes(order.status)),
   );
   const title = failed
