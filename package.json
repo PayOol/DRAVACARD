@@ -18,7 +18,7 @@
     "test:tiktok": "node --test scripts/tiktok-catalog.test.mjs scripts/tiktok-payment.test.mjs scripts/tiktok-result.test.mjs",
     "security:audit": "npm audit --audit-level=low",
     "security:source": "node scripts/security-check.mjs",
-    "security:output": "node scripts/security-check.mjs --output",
+    "security:output": "node scripts/security-output-check.mjs",
     "security:test": "node scripts/security-check.mjs --self-test",
     "security:check": "npm run security:test && npm run security:audit && npm run security:source"
   },
