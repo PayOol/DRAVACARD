@@ -92,7 +92,8 @@ it("builds the documented server POST for both product currencies without leakin
     assert.deepEqual(JSON.parse(request.init.body), {
       apiKey: env.SOLEASPAY_API_KEY, amount: 25000, currency,
       orderId: intent.orderId, description: intent.description, shopName: "DRAVA",
-      successUrl: intent.returnUrl, failureUrl: intent.cancelUrl,
+      successUrl: intent.returnUrl,
+      failureUrl: "https://drava.click/tiktok-failure?drava_return=failure#order=test",
       customer: { name: "Client", email: "test@example.com" },
     });
   }
