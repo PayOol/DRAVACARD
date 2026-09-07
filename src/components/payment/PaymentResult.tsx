@@ -59,12 +59,12 @@ const content = {
   failed: {
     title: { fr: "Paiement non finalisé", en: "Payment not completed" },
     description: {
-      fr: "Le prestataire indique que ce paiement a échoué, a été annulé ou a expiré.",
-      en: "The payment provider reports that this payment failed, was cancelled or expired.",
+      fr: "Ce paiement n’a pas été finalisé. Il peut avoir échoué, avoir été annulé ou avoir expiré.",
+      en: "This payment was not completed. It may have failed, been cancelled or expired.",
     },
     notice: {
-      fr: "Vous pouvez retourner au catalogue et réessayer lorsque vous le souhaitez.",
-      en: "You can return to the catalogue and try again whenever you wish.",
+      fr: "Aucun reçu de paiement n’a été généré. Si vous pensez avoir été débité, vérifiez avant de recommencer afin d’éviter un double paiement.",
+      en: "No payment receipt was generated. If you think you were charged, check before trying again to avoid a duplicate payment.",
     },
   },
   unconfirmed: {
@@ -142,7 +142,7 @@ export default function PaymentResult({
     setCanRetry(Boolean(orderToken));
     setOrder(null);
     if (!orderToken) {
-      setVerification("missing");
+      setVerification(status === "failure" ? "failed" : "missing");
       setIsChecking(false);
       return;
     }
@@ -153,14 +153,25 @@ export default function PaymentResult({
     let lastOrder: PaymentOrder | null = null;
     let paidReceipt = false;
     const controller = new AbortController();
-    setVerification("checking");
-    setIsChecking(true);
+    // The dedicated failure URL is an explicit checkout outcome, not proof of
+    // payment truth. Show the failure surface immediately while still allowing
+    // a verified paid response to override it if the provider already settled.
+    setVerification(status === "failure" ? "failed" : "checking");
+    setIsChecking(status !== "failure");
 
     const deadlineTimer = setTimeout(() => {
       controller.abort();
       clearTimeout(pollTimer);
       if (active) {
-        setVerification(paidReceipt ? "paid" : lastOrder ? "pending" : "unconfirmed");
+        setVerification(
+          paidReceipt
+            ? "paid"
+            : status === "failure"
+              ? "failed"
+              : lastOrder
+                ? "pending"
+                : "unconfirmed",
+        );
         setIsChecking(false);
       }
     }, 90000);
@@ -216,6 +227,12 @@ export default function PaymentResult({
         ) {
           finish("failed");
           return;
+        } else if (status === "failure") {
+          // SoleasPay can return to failureUrl without soleaspay_data. In that
+          // case the server correctly keeps the order pending, but the browser
+          // must remain on the failure surface instead of showing "unconfirmed".
+          finish("failed");
+          return;
         } else {
           setVerification("pending");
         }
@@ -231,6 +248,10 @@ export default function PaymentResult({
             return;
           }
         } else {
+          if (status === "failure") {
+            finish("failed");
+            return;
+          }
           if (error instanceof PaymentApiError && !error.retryable) {
             finish("unconfirmed");
             return;
@@ -294,11 +315,7 @@ export default function PaymentResult({
 
             <div aria-live="polite" aria-atomic="true">
               <h1 className="payment-result-title text-2xl font-bold text-slate-900 dark:text-[#e6edf7] md:text-3xl">
-                {verification === "missing" && status === "failure"
-                  ? language === "fr"
-                    ? "Paiement non finalisé"
-                    : "Payment not completed"
-                  : copy.title[language]}
+                {copy.title[language]}
               </h1>
               <p className="payment-result-description mx-auto mt-4 max-w-xl text-base leading-7 text-gray-600 dark:text-[#b3c1d5] md:text-lg">
                 {copy.description[language]}

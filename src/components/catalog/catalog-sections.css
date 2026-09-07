@@ -138,9 +138,17 @@
 
 @media (max-width: 767px), (max-width: 1023px) and (max-height: 500px) and (pointer: coarse) {
   .mobile-app .catalog-tabs {
+    position: sticky;
+    top: var(--mobile-header-height);
+    z-index: 35;
     width: auto;
     margin-inline: max(20px, env(safe-area-inset-left)) max(20px, env(safe-area-inset-right));
     margin-bottom: 22px;
+    box-shadow: 0 8px 20px rgb(15 23 42 / 7%);
+  }
+
+  .dark .mobile-app .catalog-tabs {
+    box-shadow: 0 8px 20px rgb(0 0 0 / 24%);
   }
 
   .mobile-app .catalog-tab {
