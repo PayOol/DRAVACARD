@@ -10,24 +10,24 @@ const Footer = () => {
   const { language } = useLanguage();
   const resources = [
     {
-      href: "/carte-virtuelle-cameroun/",
-      fr: "Carte virtuelle au Cameroun",
-      en: "Virtual cards in Cameroon",
+      href: "/carte-virtuelle-afrique/",
+      fr: "Carte virtuelle en Afrique",
+      en: "Virtual cards in Africa",
     },
     {
-      href: "/carte-visa-virtuelle-cameroun/",
-      fr: "Carte Visa virtuelle Cameroun",
-      en: "Virtual Visa card Cameroon",
+      href: "/carte-visa-virtuelle-afrique/",
+      fr: "Carte Visa virtuelle en Afrique",
+      en: "Virtual Visa card in Africa",
     },
     {
-      href: "/carte-mastercard-virtuelle-cameroun/",
-      fr: "Carte Mastercard virtuelle Cameroun",
-      en: "Virtual Mastercard Cameroon",
+      href: "/carte-mastercard-virtuelle-afrique/",
+      fr: "Carte Mastercard virtuelle en Afrique",
+      en: "Virtual Mastercard in Africa",
     },
     {
-      href: "/pieces-tiktok-cameroun/",
-      fr: "Pièces TikTok au Cameroun",
-      en: "TikTok coins in Cameroon",
+      href: "/pieces-tiktok-afrique/",
+      fr: "Pièces TikTok en Afrique",
+      en: "TikTok coins in Africa",
     },
   ];
 
@@ -56,7 +56,7 @@ const Footer = () => {
 
         <nav aria-label={language === "fr" ? "Guides DRAVA" : "DRAVA guides"}>
           <p className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">
-            {language === "fr" ? "Guides" : "Guides"}
+            {language === "fr" ? "Guides Afrique" : "Africa guides"}
           </p>
           <ul className="space-y-1.5">
             {resources.map((resource) => (

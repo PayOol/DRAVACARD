@@ -6,6 +6,10 @@ import path from "node:path";
 const root = process.cwd();
 const outputRoot = path.join(root, "out");
 const expectedPages = new Map([
+  ["carte-virtuelle-afrique", "https://drava.click/carte-virtuelle-afrique/"],
+  ["carte-visa-virtuelle-afrique", "https://drava.click/carte-visa-virtuelle-afrique/"],
+  ["carte-mastercard-virtuelle-afrique", "https://drava.click/carte-mastercard-virtuelle-afrique/"],
+  ["pieces-tiktok-afrique", "https://drava.click/pieces-tiktok-afrique/"],
   ["carte-virtuelle-cameroun", "https://drava.click/carte-virtuelle-cameroun/"],
   ["carte-visa-virtuelle-cameroun", "https://drava.click/carte-visa-virtuelle-cameroun/"],
   ["carte-mastercard-virtuelle-cameroun", "https://drava.click/carte-mastercard-virtuelle-cameroun/"],
