@@ -173,10 +173,13 @@ export default function RootLayout({
           httpEquiv="Content-Security-Policy"
           content={contentSecurityPolicy}
         />
-        <script
+        <Script
+          id="drava-organization-website-schema"
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: structuredData }}
-        />
+          strategy="beforeInteractive"
+        >
+          {structuredData}
+        </Script>
         {/* This tiny same-origin script must apply the saved theme before first paint. */}
         {/* eslint-disable-next-line @next/next/no-sync-scripts */}
         <script src={withBasePath("/theme-init.js")} />
