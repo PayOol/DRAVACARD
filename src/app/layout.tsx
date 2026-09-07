@@ -3,7 +3,6 @@ import { Inter, Righteous } from "next/font/google";
 import "./globals.css";
 import "@/components/payment/payment-result-mobile.css";
 import { withBasePath } from "@/lib/base-path";
-import { DRAVA_CONTACT } from "@/lib/drava-contact";
 import { LanguageProvider } from "@/lib/language-context";
 import { ThemeProvider } from "@/lib/theme-context";
 import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
@@ -50,14 +49,6 @@ const structuredData = JSON.stringify([
     url: siteUrl.href,
     logo: logoUrl.href,
     email: "contact.drava@gmail.com",
-    telephone: DRAVA_CONTACT.phoneNumber,
-    contactPoint: {
-      "@type": "ContactPoint",
-      telephone: DRAVA_CONTACT.phoneNumber,
-      contactType: "customer support",
-      areaServed: "CM",
-      availableLanguage: ["French", "English"],
-    },
   },
   {
     "@context": "https://schema.org",
