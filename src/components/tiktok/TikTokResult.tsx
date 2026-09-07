@@ -141,10 +141,9 @@ export function TikTokVerification({
   const returnFailed = Boolean(
     order && isTikTokCheckoutReturnFailure(order, providerReturn),
   );
-  // SoleasPay can return to the shared TikTok result route without preserving
-  // the order fragment on cancellation. This route is payment-result-only, so
-  // a missing capability must render the non-finalized surface rather than the
-  // ambiguous "not confirmed" surface. It still never creates a receipt.
+  // The shared TikTok result route can be reached after an interrupted checkout
+  // without the order fragment. Since this route exists only for checkout results,
+  // a missing capability renders the non-finalized surface and never a receipt.
   const failed = Boolean(
     !orderToken ||
       returnFailed ||
