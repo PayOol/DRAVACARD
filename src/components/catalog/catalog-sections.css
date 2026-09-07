@@ -138,10 +138,12 @@
 
 @media (max-width: 767px), (max-width: 1023px) and (max-height: 500px) and (pointer: coarse) {
   .mobile-app .catalog-tabs {
+    --catalog-tabs-header-gap: 12px;
     position: sticky;
-    top: var(--mobile-header-height);
+    top: calc(var(--mobile-header-height) + var(--catalog-tabs-header-gap));
     z-index: 35;
     width: auto;
+    margin-top: var(--catalog-tabs-header-gap);
     margin-inline: max(20px, env(safe-area-inset-left)) max(20px, env(safe-area-inset-right));
     margin-bottom: 22px;
     box-shadow: 0 8px 20px rgb(15 23 42 / 7%);
