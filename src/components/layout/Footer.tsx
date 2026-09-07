@@ -8,20 +8,42 @@ import Link from "next/link";
 
 const Footer = () => {
   const { language } = useLanguage();
+  const resources = [
+    {
+      href: "/carte-virtuelle-cameroun/",
+      fr: "Carte virtuelle au Cameroun",
+      en: "Virtual cards in Cameroon",
+    },
+    {
+      href: "/carte-visa-virtuelle-cameroun/",
+      fr: "Carte Visa virtuelle Cameroun",
+      en: "Virtual Visa card Cameroon",
+    },
+    {
+      href: "/carte-mastercard-virtuelle-cameroun/",
+      fr: "Carte Mastercard virtuelle Cameroun",
+      en: "Virtual Mastercard Cameroon",
+    },
+    {
+      href: "/pieces-tiktok-cameroun/",
+      fr: "Pièces TikTok au Cameroun",
+      en: "TikTok coins in Cameroon",
+    },
+  ];
 
   return (
     <footer className="border-t border-gray-100 bg-gray-50 dark:border-slate-700 dark:bg-[#111c2e]">
-      <div className="container mx-auto flex flex-col items-center justify-between gap-6 px-4 py-8 md:flex-row md:px-6">
+      <div className="container mx-auto grid gap-8 px-4 py-8 md:grid-cols-3 md:px-6">
         <div className="flex flex-col items-center md:items-start">
           <Link href="/" aria-label="DRAVA" className="flex items-center">
             <img
               src={withBasePath("/images/drava-wordmark.svg")}
-              alt="DRAVA Logo"
+              alt="DRAVA"
               className="desktop-brand-logo drava-wordmark-light h-10 w-auto"
             />
             <img
               src={withBasePath("/images/drava-wordmark-dark.svg")}
-              alt="DRAVA Logo"
+              alt="DRAVA"
               className="desktop-brand-logo drava-wordmark-dark h-10 w-auto"
             />
           </Link>
@@ -31,6 +53,24 @@ const Footer = () => {
               : "© 2026 DRAVA. All rights reserved."}
           </p>
         </div>
+
+        <nav aria-label={language === "fr" ? "Guides DRAVA" : "DRAVA guides"}>
+          <p className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">
+            {language === "fr" ? "Guides" : "Guides"}
+          </p>
+          <ul className="space-y-1.5">
+            {resources.map((resource) => (
+              <li key={resource.href}>
+                <Link
+                  href={resource.href}
+                  className="text-sm text-gray-600 transition-colors hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-300"
+                >
+                  {resource[language]}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
         <div className="space-y-2">
           <a
