@@ -1,6 +1,7 @@
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
 import Link from "next/link";
+import Script from "next/script";
 
 type Highlight = {
   label: string;
@@ -47,6 +48,7 @@ export default function SeoLandingPage({
   relatedLinks: RelatedLink[];
 }) {
   const canonicalUrl = new URL(path, "https://drava.click").href;
+  const scriptId = `seo-schema-${path.replace(/[^a-z0-9]+/gi, "-")}`;
   const structuredData = JSON.stringify([
     {
       "@context": "https://schema.org",
@@ -97,10 +99,9 @@ export default function SeoLandingPage({
     <>
       <Header />
       <main className="min-h-screen bg-white pt-16 text-slate-900 md:pt-20 dark:bg-[#0b1220] dark:text-slate-100">
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: structuredData }}
-        />
+        <Script id={scriptId} type="application/ld+json">
+          {structuredData}
+        </Script>
 
         <section className="border-b border-slate-200 bg-gradient-to-b from-blue-50 to-white px-4 py-12 md:py-20 dark:border-slate-800 dark:from-[#111c2e] dark:to-[#0b1220]">
           <div className="mx-auto max-w-5xl">
