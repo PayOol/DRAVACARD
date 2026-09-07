@@ -18,11 +18,13 @@ export { TikTokReceipt } from "./TikTokSuccess";
 export function TikTokVerification({
   orderToken,
   providerReturn,
+  failureReturn = false,
   providerLink,
   onReturnHome,
 }: {
   orderToken: string | null;
   providerReturn?: unknown;
+  failureReturn?: boolean;
   providerLink?: string;
   onReturnHome?: () => void;
 }) {
@@ -94,12 +96,21 @@ export function TikTokVerification({
           if (paid) playSuccess();
           else playFailure();
         }
-        if ((paid && result.notification === "sent") || failed) {
+        if (
+          (paid && result.notification === "sent") ||
+          failed ||
+          (failureReturn && !paid)
+        ) {
           finish();
           return;
         }
       } catch (error) {
         if (!active || controller.signal.aborted) return;
+        if (failureReturn) {
+          setUnavailable(false);
+          finish();
+          return;
+        }
         setUnavailable(true);
         if (error instanceof PaymentApiError && !error.retryable) {
           finish();
@@ -119,7 +130,7 @@ export function TikTokVerification({
       clearTimeout(timer);
       clearTimeout(deadline);
     };
-  }, [orderToken, attempt, providerReturn]);
+  }, [orderToken, attempt, providerReturn, failureReturn]);
   if (order?.status === "paid" && order.verified)
     return (
       <TikTokReceipt
@@ -130,15 +141,16 @@ export function TikTokVerification({
       />
     );
   const failed =
-    order && ["failed", "cancelled", "expired"].includes(order.status);
-  const title = !orderToken
+    failureReturn ||
+    Boolean(order && ["failed", "cancelled", "expired"].includes(order.status));
+  const title = failed
     ? fr
-      ? "Paiement non confirmé"
-      : "Payment not confirmed"
-    : failed
+      ? "Paiement non finalisé"
+      : "Payment not completed"
+    : !orderToken
       ? fr
-        ? "Paiement non finalisé"
-        : "Payment not completed"
+        ? "Paiement non confirmé"
+        : "Payment not confirmed"
       : unavailable
         ? fr
           ? "Vérification indisponible"
@@ -150,14 +162,14 @@ export function TikTokVerification({
           : fr
             ? "Vérification du paiement"
             : "Checking your payment";
-  const description = !orderToken
+  const description = failed
     ? fr
-      ? "Aucune référence de commande valide n’est présente. Cette page seule ne confirme aucun paiement."
-      : "There is no valid order reference. This page alone does not confirm a payment."
-    : failed
+      ? "Ce paiement n’a pas été finalisé. Il peut avoir échoué, avoir été annulé ou avoir expiré."
+      : "This payment was not completed. It may have failed, been cancelled or expired."
+    : !orderToken
       ? fr
-        ? "Le prestataire indique que le paiement a échoué, a été annulé ou a expiré."
-        : "The provider reports that the payment failed, was cancelled or expired."
+        ? "Aucune référence de commande valide n’est présente. Cette page seule ne confirme aucun paiement."
+        : "There is no valid order reference. This page alone does not confirm a payment."
       : unavailable
         ? fr
           ? "Le statut n’a pas pu être vérifié. Cela ne signifie pas que le paiement a échoué."
@@ -171,7 +183,7 @@ export function TikTokVerification({
       aria-live="polite"
       aria-atomic="true"
     >
-      {checking ? (
+      {checking && !failed ? (
         <LoaderCircle
           className="tiktok-result-icon tiktok-spinner"
           size={44}
@@ -221,16 +233,24 @@ export function TikTokVerification({
   );
 }
 
+export function readTikTokFailureReturn(search: string): boolean {
+  if (!search || search.length > 12000) return false;
+  const values = new URLSearchParams(search).getAll("drava_return");
+  return values.length === 1 && values[0] === "failure";
+}
+
 export default function TikTokResult() {
   const { language } = useLanguage();
   const token = useRef<string | null>(null);
   const checkoutReturn = useRef<unknown>(undefined);
+  const failureReturn = useRef(false);
   const consumed = useRef(false);
   const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!consumed.current) {
       consumed.current = true;
       token.current = readOrderToken(window.location.hash);
+      failureReturn.current = readTikTokFailureReturn(window.location.search);
       checkoutReturn.current = readCheckoutReturn(window.location.search);
       // Retain the capability only in this mounted page; never in history/storage.
       window.history.replaceState(null, "", window.location.pathname);
@@ -245,7 +265,13 @@ export default function TikTokResult() {
             ? "Paiement des pièces TikTok"
             : "TikTok coin payment"}
         </h1>
-        {ready && <TikTokVerification orderToken={token.current} providerReturn={checkoutReturn.current} />}
+        {ready && (
+          <TikTokVerification
+            orderToken={token.current}
+            providerReturn={checkoutReturn.current}
+            failureReturn={failureReturn.current}
+          />
+        )}
         <Link className="tiktok-secondary tiktok-return" href="/#tiktok">
           {language === "fr"
             ? "Retour aux pièces TikTok"
