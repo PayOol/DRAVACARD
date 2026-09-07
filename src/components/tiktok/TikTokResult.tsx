@@ -18,13 +18,11 @@ export { TikTokReceipt } from "./TikTokSuccess";
 export function TikTokVerification({
   orderToken,
   providerReturn,
-  failureReturn = false,
   providerLink,
   onReturnHome,
 }: {
   orderToken: string | null;
   providerReturn?: unknown;
-  failureReturn?: boolean;
   providerLink?: string;
   onReturnHome?: () => void;
 }) {
@@ -88,29 +86,30 @@ export function TikTokVerification({
         setUnavailable(false);
         rememberTikTokOrder(result);
         const paid = result.status === "paid" && result.verified;
-        const failed = ["failed", "cancelled", "expired"].includes(
+        const providerFailed = ["failed", "cancelled", "expired"].includes(
           result.status,
         );
+        // SoleasPay uses the same TikTok return route for success and failure.
+        // A successful Checkout v4 return carries soleaspay_data; cancelling the
+        // checkout returns without it and leaves the server order pending. Treat
+        // that exact combination as a non-finalized payment while still letting
+        // an already-verified paid order win on reload.
+        const soleasCancelled =
+          result.provider === "soleaspay" &&
+          providerReturn === undefined &&
+          !paid;
+        const failed = providerFailed || soleasCancelled;
         if ((paid || failed) && terminalSound.current !== result.orderId) {
           terminalSound.current = result.orderId;
           if (paid) playSuccess();
           else playFailure();
         }
-        if (
-          (paid && result.notification === "sent") ||
-          failed ||
-          (failureReturn && !paid)
-        ) {
+        if ((paid && result.notification === "sent") || failed) {
           finish();
           return;
         }
       } catch (error) {
         if (!active || controller.signal.aborted) return;
-        if (failureReturn) {
-          setUnavailable(false);
-          finish();
-          return;
-        }
         setUnavailable(true);
         if (error instanceof PaymentApiError && !error.retryable) {
           finish();
@@ -130,7 +129,7 @@ export function TikTokVerification({
       clearTimeout(timer);
       clearTimeout(deadline);
     };
-  }, [orderToken, attempt, providerReturn, failureReturn]);
+  }, [orderToken, attempt, providerReturn]);
   if (order?.status === "paid" && order.verified)
     return (
       <TikTokReceipt
@@ -140,9 +139,14 @@ export function TikTokVerification({
         onReturnHome={onReturnHome}
       />
     );
-  const failed =
-    failureReturn ||
-    Boolean(order && ["failed", "cancelled", "expired"].includes(order.status));
+  const soleasCancelled =
+    order?.provider === "soleaspay" &&
+    providerReturn === undefined &&
+    order.status !== "paid";
+  const failed = Boolean(
+    soleasCancelled ||
+      (order && ["failed", "cancelled", "expired"].includes(order.status)),
+  );
   const title = failed
     ? fr
       ? "Paiement non finalisé"
@@ -233,24 +237,16 @@ export function TikTokVerification({
   );
 }
 
-export function readTikTokFailureReturn(search: string): boolean {
-  if (!search || search.length > 12000) return false;
-  const values = new URLSearchParams(search).getAll("drava_return");
-  return values.length === 1 && values[0] === "failure";
-}
-
 export default function TikTokResult() {
   const { language } = useLanguage();
   const token = useRef<string | null>(null);
   const checkoutReturn = useRef<unknown>(undefined);
-  const failureReturn = useRef(false);
   const consumed = useRef(false);
   const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!consumed.current) {
       consumed.current = true;
       token.current = readOrderToken(window.location.hash);
-      failureReturn.current = readTikTokFailureReturn(window.location.search);
       checkoutReturn.current = readCheckoutReturn(window.location.search);
       // Retain the capability only in this mounted page; never in history/storage.
       window.history.replaceState(null, "", window.location.pathname);
@@ -269,7 +265,6 @@ export default function TikTokResult() {
           <TikTokVerification
             orderToken={token.current}
             providerReturn={checkoutReturn.current}
-            failureReturn={failureReturn.current}
           />
         )}
         <Link className="tiktok-secondary tiktok-return" href="/#tiktok">
