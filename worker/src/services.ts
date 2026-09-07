@@ -105,8 +105,11 @@ export function returnUrls(
   const base = env.TIKTOK_BASE_PATH ?? "";
   if (base !== "" && !/^\/[A-Za-z0-9/_-]+$/.test(base))
     throw new ApiError(503, "service_unavailable");
-  const returnUrl = `${origin}${base.replace(/\/$/, "")}/tiktok-payment/#order=${token}`;
-  return { returnUrl, cancelUrl: returnUrl };
+  const resultUrl = `${origin}${base.replace(/\/$/, "")}/tiktok-payment/`;
+  return {
+    returnUrl: `${resultUrl}#order=${token}`,
+    cancelUrl: `${resultUrl}?drava_return=failure#order=${token}`,
+  };
 }
 export async function prepareFulfillment(
   env: PaymentEnv,
