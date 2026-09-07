@@ -146,11 +146,45 @@
     margin-top: var(--catalog-tabs-header-gap);
     margin-inline: max(20px, env(safe-area-inset-left)) max(20px, env(safe-area-inset-right));
     margin-bottom: 22px;
-    box-shadow: 0 8px 20px rgb(15 23 42 / 7%);
+    border-color: rgb(255 255 255 / 66%);
+    background: rgb(241 245 249 / 72%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    backdrop-filter: blur(18px) saturate(160%);
+    box-shadow:
+      0 10px 30px rgb(15 23 42 / 12%),
+      inset 0 1px 0 rgb(255 255 255 / 76%);
+  }
+
+  .mobile-app .catalog-tab:hover {
+    background: rgb(255 255 255 / 52%);
+  }
+
+  .mobile-app .catalog-tab[aria-selected="true"] {
+    background: rgb(255 255 255 / 80%);
+    box-shadow:
+      0 3px 10px rgb(15 23 42 / 10%),
+      inset 0 1px 0 rgb(255 255 255 / 84%);
   }
 
   .dark .mobile-app .catalog-tabs {
-    box-shadow: 0 8px 20px rgb(0 0 0 / 24%);
+    border-color: rgb(148 163 184 / 20%);
+    background: rgb(17 28 46 / 70%);
+    -webkit-backdrop-filter: blur(18px) saturate(145%);
+    backdrop-filter: blur(18px) saturate(145%);
+    box-shadow:
+      0 12px 32px rgb(0 0 0 / 36%),
+      inset 0 1px 0 rgb(255 255 255 / 7%);
+  }
+
+  .dark .mobile-app .catalog-tab:hover {
+    background: rgb(35 56 88 / 54%);
+  }
+
+  .dark .mobile-app .catalog-tab[aria-selected="true"] {
+    background: rgb(35 56 88 / 78%);
+    box-shadow:
+      0 3px 12px rgb(0 0 0 / 28%),
+      inset 0 1px 0 rgb(255 255 255 / 8%);
   }
 
   .mobile-app .catalog-tab {
