@@ -43,8 +43,8 @@ function verification(responses, props = { orderToken: token }, language = "fr")
     "@/lib/language-context": { useLanguage: () => ({ language }) },
     "@/lib/payment-api": { readCheckoutReturn },
     "@/lib/leekpay": { PaymentApiError, readOrderToken },
-    "@/lib/tiktok-payment": { async getTikTokOrderStatus(value, signal) {
-      calls.push({ token: value, signal });
+    "@/lib/tiktok-payment": { async getTikTokOrderStatus(value, signal, providerReturn) {
+      calls.push({ token: value, signal, providerReturn });
       const response = responses.shift();
       if (response instanceof Error) throw response;
       assert.ok(response, "Unexpected additional verification request");
@@ -58,14 +58,13 @@ function verification(responses, props = { orderToken: token }, language = "fr")
     "./TikTokSuccess": { TikTokReceipt: "receipt" },
     "./tiktok-checkout.css": {},
   };
-  const context = vm.createContext({ exports: {}, AbortController, URLSearchParams, require(name) {
+  const context = vm.createContext({ exports: {}, AbortController, require(name) {
     assert.ok(name in imports, `Unexpected dependency ${name}`); return imports[name];
   }, setTimeout(callback, delay) { const id = ++nextTimer; timers.set(id, { callback, delay }); return id; }, clearTimeout(id) { timers.delete(id); } });
   vm.runInContext(compiled, context);
   const render = () => { cursor = 0; return context.exports.TikTokVerification(props); };
   return {
     calls, sounds, saved, timers, render,
-    readFailureReturn: context.exports.readTikTokFailureReturn,
     async flush() { render(); pending.splice(0).forEach(effect => effect()); await settle(); return render(); },
     async tick(predicate = delay => delay < 300000) {
       const entry = [...timers].find(([, timer]) => predicate(timer.delay));
@@ -171,50 +170,57 @@ test("missing order capability performs no request, produces no receipt and leav
   run.cleanup();
 });
 
-test("TikTok failure return marker is strict and does not accept duplicates or arbitrary values", () => {
-  const run = verification([], { orderToken: null });
-  assert.equal(run.readFailureReturn("?drava_return=failure"), true);
-  for (const search of [
-    "",
-    "?drava_return=success",
-    "?drava_return=cancelled",
-    "?drava_return=failure&drava_return=failure",
-    "?DRAVA_RETURN=failure",
-  ]) assert.equal(run.readFailureReturn(search), false);
-  run.cleanup();
-});
-
-test("explicit TikTok provider cancellation stays on payment not completed when the server order is still pending", async () => {
+test("SoleasPay TikTok cancellation without soleaspay_data is shown as payment not completed instead of pending", async () => {
   for (const language of ["fr", "en"]) {
-    const pending = { ...order, status: "pending", verified: false, notification: undefined };
-    const run = verification([pending], { orderToken: token, failureReturn: true }, language);
+    const pendingSoleas = {
+      ...order,
+      provider: "soleaspay",
+      status: "pending",
+      verified: false,
+      notification: "pending",
+      username: undefined,
+      transactionReference: undefined,
+    };
+    const run = verification([pendingSoleas], { orderToken: token }, language);
     const tree = await run.flush();
     const text = textOf(tree);
     assert.equal(tree.type, "section");
     assert.match(text, language === "fr" ? /Paiement non finalisé/ : /Payment not completed/);
     assert.doesNotMatch(text, /Paiement non confirmé|Payment not confirmed|Paiement en attente|Payment pending/);
     assert.equal(nodes(tree).some(node => node.type === "receipt"), false);
-    assert.equal(run.calls.length, 1, "The order is checked once so a verified payment can still override the failure return");
-    assert.equal(run.timers.size, 0, "A pending order must not turn the explicit cancellation into a polling screen");
+    assert.equal(run.calls.length, 1);
+    assert.equal(run.calls[0].providerReturn, undefined);
+    assert.equal(run.timers.size, 0, "A cancelled SoleasPay return must not become a polling screen");
+    assert.deepEqual(run.sounds, ["failure"]);
     run.cleanup();
   }
 });
 
-test("a verified TikTok payment overrides an explicit failure return", async () => {
-  const run = verification([{ ...order, notification: "sent" }], { orderToken: token, failureReturn: true });
+test("pending non-SoleasPay TikTok payment remains pending and continues polling", async () => {
+  const pendingLeekPay = {
+    ...order,
+    provider: "leekpay",
+    status: "pending",
+    verified: false,
+    notification: "pending",
+    username: undefined,
+    transactionReference: undefined,
+  };
+  const run = verification([pendingLeekPay], { orderToken: token });
+  const tree = await run.flush();
+  assert.match(textOf(tree), /Paiement en attente/);
+  assert.doesNotMatch(textOf(tree), /Paiement non finalisé/);
+  assert.equal(run.calls.length, 1);
+  assert.equal(run.timers.size, 2, "Pending LeekPay keeps both the deadline and next poll timer");
+  run.cleanup();
+});
+
+test("an already verified SoleasPay TikTok payment still renders its receipt without return payload", async () => {
+  const paidSoleas = { ...order, provider: "soleaspay", notification: "sent" };
+  const run = verification([paidSoleas], { orderToken: token });
   const tree = await run.flush();
   assert.equal(tree.type, "receipt");
   assert.equal(tree.props.order.verified, true);
   assert.deepEqual(run.sounds, ["success"]);
-  run.cleanup();
-});
-
-test("TikTok failure return without an order token still shows payment not completed without a request", async () => {
-  const run = verification([], { orderToken: null, failureReturn: true });
-  const tree = await run.flush();
-  assert.match(textOf(tree), /Paiement non finalisé/);
-  assert.doesNotMatch(textOf(tree), /Paiement non confirmé/);
-  assert.equal(run.calls.length, 0);
-  assert.equal(run.timers.size, 0);
   run.cleanup();
 });
