@@ -43,13 +43,18 @@ function verification(responses, props = { orderToken: token }, language = "fr")
     "@/lib/language-context": { useLanguage: () => ({ language }) },
     "@/lib/payment-api": { readCheckoutReturn },
     "@/lib/leekpay": { PaymentApiError, readOrderToken },
-    "@/lib/tiktok-payment": { async getTikTokOrderStatus(value, signal) {
-      calls.push({ token: value, signal });
-      const response = responses.shift();
-      if (response instanceof Error) throw response;
-      assert.ok(response, "Unexpected additional verification request");
-      return response;
-    } },
+    "@/lib/tiktok-payment": {
+      async getTikTokOrderStatus(value, signal, providerReturn) {
+        calls.push({ token: value, signal, providerReturn });
+        const response = responses.shift();
+        if (response instanceof Error) throw response;
+        assert.ok(response, "Unexpected additional verification request");
+        return response;
+      },
+      isTikTokCheckoutReturnFailure(value, providerReturn) {
+        return value.provider === "soleaspay" && providerReturn === undefined && value.status !== "paid";
+      },
+    },
     "@/lib/tiktok-history": { rememberTikTokOrder: value => saved.push(value) },
     "@/lib/tiktok-sound": { playSuccess: () => sounds.push("success"), playFailure: () => sounds.push("failure") },
     "lucide-react": { LoaderCircle: "spinner", TriangleAlert: "warning" },
@@ -77,6 +82,14 @@ function verification(responses, props = { orderToken: token }, language = "fr")
 function nodes(element) {
   if (Array.isArray(element)) return element.flatMap(nodes);
   return element && typeof element === "object" ? [element, ...nodes(element.props?.children)] : [];
+}
+
+function textOf(element) {
+  if (Array.isArray(element)) return element.map(textOf).join("");
+  if (element == null || typeof element === "boolean") return "";
+  return typeof element === "object"
+    ? textOf(element.props?.children)
+    : String(element);
 }
 
 test("verified payment shows its receipt before email delivery and polls notification without replaying the success sound", async () => {
@@ -159,5 +172,60 @@ test("missing order capability performs no request, produces no receipt and leav
   assert.equal(tree.type, "section");
   assert.equal(run.calls.length, 0);
   assert.equal(run.timers.size, 0);
+  run.cleanup();
+});
+
+test("SoleasPay TikTok cancellation without soleaspay_data is shown as payment not completed instead of pending", async () => {
+  for (const language of ["fr", "en"]) {
+    const pendingSoleas = {
+      ...order,
+      provider: "soleaspay",
+      status: "pending",
+      verified: false,
+      notification: "pending",
+      username: undefined,
+      transactionReference: undefined,
+    };
+    const run = verification([pendingSoleas], { orderToken: token }, language);
+    const tree = await run.flush();
+    const text = textOf(tree);
+    assert.equal(tree.type, "section");
+    assert.match(text, language === "fr" ? /Paiement non finalisé/ : /Payment not completed/);
+    assert.doesNotMatch(text, /Paiement non confirmé|Payment not confirmed|Paiement en attente|Payment pending/);
+    assert.equal(nodes(tree).some(node => node.type === "receipt"), false);
+    assert.equal(run.calls.length, 1);
+    assert.equal(run.calls[0].providerReturn, undefined);
+    assert.equal(run.timers.size, 0, "A cancelled SoleasPay return must not become a polling screen");
+    assert.deepEqual(run.sounds, ["failure"]);
+    run.cleanup();
+  }
+});
+
+test("pending non-SoleasPay TikTok payment remains pending and continues polling", async () => {
+  const pendingLeekPay = {
+    ...order,
+    provider: "leekpay",
+    status: "pending",
+    verified: false,
+    notification: "pending",
+    username: undefined,
+    transactionReference: undefined,
+  };
+  const run = verification([pendingLeekPay], { orderToken: token });
+  const tree = await run.flush();
+  assert.match(textOf(tree), /Paiement en attente/);
+  assert.doesNotMatch(textOf(tree), /Paiement non finalisé/);
+  assert.equal(run.calls.length, 1);
+  assert.equal(run.timers.size, 2, "Pending LeekPay keeps both the deadline and next poll timer");
+  run.cleanup();
+});
+
+test("an already verified SoleasPay TikTok payment still renders its receipt without return payload", async () => {
+  const paidSoleas = { ...order, provider: "soleaspay", notification: "sent" };
+  const run = verification([paidSoleas], { orderToken: token });
+  const tree = await run.flush();
+  assert.equal(tree.type, "receipt");
+  assert.equal(tree.props.order.verified, true);
+  assert.deepEqual(run.sounds, ["success"]);
   run.cleanup();
 });

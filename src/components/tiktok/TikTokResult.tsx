@@ -5,7 +5,11 @@ import { useLanguage } from "@/lib/language-context";
 import { PaymentApiError, readOrderToken } from "@/lib/leekpay";
 import { readCheckoutReturn } from "@/lib/payment-api";
 import { rememberTikTokOrder } from "@/lib/tiktok-history";
-import { type TikTokOrder, getTikTokOrderStatus } from "@/lib/tiktok-payment";
+import {
+  type TikTokOrder,
+  getTikTokOrderStatus,
+  isTikTokCheckoutReturnFailure,
+} from "@/lib/tiktok-payment";
 import { playFailure, playSuccess } from "@/lib/tiktok-sound";
 import { LoaderCircle, TriangleAlert } from "lucide-react";
 import Link from "next/link";
@@ -86,9 +90,14 @@ export function TikTokVerification({
         setUnavailable(false);
         rememberTikTokOrder(result);
         const paid = result.status === "paid" && result.verified;
-        const failed = ["failed", "cancelled", "expired"].includes(
+        const providerFailed = ["failed", "cancelled", "expired"].includes(
           result.status,
         );
+        const returnFailed = isTikTokCheckoutReturnFailure(
+          result,
+          providerReturn,
+        );
+        const failed = providerFailed || returnFailed;
         if ((paid || failed) && terminalSound.current !== result.orderId) {
           terminalSound.current = result.orderId;
           if (paid) playSuccess();
@@ -129,16 +138,21 @@ export function TikTokVerification({
         onReturnHome={onReturnHome}
       />
     );
-  const failed =
-    order && ["failed", "cancelled", "expired"].includes(order.status);
-  const title = !orderToken
+  const returnFailed = Boolean(
+    order && isTikTokCheckoutReturnFailure(order, providerReturn),
+  );
+  const failed = Boolean(
+    returnFailed ||
+      (order && ["failed", "cancelled", "expired"].includes(order.status)),
+  );
+  const title = failed
     ? fr
-      ? "Paiement non confirmé"
-      : "Payment not confirmed"
-    : failed
+      ? "Paiement non finalisé"
+      : "Payment not completed"
+    : !orderToken
       ? fr
-        ? "Paiement non finalisé"
-        : "Payment not completed"
+        ? "Paiement non confirmé"
+        : "Payment not confirmed"
       : unavailable
         ? fr
           ? "Vérification indisponible"
@@ -150,14 +164,14 @@ export function TikTokVerification({
           : fr
             ? "Vérification du paiement"
             : "Checking your payment";
-  const description = !orderToken
+  const description = failed
     ? fr
-      ? "Aucune référence de commande valide n’est présente. Cette page seule ne confirme aucun paiement."
-      : "There is no valid order reference. This page alone does not confirm a payment."
-    : failed
+      ? "Ce paiement n’a pas été finalisé. Il peut avoir échoué, avoir été annulé ou avoir expiré."
+      : "This payment was not completed. It may have failed, been cancelled or expired."
+    : !orderToken
       ? fr
-        ? "Le prestataire indique que le paiement a échoué, a été annulé ou a expiré."
-        : "The provider reports that the payment failed, was cancelled or expired."
+        ? "Aucune référence de commande valide n’est présente. Cette page seule ne confirme aucun paiement."
+        : "There is no valid order reference. This page alone does not confirm a payment."
       : unavailable
         ? fr
           ? "Le statut n’a pas pu être vérifié. Cela ne signifie pas que le paiement a échoué."
@@ -171,7 +185,7 @@ export function TikTokVerification({
       aria-live="polite"
       aria-atomic="true"
     >
-      {checking ? (
+      {checking && !failed ? (
         <LoaderCircle
           className="tiktok-result-icon tiktok-spinner"
           size={44}
@@ -245,7 +259,12 @@ export default function TikTokResult() {
             ? "Paiement des pièces TikTok"
             : "TikTok coin payment"}
         </h1>
-        {ready && <TikTokVerification orderToken={token.current} providerReturn={checkoutReturn.current} />}
+        {ready && (
+          <TikTokVerification
+            orderToken={token.current}
+            providerReturn={checkoutReturn.current}
+          />
+        )}
         <Link className="tiktok-secondary tiktok-return" href="/#tiktok">
           {language === "fr"
             ? "Retour aux pièces TikTok"
