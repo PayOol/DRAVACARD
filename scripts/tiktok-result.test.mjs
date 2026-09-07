@@ -43,13 +43,18 @@ function verification(responses, props = { orderToken: token }, language = "fr")
     "@/lib/language-context": { useLanguage: () => ({ language }) },
     "@/lib/payment-api": { readCheckoutReturn },
     "@/lib/leekpay": { PaymentApiError, readOrderToken },
-    "@/lib/tiktok-payment": { async getTikTokOrderStatus(value, signal, providerReturn) {
-      calls.push({ token: value, signal, providerReturn });
-      const response = responses.shift();
-      if (response instanceof Error) throw response;
-      assert.ok(response, "Unexpected additional verification request");
-      return response;
-    } },
+    "@/lib/tiktok-payment": {
+      async getTikTokOrderStatus(value, signal, providerReturn) {
+        calls.push({ token: value, signal, providerReturn });
+        const response = responses.shift();
+        if (response instanceof Error) throw response;
+        assert.ok(response, "Unexpected additional verification request");
+        return response;
+      },
+      isTikTokCheckoutReturnFailure(value, providerReturn) {
+        return value.provider === "soleaspay" && providerReturn === undefined && value.status !== "paid";
+      },
+    },
     "@/lib/tiktok-history": { rememberTikTokOrder: value => saved.push(value) },
     "@/lib/tiktok-sound": { playSuccess: () => sounds.push("success"), playFailure: () => sounds.push("failure") },
     "lucide-react": { LoaderCircle: "spinner", TriangleAlert: "warning" },
