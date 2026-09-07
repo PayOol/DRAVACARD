@@ -3,6 +3,7 @@ import { Inter, Righteous } from "next/font/google";
 import "./globals.css";
 import "@/components/payment/payment-result-mobile.css";
 import { withBasePath } from "@/lib/base-path";
+import { DRAVA_CONTACT } from "@/lib/drava-contact";
 import { LanguageProvider } from "@/lib/language-context";
 import { ThemeProvider } from "@/lib/theme-context";
 import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
@@ -22,6 +23,7 @@ const siteUrl = new URL(
 );
 siteUrl.pathname = `${siteUrl.pathname.replace(/\/$/, "")}/`;
 const socialImageUrl = new URL("og-image.svg", siteUrl);
+const logoUrl = new URL("images/drava-wordmark.svg", siteUrl);
 
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -40,10 +42,56 @@ const contentSecurityPolicy = [
   "media-src 'none'",
 ].join("; ");
 
+const structuredData = JSON.stringify([
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "DRAVA",
+    url: siteUrl.href,
+    logo: logoUrl.href,
+    email: "contact.drava@gmail.com",
+    telephone: DRAVA_CONTACT.phoneNumber,
+    contactPoint: {
+      "@type": "ContactPoint",
+      telephone: DRAVA_CONTACT.phoneNumber,
+      contactType: "customer support",
+      areaServed: "CM",
+      availableLanguage: ["French", "English"],
+    },
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "DRAVA",
+    url: siteUrl.href,
+    inLanguage: ["fr", "en"],
+    description:
+      "Plateforme DRAVA de cartes virtuelles Visa et Mastercard et de packs de pièces TikTok au Cameroun.",
+  },
+]).replace(/</g, "\\u003c");
+
 export const metadata: Metadata = {
   metadataBase: siteUrl,
-  title: "DRAVA - Cartes virtuelles et pièces TikTok",
-  description: "Découvrez les cartes virtuelles et les packs de pièces TikTok DRAVA.",
+  title: {
+    default: "Carte virtuelle au Cameroun & pièces TikTok | DRAVA",
+    template: "%s | DRAVA",
+  },
+  description:
+    "Découvrez les cartes virtuelles Visa et Mastercard DRAVA au Cameroun, comparez les offres et accédez aussi aux packs de pièces TikTok.",
+  alternates: {
+    canonical: "/",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
   referrer: "strict-origin-when-cross-origin",
   manifest: withBasePath("/manifest.json"),
   applicationName: "Drava",
@@ -81,10 +129,11 @@ export const metadata: Metadata = {
     ],
   },
   openGraph: {
-    title: "Drava - Cartes virtuelles et pièces TikTok",
-    description: "Découvrez les cartes virtuelles et les packs de pièces TikTok Drava.",
+    title: "Carte virtuelle au Cameroun & pièces TikTok | DRAVA",
+    description:
+      "Cartes virtuelles Visa et Mastercard DRAVA au Cameroun et packs de pièces TikTok.",
     url: siteUrl,
-    siteName: "Drava",
+    siteName: "DRAVA",
     images: [
       {
         url: socialImageUrl,
@@ -92,13 +141,14 @@ export const metadata: Metadata = {
         height: 630,
       },
     ],
-    locale: "fr_FR",
+    locale: "fr_CM",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Drava - Cartes virtuelles et pièces TikTok",
-    description: "Découvrez les cartes virtuelles et les packs de pièces TikTok Drava.",
+    title: "Carte virtuelle au Cameroun & pièces TikTok | DRAVA",
+    description:
+      "Cartes virtuelles Visa et Mastercard DRAVA au Cameroun et packs de pièces TikTok.",
     images: [socialImageUrl],
   },
 };
@@ -122,6 +172,10 @@ export default function RootLayout({
         <meta
           httpEquiv="Content-Security-Policy"
           content={contentSecurityPolicy}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: structuredData }}
         />
         {/* This tiny same-origin script must apply the saved theme before first paint. */}
         {/* eslint-disable-next-line @next/next/no-sync-scripts */}
