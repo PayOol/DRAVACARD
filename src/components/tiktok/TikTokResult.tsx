@@ -141,44 +141,41 @@ export function TikTokVerification({
   const returnFailed = Boolean(
     order && isTikTokCheckoutReturnFailure(order, providerReturn),
   );
+  // SoleasPay can return to the shared TikTok result route without preserving
+  // the order fragment on cancellation. This route is payment-result-only, so
+  // a missing capability must render the non-finalized surface rather than the
+  // ambiguous "not confirmed" surface. It still never creates a receipt.
   const failed = Boolean(
-    returnFailed ||
+    !orderToken ||
+      returnFailed ||
       (order && ["failed", "cancelled", "expired"].includes(order.status)),
   );
   const title = failed
     ? fr
       ? "Paiement non finalisé"
       : "Payment not completed"
-    : !orderToken
+    : unavailable
       ? fr
-        ? "Paiement non confirmé"
-        : "Payment not confirmed"
-      : unavailable
+        ? "Vérification indisponible"
+        : "Verification unavailable"
+      : order
         ? fr
-          ? "Vérification indisponible"
-          : "Verification unavailable"
-        : order
-          ? fr
-            ? "Paiement en attente"
-            : "Payment pending"
-          : fr
-            ? "Vérification du paiement"
-            : "Checking your payment";
+          ? "Paiement en attente"
+          : "Payment pending"
+        : fr
+          ? "Vérification du paiement"
+          : "Checking your payment";
   const description = failed
     ? fr
       ? "Ce paiement n’a pas été finalisé. Il peut avoir échoué, avoir été annulé ou avoir expiré."
       : "This payment was not completed. It may have failed, been cancelled or expired."
-    : !orderToken
+    : unavailable
       ? fr
-        ? "Aucune référence de commande valide n’est présente. Cette page seule ne confirme aucun paiement."
-        : "There is no valid order reference. This page alone does not confirm a payment."
-      : unavailable
-        ? fr
-          ? "Le statut n’a pas pu être vérifié. Cela ne signifie pas que le paiement a échoué."
-          : "The status could not be verified. This does not mean the payment failed."
-        : fr
-          ? "Consultez votre téléphone pour valider le paiement. Nous attendons la confirmation du prestataire."
-          : "Check your phone to approve the payment. We are waiting for the provider’s confirmation.";
+        ? "Le statut n’a pas pu être vérifié. Cela ne signifie pas que le paiement a échoué."
+        : "The status could not be verified. This does not mean the payment failed."
+      : fr
+        ? "Consultez votre téléphone pour valider le paiement. Nous attendons la confirmation du prestataire."
+        : "Check your phone to approve the payment. We are waiting for the provider’s confirmation.";
   return (
     <section
       className="tiktok-verification"
