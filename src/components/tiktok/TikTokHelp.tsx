@@ -37,7 +37,7 @@ import {
 } from "@/lib/tiktok-support";
 import "./tiktok-help.css";
 
-const DEFAULT_TIKTOK_VIDEO_ID = "AZgaA8ufCzs";
+const DEFAULT_TIKTOK_VIDEO_ID = "UfpP394WSGk";
 
 const buildYoutubeEmbedBase = (videoId: string) =>
   `https://www.youtube.com/embed/${videoId}`;
@@ -327,7 +327,7 @@ export function TikTokHelp({
           {open && (
             <iframe
               ref={frameRef}
-              src="https://www.youtube.com/embed/AZgaA8ufCzs?autoplay=1&rel=0"
+              src="https://www.youtube.com/embed/UfpP394WSGk?autoplay=1&rel=0"
               title={title}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen

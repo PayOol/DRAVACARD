@@ -38,7 +38,7 @@ const dravaContactPath = 'src/lib/drava-contact.ts'
 const tiktokSoundPath = 'src/lib/tiktok-sound.ts'
 const tiktokResultPath = 'src/components/tiktok/TikTokResult.tsx'
 const tiktokRoutePath = 'src/app/tiktok-payment/page.tsx'
-const tiktokVideoUrl = 'https://www.youtube.com/embed/AZgaA8ufCzs?autoplay=1&rel=0'
+const tiktokVideoUrl = 'https://www.youtube.com/embed/UfpP394WSGk?autoplay=1&rel=0'
 const workerSourcePath = 'worker/src/index.ts'
 const workerConfigPath = 'worker/wrangler.jsonc'
 

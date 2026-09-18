@@ -329,8 +329,7 @@ export default function MobileCatalog({
                   <TikTokHelp
                     kind="video"
                     video={{
-                      videoId: "m4lW08PFieE",
-                      startAt: 4,
+                      videoId: "a9pY3mRHsHc",
                       videoTitle:
                         fr
                           ? "Besoin d’aide pour votre carte virtuelle ?"
