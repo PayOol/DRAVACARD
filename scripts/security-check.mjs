@@ -38,7 +38,7 @@ const dravaContactPath = 'src/lib/drava-contact.ts'
 const tiktokSoundPath = 'src/lib/tiktok-sound.ts'
 const tiktokResultPath = 'src/components/tiktok/TikTokResult.tsx'
 const tiktokRoutePath = 'src/app/tiktok-payment/page.tsx'
-const tiktokVideoUrl = 'https://www.youtube.com/embed/UfpP394WSGk?autoplay=1&rel=0'
+const approvedTiktokVideoIds = ['UfpP394WSGk', 'a9pY3mRHsHc']
 const workerSourcePath = 'worker/src/index.ts'
 const workerConfigPath = 'worker/wrangler.jsonc'
 
@@ -453,10 +453,12 @@ function validateTikTokSource(source, relativePath) {
     const frames = []
     const visit = (node) => { const element = getJsxOpeningElement(node); if (element?.tagName.getText() === 'iframe') frames.push(element); ts.forEachChild(node, visit) }
     visit(file)
-    const src = frames.length === 1 ? jsxAttribute(frames[0], 'src') : null
-    if (!src || !ts.isStringLiteral(src) || src.text !== tiktokVideoUrl
+    if (frames.length !== 1
       || frames[0].attributes.properties.some(ts.isJsxSpreadAttribute)
-      || /document\.createElement\(\s*["']iframe["']/.test(source)) failures.push('TikTok help may embed only the original public YouTube tutorial with a static URL')
+      || /document\.createElement\(\s*["']iframe["']/.test(source)) failures.push('TikTok help may embed only approved public YouTube tutorials')
+    const defaultIdMatch = source.match(/const DEFAULT_TIKTOK_VIDEO_ID = "([^"]+)"/)
+    if (!defaultIdMatch || !approvedTiktokVideoIds.includes(defaultIdMatch[1])) failures.push('TikTok help default video ID is not approved')
+    if (!/`https:\/\/www\.youtube\.com\/embed\/\$\{videoId\}`/.test(source)) failures.push('TikTok help video builder must use the YouTube embed URL pattern')
   }
   if (relativePath === tiktokSupportPath) {
     failures.push(...validateTikTokSupport(source))
@@ -1408,10 +1410,10 @@ async function selfTest() {
   assert.equal(allowReviewedTikTokRule('', providerDialogPath, 'Soleas integration'), false)
   assert.equal(allowReviewedTikTokRule('', tiktokHelpPath, 'payment iframe'), true)
   assert.equal(allowReviewedTikTokRule('', tiktokCheckoutPath, 'payment iframe'), false)
-  const safeVideo = `<iframe src="${tiktokVideoUrl}" title="Tutorial" />`
-  assert.deepEqual(validateTikTokSource(safeVideo, tiktokHelpPath), [])
-  for (const invalidVideo of [safeVideo.replace(tiktokVideoUrl, 'https://example.test/frame'), '<iframe src={customer.url} />', `${safeVideo}<iframe src="https://example.test" />`, safeVideo.replace('title="Tutorial"', '{...props}')]) {
-    assert.ok(validateTikTokSource(invalidVideo, tiktokHelpPath).length > 0)
+  const safeTikTokHelp = 'const DEFAULT_TIKTOK_VIDEO_ID = "UfpP394WSGk"\nconst x = `https://www.youtube.com/embed/${videoId}`\nconst y = <iframe src={iframeSrc} title="Tutorial" />'
+  assert.deepEqual(validateTikTokSource(safeTikTokHelp, tiktokHelpPath), [])
+  for (const invalidHelp of [safeTikTokHelp + '\nconst z = <iframe src="x" />', safeTikTokHelp.replace('title="Tutorial"', '{...props}'), safeTikTokHelp.replace('UfpP394WSGk', 'BADID12345'), safeTikTokHelp.replace('youtube.com', 'example.test')]) {
+    assert.ok(validateTikTokSource(invalidHelp, tiktokHelpPath).length > 0)
   }
   for (const browserStore of ['window.localStorage.setItem("secret", customer.password)', 'window.sessionStorage.setItem("token", orderToken)', 'const store = globalThis["indexedDB"]']) {
     assert.ok(validateTikTokSource(browserStore, tiktokCheckoutPath).length > 0)

@@ -17,7 +17,6 @@ import {
 import {
   type ReactNode,
   useLayoutEffect,
-  useEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -268,7 +267,6 @@ export function TikTokHelp({
   const { language } = useLanguage();
   const t = copy[language];
   const [open, setOpen] = useState(false);
-  const frameRef = useRef<HTMLIFrameElement>(null);
   const videoId = video?.videoId ?? DEFAULT_TIKTOK_VIDEO_ID;
   const title = video?.videoTitle ?? t.videoTitle;
   const subtitle = video?.videoSubtitle ?? t.videoSubtitle;
@@ -279,10 +277,6 @@ export function TikTokHelp({
   const thumbnail = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
   const iframeSrc = getVideoSrc(videoId, startAt);
 
-  useEffect(() => {
-    if (!open || !frameRef.current) return;
-    frameRef.current.src = iframeSrc;
-  }, [iframeSrc, open]);
 
   if (kind === "video") {
     return (
@@ -326,8 +320,7 @@ export function TikTokHelp({
         <div className="tiktok-help-video-frame">
           {open && (
             <iframe
-              ref={frameRef}
-              src="https://www.youtube.com/embed/UfpP394WSGk?autoplay=1&rel=0"
+              src={iframeSrc}
               title={title}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
