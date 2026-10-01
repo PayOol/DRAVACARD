@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rename, rm } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -59,11 +59,24 @@ function validateSeoHtml(html, slug, canonical) {
   }
 }
 
+async function safeMove(from, to) {
+  try {
+    await rename(from, to);
+  } catch (error) {
+    if (error && error.code === "EXDEV") {
+      await cp(from, to, { recursive: true });
+      await rm(from, { recursive: true, force: true });
+      return;
+    }
+    throw error;
+  }
+}
+
 try {
   for (const slug of expectedPages.keys()) {
     const from = path.join(outputRoot, slug);
     const to = path.join(stagingRoot, slug);
-    await rename(from, to);
+    await safeMove(from, to);
     moved.push({ from, to });
   }
 
@@ -100,7 +113,7 @@ try {
   }
 } finally {
   for (const { from, to } of moved.reverse()) {
-    await rename(to, from).catch(() => {});
+    await safeMove(to, from).catch(() => {});
   }
   await rm(stagingRoot, { recursive: true, force: true });
 }
